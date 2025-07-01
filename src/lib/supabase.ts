@@ -29,6 +29,17 @@ class MockQueryBuilder {
     this.tableName = tableName;
   }
 
+  
+  insert(data: any) {
+    return this;
+  }
+  update(data: any) {
+    return this;
+  }
+  delete() {
+    return this;
+  }
+
   select(fields: string = '*') {
     this.selectFields = fields;
     return this;
@@ -211,7 +222,19 @@ const createMockClient = () => ({
     })
   },
   from: (tableName: string) => new MockQueryBuilder(tableName),
-  channel: (channelName: string) => new MockChannel(channelName)
+  channel: (channelName: string) => new MockChannel(channelName),
+  storage: {
+    from: () => ({
+      upload: async () => ({ data: null, error: { message: "Supabase not configured" } }),
+      download: async () => ({ data: null, error: { message: "Supabase not configured" } }),
+      list: async () => ({ data: [], error: null }),
+      getPublicUrl: (path: string) => ({
+        publicUrl: `https://mock-storage/${path}`
+    })
+
+      // getPublicUrl: (path: string) => ({ publicURL: `https://mock-storage/${path}`, error: null })
+    })
+  }
 })
 
 // Create Supabase client or mock client
