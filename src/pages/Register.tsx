@@ -8,7 +8,7 @@ import {
   AlertCircle, 
   CheckCircle, 
   Terminal, 
-  Database, 
+  // Database, 
   Shield,
   Camera,
   FileText,
@@ -39,6 +39,7 @@ interface BiometricData {
 interface BehavioralData {
   keystrokes: any[];
   mouseMovements: any[];
+  typedText?: string; // Added typedText to interface
 }
 
 interface EKYCData {
@@ -76,6 +77,7 @@ const Register = () => {
     keystrokes: [],
     mouseMovements: []
   });
+  const [typedText, setTypedText] = useState('');
   
   // eKYC data
   const [ekycData, setEKYCData] = useState<EKYCData>({
@@ -97,80 +99,82 @@ const Register = () => {
 
   // Behavioral capture effect
   useEffect(() => {
-    if (behavioralCaptureActive) {
-      const keystrokes: any[] = [];
-      const mouseMovements: any[] = [];
-      
-      const handleKeyDown = (e: KeyboardEvent) => {
-        keystrokes.push({
-          key: e.key,
-          code: e.code,
-          timestamp: Date.now(),
-          type: 'keydown'
-        });
-      };
-      
-      const handleKeyUp = (e: KeyboardEvent) => {
-        keystrokes.push({
-          key: e.key,
-          code: e.code,
-          timestamp: Date.now(),
-          type: 'keyup'
-        });
-      };
-      
-      const handleMouseMove = (e: MouseEvent) => {
+  if (behavioralCaptureActive) {
+    const keystrokes: any[] = [];
+    const mouseMovements: any[] = [];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keystrokes.push({
+        key: e.key,
+        code: e.code,
+        timestamp: Date.now(),
+        type: 'keydown'
+      });
+      setBehavioralData(prev => ({
+        ...prev,
+        keystrokes: [...keystrokes]
+      }));
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keystrokes.push({
+        key: e.key,
+        code: e.code,
+        timestamp: Date.now(),
+        type: 'keyup'
+      });
+      setBehavioralData(prev => ({
+        ...prev,
+        keystrokes: [...keystrokes]
+      }));
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (
+        mouseMovements.length === 0 ||
+        Date.now() - mouseMovements[mouseMovements.length - 1].timestamp > 50
+      ) {
         mouseMovements.push({
           x: e.clientX,
           y: e.clientY,
           timestamp: Date.now(),
           type: 'mousemove'
         });
-      };
-      
-      const handleClick = (e: MouseEvent) => {
-        mouseMovements.push({
-          x: e.clientX,
-          y: e.clientY,
-          button: e.button,
-          timestamp: Date.now(),
-          type: 'click'
-        });
-      };
-      
-      document.addEventListener('keydown', handleKeyDown);
-      document.addEventListener('keyup', handleKeyUp);
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('click', handleClick);
-      
-      // Auto-complete after 30 seconds or sufficient data
-      const timer = setTimeout(() => {
-        setBehavioralData({ keystrokes, mouseMovements });
-        setBehavioralCaptureActive(false);
-        setBehavioralCaptureComplete(true);
-      }, 30000);
-      
-      // Check for sufficient data every 5 seconds
-      const checkTimer = setInterval(() => {
-        if (keystrokes.length >= 50 && mouseMovements.length >= 100) {
-          setBehavioralData({ keystrokes, mouseMovements });
-          setBehavioralCaptureActive(false);
-          setBehavioralCaptureComplete(true);
-          clearTimeout(timer);
-          clearInterval(checkTimer);
-        }
-      }, 5000);
-      
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-        document.removeEventListener('keyup', handleKeyUp);
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('click', handleClick);
-        clearTimeout(timer);
-        clearInterval(checkTimer);
-      };
-    }
-  }, [behavioralCaptureActive]);
+        setBehavioralData(prev => ({
+          ...prev,
+          mouseMovements: [...mouseMovements]
+        }));
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      mouseMovements.push({
+        x: e.clientX,
+        y: e.clientY,
+        button: e.button,
+        timestamp: Date.now(),
+        type: 'click'
+      });
+      setBehavioralData(prev => ({
+        ...prev,
+        mouseMovements: [...mouseMovements]
+      }));
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('click', handleClick);
+    };
+  }
+}, [behavioralCaptureActive]);
+
 
   // Validation functions
   const validateStep1 = () => {
@@ -210,8 +214,29 @@ const Register = () => {
       return false;
     }
     
-    if (!biometricData.livenessData || !biometricData.livenessData.overall_liveness_passed) {
-      setErrors({ biometric: 'Liveness detection must be completed successfully' });
+    // Check if livenessData exists and has the proper structure
+    if (!biometricData.livenessData) {
+      setErrors({ biometric: 'Liveness detection must be completed' });
+      return false;
+    }
+    
+    // Check the new liveness_validation structure from backend
+    const validation = biometricData.livenessData.liveness_validation;
+    if (!validation || !validation.overall_liveness_passed) {
+      setErrors({ biometric: 'Liveness detection failed. Please ensure all steps are completed successfully.' });
+      return false;
+    }
+    
+    // Verify all requirements are met
+    const requirements = validation.step_requirements;
+    if (!requirements.blinks_met || !requirements.mouth_met || !requirements.head_met || !requirements.score_met) {
+      const failedSteps = [];
+      if (!requirements.blinks_met) failedSteps.push('blinks');
+      if (!requirements.mouth_met) failedSteps.push('mouth opens');
+      if (!requirements.head_met) failedSteps.push('head movements');
+      if (!requirements.score_met) failedSteps.push('anti-spoofing score');
+      
+      setErrors({ biometric: `Failed requirements: ${failedSteps.join(', ')}` });
       return false;
     }
     
@@ -225,12 +250,18 @@ const Register = () => {
       return false;
     }
     
+    // Check if the correct sentence was typed
+    if (typedText !== "The quick brown fox jumps over the lazy dog.") {
+      setErrors({ behavioral: 'You must type the exact sentence shown' });
+      return false;
+    }
+    
     if (behavioralData.keystrokes.length < 20) {
       setErrors({ behavioral: 'Insufficient keystroke data captured' });
       return false;
     }
     
-    if (behavioralData.mouseMovements.length < 50) {
+    if (behavioralData.mouseMovements.length < 10) {
       setErrors({ behavioral: 'Insufficient mouse movement data captured' });
       return false;
     }
@@ -316,49 +347,43 @@ const Register = () => {
     reader.readAsDataURL(file);
   };
 
+  const uploadEKYCFiles = async () => {
+    if (!ekycData.frontFile || !ekycData.backFile) {
+      throw new Error('Both IC files are required');
+    }
 
-const uploadEKYCFiles = async () => {
-  if (!ekycData.frontFile || !ekycData.backFile) {
-    throw new Error('Both IC files are required');
-  }
+    const userId = `user_${Date.now()}`;
 
-  const userId = `user_${Date.now()}`;
+    // Upload front
+    const frontFileName = `${userId}_ic_front_${Date.now()}.jpg`;
+    const { data: frontData, error: frontError } = await supabase.storage
+      .from('ekyc-documents')
+      .upload(frontFileName, ekycData.frontFile);
 
-  // Upload front
-  const frontFileName = `${userId}_ic_front_${Date.now()}.jpg`;
-  const { data: frontData, error: frontError } = await supabase.storage
-    .from('ekyc-documents')
-    .upload(frontFileName, ekycData.frontFile);
+    if (frontError) throw frontError;
 
-  if (frontError) throw frontError;
+    // Upload back
+    const backFileName = `${userId}_ic_back_${Date.now()}.jpg`;
+    const { data: backData, error: backError } = await supabase.storage
+      .from('ekyc-documents')
+      .upload(backFileName, ekycData.backFile);
 
-  // Upload back
-  const backFileName = `${userId}_ic_back_${Date.now()}.jpg`;
-  const { data: backData, error: backError } = await supabase.storage
-    .from('ekyc-documents')
-    .upload(backFileName, ekycData.backFile);
+    if (backError) throw backError;
 
-  if (backError) throw backError;
+    // Get public URLs
+    const { publicUrl: frontUrl } = supabase.storage
+      .from('ekyc-documents')
+      .getPublicUrl(frontData.path);
 
-  // Get public URLs
-  const { publicUrl: frontUrl } = supabase.storage
-    .from('ekyc-documents')
-    .getPublicUrl(frontData.path);
+    const { publicUrl: backUrl } = supabase.storage
+      .from('ekyc-documents')
+      .getPublicUrl(backData.path);
 
-  const { publicUrl: backUrl } = supabase.storage
-    .from('ekyc-documents')
-    .getPublicUrl(backData.path);
-
-
-  return {
-    frontUrl,
-    backUrl
+    return {
+      frontUrl,
+      backUrl
+    };
   };
-};
-
-
-
-
 
   // Final submission
   const handleSubmit = async () => {
@@ -689,11 +714,14 @@ const uploadEKYCFiles = async () => {
                       {!behavioralCaptureActive && !behavioralCaptureComplete && (
                         <div>
                           <p className="text-cyan-400 mb-4">
-                            Click the button below to start capturing your behavioral patterns.
-                            Type naturally and move your mouse around for 30 seconds.
+                            We'll capture your typing pattern by having you type a specific sentence.
+                            Please type naturally at your normal speed.
                           </p>
                           <button
-                            onClick={() => setBehavioralCaptureActive(true)}
+                            onClick={() => {
+                              setBehavioralCaptureActive(true);
+                              setTypedText(''); // Reset typed text
+                            }}
                             className="terminal-button px-6 py-3 rounded font-bold hover-glow"
                           >
                             START BEHAVIORAL CAPTURE
@@ -709,28 +737,84 @@ const uploadEKYCFiles = async () => {
                             </div>
                           </div>
                           <p className="text-green-400 font-bold mb-2">CAPTURING BEHAVIORAL PATTERNS...</p>
-                          <p className="text-cyan-400 text-sm mb-4">
-                            Please type naturally and move your mouse around. 
-                            Capture will complete automatically when sufficient data is collected.
-                          </p>
+                          
+                          {/* Target Sentence Display */}
+                          <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4 mb-4">
+                            <p className="text-green-400 font-bold mb-2">Please type this sentence exactly:</p>
+                            <p className="text-cyan-400 text-lg font-mono">
+                              The quick brown fox jumps over the lazy dog.
+                            </p>
+                          </div>
+                          
+                          {/* Typing Input */}
                           <div className="bg-black/30 rounded p-4">
                             <textarea
-                              placeholder="Type anything here to capture your keystroke dynamics..."
-                              className="w-full h-32 bg-transparent border border-green-500/30 rounded p-3 text-green-400 resize-none"
+                              value={typedText}
+                              onChange={(e) => {
+                                setTypedText(e.target.value);
+                                
+                                // Check if sentence is complete
+                                if (e.target.value === "The quick brown fox jumps over the lazy dog.") {
+                                  // Auto-complete after correct sentence
+                                  setTimeout(() => {
+                                    setBehavioralCaptureActive(false);
+                                    setBehavioralCaptureComplete(true);
+                                  }, 500);
+                                }
+                              }}
+                              onPaste={(e) => {
+                                e.preventDefault();
+                                return false;
+                              }}
+                              placeholder="Start typing the sentence above..."
+                              className="w-full h-32 bg-transparent border border-green-500/30 rounded p-3 text-green-400 resize-none font-mono"
                               style={{ fontFamily: 'IBM Plex Mono' }}
                             />
+                            
+                            {/* Character count and match indicator */}
+                            <div className="mt-2 flex justify-between text-sm">
+                              <span className="text-cyan-400">
+                                Characters: {typedText.length} / 44
+                              </span>
+                              {typedText && (
+                                <span className={
+                                  "The quick brown fox jumps over the lazy dog.".startsWith(typedText) 
+                                    ? "text-green-400" 
+                                    : "text-red-400"
+                                }>
+                                  {
+                                    "The quick brown fox jumps over the lazy dog.".startsWith(typedText)
+                                      ? "✓ Matching..."
+                                      : "✗ Text doesn't match"
+                                  }
+                                </span>
+                              )}
+                            </div>
                           </div>
+                          
+                          <p className="text-cyan-400 text-sm mt-4">
+                            Also move your mouse naturally while typing.
+                          </p>
                         </div>
                       )}
-                      
+
                       {behavioralCaptureComplete && (
                         <div>
                           <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4" />
                           <p className="text-green-400 font-bold mb-2">BEHAVIORAL CAPTURE COMPLETE!</p>
-                          <p className="text-cyan-400 text-sm">
+                          <p className="text-cyan-400 text-sm mb-2">
                             Successfully captured {behavioralData.keystrokes.length} keystroke events 
                             and {behavioralData.mouseMovements.length} mouse movement events.
                           </p>
+                          {typedText === "The quick brown fox jumps over the lazy dog." ? (
+                            <p className="text-green-400 text-sm font-bold">
+                              ✓ Sentence typed correctly
+                            </p>
+                          ) : (
+                            <p className="text-yellow-400 text-sm">
+                              ⚠️ Sentence was not typed exactly as shown
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -927,11 +1011,24 @@ const uploadEKYCFiles = async () => {
                         </div>
                         <div className="text-center">
                           <div className="text-cyan-400 font-bold">
-                            {((biometricData.livenessData.face_real_score || 0) * 100).toFixed(0)}%
+                            {((biometricData.livenessData.enhanced_face_score || biometricData.livenessData.face_real_score || 0) * 100).toFixed(0)}%
                           </div>
                           <div className="text-gray-400">Face Score</div>
                         </div>
                       </div>
+                      {biometricData.livenessData.liveness_validation && (
+                        <div className="mt-4 text-center">
+                          <div className={`text-sm font-bold ${
+                            biometricData.livenessData.liveness_validation.overall_liveness_passed 
+                              ? 'text-green-400' 
+                              : 'text-red-400'
+                          }`}>
+                            {biometricData.livenessData.liveness_validation.overall_liveness_passed 
+                              ? '✅ All liveness checks passed' 
+                              : '❌ Liveness verification incomplete'}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

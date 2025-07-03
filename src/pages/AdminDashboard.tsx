@@ -8,7 +8,7 @@ import {
   Eye, 
   TrendingUp, 
   Database, 
-  Settings,
+  // Settings,
   User,
   Clock,
   CheckCircle,
@@ -18,10 +18,11 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  Camera
+  // Camera
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+// import BehavioralMonitor from '../components/BehavioralMonitor';
 
 interface User {
   id: string;
@@ -100,6 +101,7 @@ const AdminDashboard: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [actionUser, setActionUser] = useState<User | null>(null);
   const [actionType, setActionType] = useState('');
+  const [anomalyFilter, setAnomalyFilter] = useState<'all' | 'auto_lock' | 'anomaly_logged'>('all');
 
   // Check if user is admin
   useEffect(() => {
@@ -329,7 +331,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string; trend?: string }> = 
-    ({ title, value, icon, color, trend }) => (
+    ({ title, value, icon, trend }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -347,6 +349,10 @@ const AdminDashboard: React.FC = () => {
       </div>
     </motion.div>
   );
+
+  const filteredAnomalies = anomalyFilter === 'all'
+    ? anomalies
+    : anomalies.filter(a => a.action === anomalyFilter);
 
   const BiometricDetailModal: React.FC = () => {
     if (!selectedUser) return null;
@@ -851,19 +857,51 @@ const AdminDashboard: React.FC = () => {
 
             {activeTab === 'anomalies' && (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
-                  <AlertTriangle className="mr-3 h-6 w-6" />
-                  SECURITY_ANOMALIES
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-green-400 flex items-center">
+                    <AlertTriangle className="mr-3 h-6 w-6" />
+                    SECURITY_ANOMALIES
+                  </h2>
 
-                {anomalies.length === 0 ? (
+                  {/* Anomaly Filter */}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-cyan-400 text-sm font-mono">FILTER:</span>
+                    <button
+                      onClick={() => setAnomalyFilter('all')}
+                      className={`terminal-button px-3 py-1 rounded text-sm ${
+                        anomalyFilter === 'all' ? 'bg-green-600/30' : ''
+                      }`}
+                    >
+                      ALL
+                    </button>
+                    <button
+                      onClick={() => setAnomalyFilter('auto_lock')}
+                      className={`terminal-button px-3 py-1 rounded text-sm ${
+                        anomalyFilter === 'auto_lock' ? 'bg-red-600/30' : ''
+                      }`}
+                    >
+                      AUTO-LOCKS
+                    </button>
+                    <button
+                      onClick={() => setAnomalyFilter('anomaly_logged')}
+                      className={`terminal-button px-3 py-1 rounded text-sm ${
+                        anomalyFilter === 'anomaly_logged' ? 'bg-yellow-600/30' : ''
+                      }`}
+                    >
+                      WARNINGS
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter the anomalies */}
+                {filteredAnomalies.length === 0 ? (
                   <div className="text-center p-8 glass-card rounded-lg">
                     <Shield className="h-12 w-12 text-green-400 mx-auto mb-4" />
-                    <p className="text-green-400 font-mono">NO_SECURITY_ANOMALIES_DETECTED</p>
+                    <p className="text-green-400 font-mono">NO_ANOMALIES_FOUND</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {anomalies.map((anomaly) => (
+                    {filteredAnomalies.map((anomaly: any) => (
                       <motion.div
                         key={anomaly.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -874,7 +912,7 @@ const AdminDashboard: React.FC = () => {
                           <div className="flex items-center">
                             <AlertTriangle className="h-5 w-5 mr-2 text-yellow-400" />
                             <span className="font-bold text-yellow-400 font-mono">
-                              {anomaly.anomaly_type.toUpperCase().replace(/_/g, ' ')}
+                              {anomaly.anomaly_type?.toUpperCase().replace(/_/g, ' ') || 'UNKNOWN'}
                             </span>
                           </div>
                           <div className="flex items-center text-cyan-400 text-sm">
@@ -882,7 +920,6 @@ const AdminDashboard: React.FC = () => {
                             {formatDate(anomaly.event_ts)}
                           </div>
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                           <div>
                             <div className="flex items-center text-gray-400 text-sm mb-1">
@@ -898,18 +935,11 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex items-center text-gray-400 text-sm mb-1">
                               <Shield className="h-4 w-4 mr-1" />
                               Action: <span className={`ml-1 ${
-                                anomaly.action === 'blocked' ? 'text-red-400' : 
-                                anomaly.action === 'flagged' ? 'text-yellow-400' : 'text-blue-400'
+                                anomaly.action === 'auto_lock' ? 'text-red-400' :
+                                anomaly.action === 'anomaly_logged' ? 'text-yellow-400' :
+                                'text-blue-400'
                               } font-bold`}>
-                                {anomaly.action.toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="flex items-center text-gray-400 text-sm">
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Status: <span className={`ml-1 ${
-                                anomaly.resolved ? 'text-green-400' : 'text-yellow-400'
-                              } font-bold`}>
-                                {anomaly.resolved ? 'RESOLVED' : 'OPEN'}
+                                {anomaly.action?.toUpperCase() || 'N/A'}
                               </span>
                             </div>
                           </div>
