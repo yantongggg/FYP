@@ -33,6 +33,7 @@ interface FormData {
 
 interface BiometricData {
   faceData: string;
+  faceUrl?: string;
   livenessData: any;
 }
 
@@ -323,9 +324,13 @@ const Register = () => {
   };
 
   // Biometric handlers
-  const handleFaceCapture = (faceData: string) => {
-    setBiometricData(prev => ({ ...prev, faceData }));
-    console.log('✅ Face data captured');
+  const handleFaceCapture = (faceData: string, faceUrl?: string) => {
+    setBiometricData(prev => ({ 
+      ...prev, 
+      faceData,
+      faceUrl 
+    }));
+    console.log('✅ Face data captured with URL:', faceUrl);
   };
 
   const handleLivenessCapture = (livenessData: any) => {
@@ -334,7 +339,18 @@ const Register = () => {
   };
 
   // eKYC handlers
-  const handleFileSelect = (type: 'front' | 'back', file: File) => {
+  const handleFileSelect = async (type: 'front' | 'back', file: File) => {
+  // Clear previous errors
+  setErrors({});
+
+  // Validate image first
+  const validation = await validateICImage(file);
+    if (!validation.valid) {
+      setErrors({ ekyc: validation.error || 'Invalid image' });
+      return;
+    }
+
+    // If valid, proceed with preview
     const reader = new FileReader();
     reader.onload = (e) => {
       const preview = e.target?.result as string;
@@ -347,6 +363,66 @@ const Register = () => {
     reader.readAsDataURL(file);
   };
 
+  const [verificationResults, setVerificationResults] = useState<any>(null);
+
+
+  const validateICImage = async (file: File): Promise<{ valid: boolean; error?: string }> => {
+    // Check file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      return { valid: false, error: 'File size must be less than 5MB' };
+    }
+
+    // Check file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      return { valid: false, error: 'Please upload JPG or PNG images only' };
+    }
+
+    // Check image dimensions and quality
+    return new Promise((resolve) => {
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+        
+        img.onload = () => {
+          // Check minimum dimensions (at least 800x600)
+          if (img.width < 800 || img.height < 600) {
+            resolve({ 
+              valid: false, 
+              error: 'Image resolution too low. Please upload a clearer photo (minimum 800x600)' 
+            });
+            return;
+          }
+
+          // Check aspect ratio (typical IC aspect ratio is around 1.6:1)
+          const aspectRatio = img.width / img.height;
+          if (aspectRatio < 1.3 || aspectRatio > 1.8) {
+            resolve({ 
+              valid: false, 
+              error: 'Please upload a properly oriented IC photo' 
+            });
+            return;
+          }
+
+          resolve({ valid: true });
+        };
+
+        img.onerror = () => {
+          resolve({ valid: false, error: 'Failed to load image' });
+        };
+      };
+
+      reader.onerror = () => {
+        resolve({ valid: false, error: 'Failed to read file' });
+      };
+
+      reader.readAsDataURL(file);
+    });
+  };
+
   const uploadEKYCFiles = async () => {
     if (!ekycData.frontFile || !ekycData.backFile) {
       throw new Error('Both IC files are required');
@@ -354,30 +430,33 @@ const Register = () => {
 
     const userId = `user_${Date.now()}`;
 
-    // Upload front
+    // Upload front - FIXED bucket name
     const frontFileName = `${userId}_ic_front_${Date.now()}.jpg`;
     const { data: frontData, error: frontError } = await supabase.storage
-      .from('ekyc-documents')
+      .from('ekycdoc')  // ✅ Correct bucket name
       .upload(frontFileName, ekycData.frontFile);
 
     if (frontError) throw frontError;
 
-    // Upload back
+    // Upload back - FIXED bucket name
     const backFileName = `${userId}_ic_back_${Date.now()}.jpg`;
     const { data: backData, error: backError } = await supabase.storage
-      .from('ekyc-documents')
+      .from('ekycdoc')  // ✅ Correct bucket name
       .upload(backFileName, ekycData.backFile);
 
     if (backError) throw backError;
 
-    // Get public URLs
-    const { publicUrl: frontUrl } = supabase.storage
-      .from('ekyc-documents')
+    // Get public URLs - FIXED bucket name
+    const { data: { publicUrl: frontUrl } } = supabase.storage
+      .from('ekycdoc')  // ✅ Correct bucket name
       .getPublicUrl(frontData.path);
 
-    const { publicUrl: backUrl } = supabase.storage
-      .from('ekyc-documents')
+    const { data: { publicUrl: backUrl } } = supabase.storage
+      .from('ekycdoc')  // ✅ Correct bucket name
       .getPublicUrl(backData.path);
+
+    console.log('Front URL:', frontUrl); // Debug log
+    console.log('Back URL:', backUrl);   // Debug log
 
     return {
       frontUrl,
@@ -385,7 +464,7 @@ const Register = () => {
     };
   };
 
-  // Final submission
+  // Update the handleSubmit function to capture verification results
   const handleSubmit = async () => {
     if (!validateStep4()) return;
 
@@ -402,22 +481,17 @@ const Register = () => {
         email: formData.email,
         password: formData.password,
         faceData: biometricData.faceData,
+        faceUrl: biometricData.faceUrl,
         livenessData: biometricData.livenessData,
-        behavioralData: behavioralData,
+        behavioralData: {
+          ...behavioralData,
+          typedText: typedText  // Include the typed text
+        },
         ekycFiles: {
           frontUrl,
           backUrl
         }
       };
-
-      console.log('📊 Registration data prepared:', {
-        username: registrationData.username,
-        email: registrationData.email,
-        faceData: registrationData.faceData ? 'Present' : 'Missing',
-        livenessData: registrationData.livenessData ? 'Present' : 'Missing',
-        behavioralData: `${registrationData.behavioralData.keystrokes.length} keystrokes, ${registrationData.behavioralData.mouseMovements.length} mouse events`,
-        ekycFiles: 'URLs present'
-      });
 
       // Send to backend
       const response = await fetch('http://localhost:5000/api/register', {
@@ -432,6 +506,12 @@ const Register = () => {
 
       if (response.ok && result.success) {
         console.log('✅ Registration successful:', result);
+        
+        // Store verification results
+        if (result.verification) {
+          setVerificationResults(result.verification);
+        }
+        
         setSuccess(true);
         
         // Redirect to login after delay
@@ -440,7 +520,19 @@ const Register = () => {
         }, 3000);
       } else {
         console.error('❌ Registration failed:', result);
-        setErrors({ submit: result.error || 'Registration failed' });
+        
+        // Show specific validation errors
+        if (result.validation_errors && result.validation_errors.length > 0) {
+          const errorMessage = result.validation_errors.join('. ');
+          setErrors({ submit: errorMessage });
+        } else {
+          setErrors({ submit: result.error || 'Registration failed' });
+        }
+        
+        // If it's an eKYC validation error, go back to step 4
+        if (result.error && result.error.includes('IC') || result.error.includes('MyKad')) {
+          setCurrentStep(4);
+        }
       }
 
     } catch (error: any) {
@@ -467,6 +559,34 @@ const Register = () => {
           <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
             Complete biometric profile created with eKYC verification
           </p>
+          {/* Show verification results if available */}
+          {verificationResults && (
+            <div className="mt-6 glass-card rounded-lg p-4">
+              <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Document Scan:</span>
+                  <span className={verificationResults.docscan_result?.status === 'ok' ? 'text-green-400' : 'text-red-400'}>
+                    {verificationResults.docscan_result?.status === 'ok' ? '✅ Valid ID' : '❌ Invalid'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Face Match:</span>
+                  <span className={verificationResults.face_match_result?.same_face ? 'text-green-400' : 'text-yellow-400'}>
+                    {verificationResults.face_match_result?.same_face 
+                      ? `✅ Matched (${(verificationResults.face_match_result.confidence * 100).toFixed(0)}%)`
+                      : '⚠️ No Match'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Overall Status:</span>
+                  <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
+                    {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="text-green-400 text-sm" style={{ fontFamily: 'IBM Plex Mono' }}>
             Redirecting to login terminal...
           </div>
@@ -668,24 +788,36 @@ const Register = () => {
 
               {/* Step 2: Biometric Capture */}
               {currentStep === 2 && (
-                <div>
-                  <BiometricCapture
-                    onFaceCapture={handleFaceCapture}
-                    onLivenessCapture={handleLivenessCapture}
-                    mode="registration"
-                    userId={formData.email || 'temp_user'}
-                  />
-                  
-                  {errors.biometric && (
-                    <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
-                      <p className="text-red-400 text-sm flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-2" />
-                        {errors.biometric}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div>
+                <BiometricCapture
+                  onFaceCapture={handleFaceCapture}
+                  onLivenessCapture={handleLivenessCapture}
+                  mode="registration"
+                  userId={formData.email || 'temp_user'}
+                />
+                
+                {/* Show captured face preview if available */}
+                {biometricData.faceData && (
+                  <div className="mt-4 glass-card rounded-lg p-4">
+                    <h3 className="text-green-400 font-bold mb-2">Captured Face Preview</h3>
+                    <img 
+                      src={biometricData.faceData} 
+                      alt="Captured face" 
+                      className="w-32 h-32 mx-auto rounded-lg border-2 border-green-400"
+                    />
+                  </div>
+                )}
+                
+                {errors.biometric && (
+                  <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
+                    <p className="text-red-400 text-sm flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      {errors.biometric}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
               {/* Step 3: Behavioral Capture */}
               {currentStep === 3 && (
@@ -831,58 +963,93 @@ const Register = () => {
                 </div>
               )}
 
-              {/* Step 4: eKYC Upload */}
+              {/* Step 4: eKYC Upload - Enhanced Version */}
               {currentStep === 4 && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-cyan-400 mb-6">eKYC Document Verification</h2>
                   
+                  {/* Enhanced Instructions */}
                   <div className="bg-yellow-600/20 border border-yellow-500/30 rounded-lg p-4 mb-6">
                     <p className="text-yellow-400 text-sm font-bold mb-2">
-                      ⚠️ IMPORTANT INSTRUCTIONS:
+                      ⚠️ IMPORTANT: Your IC will be verified with PixLab
                     </p>
                     <ul className="text-yellow-300 text-sm space-y-1">
                       <li>• Upload BOTH front and back of your Malaysian IC (MyKad)</li>
                       <li>• Ensure images are clear, well-lit, and not blurry</li>
+                      <li>• All 4 corners of the IC must be visible</li>
                       <li>• IC must be placed on a plain background</li>
-                      <li>• Face on IC will be matched with your biometric profile</li>
+                      <li>• The face on your IC will be matched with your biometric photo</li>
+                      <li>• Minimum image size: 800x600 pixels</li>
                     </ul>
                   </div>
+                  
+                  {/* Biometric Face Preview */}
+                  {biometricData.faceUrl && (
+                    <div className="glass-card rounded-lg p-4 mb-6">
+                      <h3 className="text-green-400 font-bold mb-2">Your Biometric Face</h3>
+                      <p className="text-cyan-400 text-sm mb-3">
+                        This face will be matched with your IC photo
+                      </p>
+                      <img 
+                        src={biometricData.faceUrl} 
+                        alt="Your biometric face" 
+                        className="w-32 h-32 mx-auto rounded-lg border-2 border-green-400"
+                      />
+                    </div>
+                  )}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Front IC Upload */}
                     <div>
                       <label className="block text-green-400 font-bold mb-2">
-                        IC FRONT (WITH PHOTO)
+                        IC FRONT (WITH YOUR PHOTO)
                       </label>
-                      <div className="border-2 border-dashed border-green-500/50 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
+                      <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
+                        ekycData.frontPreview 
+                          ? 'border-green-500 bg-green-900/10' 
+                          : 'border-green-500/50 hover:border-green-500'
+                      }`}>
                         {ekycData.frontPreview ? (
                           <div>
                             <img
                               src={ekycData.frontPreview}
                               alt="IC Front Preview"
-                              className="max-w-full h-48 object-contain mx-auto mb-4 rounded"
+                              className="max-w-full h-48 object-contain mx-auto mb-4 rounded border border-green-500/30"
                             />
-                            <p className="text-green-400 text-sm">✅ Front IC uploaded</p>
+                            <div className="flex items-center justify-center text-green-400 text-sm mb-2">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Front IC uploaded
+                            </div>
+                            <p className="text-cyan-400 text-xs">
+                              Will be verified with PixLab DocScan
+                            </p>
                           </div>
                         ) : (
                           <div>
                             <Upload className="h-12 w-12 text-green-400 mx-auto mb-2" />
-                            <p className="text-cyan-400 text-sm mb-2">Upload IC front side</p>
+                            <p className="text-cyan-400 text-sm mb-2">
+                              Upload IC front side with your photo
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                              JPG/PNG • Max 5MB • Min 800x600
+                            </p>
                           </div>
                         )}
                         <input
                           type="file"
-                          accept="image/*"
-                          onChange={(e) => {
+                          accept="image/jpeg,image/jpg,image/png"
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) handleFileSelect('front', file);
+                            if (file) {
+                              await handleFileSelect('front', file);
+                            }
                           }}
                           className="hidden"
                           id="ic-front"
                         />
                         <label
                           htmlFor="ic-front"
-                          className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer"
+                          className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer hover-glow"
                         >
                           {ekycData.frontPreview ? 'CHANGE FRONT' : 'UPLOAD FRONT'}
                         </label>
@@ -892,37 +1059,54 @@ const Register = () => {
                     {/* Back IC Upload */}
                     <div>
                       <label className="block text-green-400 font-bold mb-2">
-                        IC BACK (WITH SIGNATURE)
+                        IC BACK (WITH CHIP & SIGNATURE)
                       </label>
-                      <div className="border-2 border-dashed border-green-500/50 rounded-lg p-6 text-center hover:border-green-500 transition-colors">
+                      <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
+                        ekycData.backPreview 
+                          ? 'border-green-500 bg-green-900/10' 
+                          : 'border-green-500/50 hover:border-green-500'
+                      }`}>
                         {ekycData.backPreview ? (
                           <div>
                             <img
                               src={ekycData.backPreview}
                               alt="IC Back Preview"
-                              className="max-w-full h-48 object-contain mx-auto mb-4 rounded"
+                              className="max-w-full h-48 object-contain mx-auto mb-4 rounded border border-green-500/30"
                             />
-                            <p className="text-green-400 text-sm">✅ Back IC uploaded</p>
+                            <div className="flex items-center justify-center text-green-400 text-sm mb-2">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Back IC uploaded
+                            </div>
+                            <p className="text-cyan-400 text-xs">
+                              Ready for verification
+                            </p>
                           </div>
                         ) : (
                           <div>
                             <Upload className="h-12 w-12 text-green-400 mx-auto mb-2" />
-                            <p className="text-cyan-400 text-sm mb-2">Upload IC back side</p>
+                            <p className="text-cyan-400 text-sm mb-2">
+                              Upload IC back side
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                              JPG/PNG • Max 5MB • Min 800x600
+                            </p>
                           </div>
                         )}
                         <input
                           type="file"
-                          accept="image/*"
-                          onChange={(e) => {
+                          accept="image/jpeg,image/jpg,image/png"
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
-                            if (file) handleFileSelect('back', file);
+                            if (file) {
+                              await handleFileSelect('back', file);
+                            }
                           }}
                           className="hidden"
                           id="ic-back"
                         />
                         <label
                           htmlFor="ic-back"
-                          className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer"
+                          className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer hover-glow"
                         >
                           {ekycData.backPreview ? 'CHANGE BACK' : 'UPLOAD BACK'}
                         </label>
@@ -930,6 +1114,20 @@ const Register = () => {
                     </div>
                   </div>
                   
+                  {/* Validation Status */}
+                  {(ekycData.frontPreview && ekycData.backPreview) && (
+                    <div className="glass-card rounded-lg p-4 mt-4">
+                      <div className="flex items-center text-green-400">
+                        <Shield className="h-5 w-5 mr-2" />
+                        <span className="font-bold">Ready for PixLab Verification</span>
+                      </div>
+                      <p className="text-cyan-400 text-sm mt-2">
+                        Your IC will be validated and face-matched when you complete registration
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Error Display */}
                   {errors.ekyc && (
                     <div className="p-3 bg-red-900/20 border border-red-500/30 rounded">
                       <p className="text-red-400 text-sm flex items-center">
@@ -946,6 +1144,33 @@ const Register = () => {
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-cyan-400 mb-6">Registration Review</h2>
                   
+                      {/* Add eKYC Preview Section */}
+                    <div className="glass-card rounded-lg p-4">
+                      <h3 className="text-lg font-bold text-green-400 mb-3">eKYC Documents</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {ekycData.frontPreview && (
+                          <div>
+                            <p className="text-sm text-gray-400 mb-2">IC Front:</p>
+                            <img 
+                              src={ekycData.frontPreview} 
+                              alt="IC Front" 
+                              className="w-full h-48 object-contain rounded border border-green-500/30"
+                            />
+                          </div>
+                        )}
+                        {ekycData.backPreview && (
+                          <div>
+                            <p className="text-sm text-gray-400 mb-2">IC Back:</p>
+                            <img 
+                              src={ekycData.backPreview} 
+                              alt="IC Back" 
+                              className="w-full h-48 object-contain rounded border border-green-500/30"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* User Information */}
                     <div className="glass-card rounded-lg p-4">

@@ -1,5 +1,5 @@
 //biometriccapture.tsx
-
+import { supabase } from '../lib/supabase';
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Camera, CheckCircle, AlertCircle, Loader2, RefreshCw, User } from "lucide-react";
 
@@ -36,7 +36,7 @@ interface LivenessMetrics {
 }
 
 interface BiometricCaptureProps {
-  onFaceCapture: (faceData: string) => void;
+  onFaceCapture: (faceData: string, faceUrl?: string) => void;
   onLivenessCapture: (livenessData: any) => void;
   mode?: "registration" | "authentication";
   userId?: string;
@@ -223,22 +223,69 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
 
   const saveToSupabase = useCallback(async (faceData: string, livenessData: LivenessResponse) => {
     try {
-      // For now, just log success - actual Supabase integration handled in final registration
-      console.log("✅ Biometric data captured successfully");
-      console.log("Face data length:", faceData.length);
-      console.log("Liveness data:", livenessData);
+      // Add this at the start of saveToSupabase to debug auth
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current auth session:', session);
+      console.log('User ID:', session?.user?.id);
+      console.log('User role:', session?.user?.role);
+      // Extract user ID from props or generate temporary one
+      const tempUserId = userId || `temp_${Date.now()}`;
       
-      // Store the data in state for final submission
-      // The actual Supabase upload will be handled in Register.tsx final submission
-      // This is to avoid duplicate uploads during the capture process
+      // Convert base64 to blob for face image upload
+      const base64Data = faceData.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
+      
+      // Upload face image to Supabase Storage
+      const fileName = `${tempUserId}_face_${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('biometric-faces')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Upload error details:', {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          error: uploadError.error,
+          details: uploadError.details,
+          hint: uploadError.hint
+        });
+      }
+      
+      // Get public URL for the uploaded face
+      const { data: { publicUrl } } = supabase.storage
+        .from('biometric')
+        .getPublicUrl(`${fileName}`);
+      
+      console.log('✅ Face image uploaded to Supabase:', publicUrl);
+      
+      // Store face URL in parent component state for later use
+      // Call parent callback with face URL
+      if (onFaceCapture) {
+        onFaceCapture(faceData, publicUrl); // Pass both base64 and URL
+      }
       
       return true;
     } catch (error) {
-      console.error("Save error:", error);
-      setCameraError("Failed to process biometric data");
-      return false;
+    console.error("Save error:", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
     }
-  }, []);
+    setCameraError("Failed to save face image");
+    return false;
+  }
+  }, [userId, onFaceCapture]);
 
   // Helper function to wait for a specific liveness requirement
   const waitForLivenessStep = async (
@@ -310,12 +357,18 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
 
       // Step 6: Process and validate data
       setCurrentStep("saving");
+      // const saved = await saveToSupabase(referenceFace, finalResult);
+      // if (!saved) throw new Error("Failed to process biometric data");
       const saved = await saveToSupabase(referenceFace, finalResult);
-      if (!saved) throw new Error("Failed to process biometric data");
+      if (!saved) {
+        console.error("DEBUG - saveToSupabase returned false");
+        throw new Error("Failed to process biometric data");
+      }
+
 
       // Complete
       setCurrentStep("complete");
-      onFaceCapture(referenceFace);
+      // onFaceCapture(referenceFace); // This will now include the URL in the callback
       onLivenessCapture(finalResult);
 
     } catch (error: any) {

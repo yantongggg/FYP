@@ -20,8 +20,8 @@ import bcrypt
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import face_recognition
-
-# Supabase imports
+import requests
+from typing import Dict, Optional, Tuple
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -47,6 +47,7 @@ from ml_models.liveness_detector import (
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
+PIXLAB_API_KEY = "d80d10fc49ca9954b7dfcb4628050fc8"
 
 def convert_numpy_types(obj):
     """
@@ -138,19 +139,29 @@ class SupabaseManager:
     # ========== STEP 2: BIOMETRIC & LIVENESS ==========
     async def store_biometric_data(self, user_id: str, biometric_data: Dict) -> Dict:
         """
-        Step 2: Store biometric and liveness data
-        - Stores face embedding
-        - Records liveness detection results
+        Step 2: Store biometric and liveness data with face image URL
         """
         try:
+              # Force flush stdout to see prints immediately
+            print(f"DEBUG - store_biometric_data called for user: {user_id}", flush=True)
+            print(f"DEBUG - biometric_data keys: {list(biometric_data.keys())}", flush=True)
+            print(f"DEBUG - face_url: {biometric_data.get('face_url', 'NOT PROVIDED')}", flush=True)
+            
+            # Also log to logger
+            logger.info(f"Biometric data received - face_url: {biometric_data.get('face_url', 'NOT PROVIDED')}")
+
             # Generate face embedding
             face_embedding = self._generate_face_embedding(biometric_data['face_data'])
             
-            # Store biometric profile
+            # Get face URL if provided
+            face_url = biometric_data.get('face_url', '')
+            
+            # Store biometric profile with face URL
             biometric_profile = {
                 "user_id": user_id,
                 "face_template_hash": hashlib.sha256(biometric_data['face_data'].encode()).hexdigest(),
                 "face_embedding": face_embedding,
+                "face_image_url": face_url,  # Store the face image URL
                 "enrollment_quality": biometric_data['liveness_data'].get('enhanced_face_score', 0.9),
                 "enrollment_device_info": {
                     "user_agent": request.headers.get("User-Agent"),
@@ -159,26 +170,25 @@ class SupabaseManager:
                 "created_at": datetime.now().isoformat()
             }
             
-            # Store liveness data
-            liveness_record = {
+            # Also store face data in biometric_data table
+            biometric_data_record = {
                 "user_id": user_id,
-                "session_id": f"reg_{user_id}_{int(time.time())}",
-                "blink_count": biometric_data['liveness_data']['blink_count'],
-                "mouth_open_count": biometric_data['liveness_data']['mouth_open_count'],
-                "head_movement_count": biometric_data['liveness_data']['head_movement_count'],
-                "face_real_score": biometric_data['liveness_data']['face_real_score'],
-                "enhanced_score": biometric_data['liveness_data'].get('enhanced_face_score', 0),
-                "overall_passed": biometric_data['liveness_data']['liveness_validation']['overall_liveness_passed'],
-                "step_requirements": biometric_data['liveness_data']['liveness_validation']['step_requirements'],
-                "mode": "registration",
-                "created_at": datetime.now().isoformat()
+                "biometric_type": "face",
+                "face_embedding": face_embedding,
+                "face_image_url": face_url,  # Store URL here too
+                "data": {
+                    "encoding": face_embedding,
+                    "quality_score": biometric_data['liveness_data'].get('enhanced_face_score', 0.9)
+                },
+                "quality_score": biometric_data['liveness_data'].get('enhanced_face_score', 0.9),
+                "capture_timestamp": datetime.now().isoformat()
             }
             
             if self.client:
                 # Store biometric profile
                 bio_result = self.client.table("biometric_profiles").insert(biometric_profile).execute()
-                # Store liveness data
-                liveness_result = self.client.table("liveness_data").insert(liveness_record).execute()
+                # Store in biometric_data table
+                data_result = self.client.table("biometric_data").insert(biometric_data_record).execute()
                 
                 # Update user as biometric enrolled
                 self.client.table("users").update({
@@ -357,25 +367,184 @@ class SupabaseManager:
             }
 
     # ========== STEP 4: eKYC DOCUMENTS ==========
+    # Enhanced store_ekyc_documents method for SupabaseManager class
+
     async def store_ekyc_documents(self, user_id: str, ekyc_data: Dict) -> Dict:
         """
-        Step 4: Store eKYC documents
-        - Stores document URLs
-        - Records verification status
+        Step 4: Store eKYC documents with validation and face matching
         """
         try:
             ekyc_records = []
+            verification_results = {
+                'docscan_result': None,
+                'face_match_result': None,
+                'verified': False,
+                'validation_errors': []
+            }
             
-            # Store front document
-            if ekyc_data.get('frontUrl'):
-                front_record = {
-                    "user_id": user_id,
-                    "document_type": "ic_front",
-                    "document_url": ekyc_data['frontUrl'],
-                    "verification_status": "pending",
-                    "created_at": datetime.now().isoformat()
+            # Validate that we have the required URLs
+            if not ekyc_data.get('frontUrl') or not ekyc_data.get('backUrl'):
+                return {
+                    "success": False,
+                    "error": "Both front and back IC images are required"
                 }
-                ekyc_records.append(front_record)
+            
+            # Step 1: Validate front IC with PixLab DocScan
+            logger.info(f"🔍 Validating front IC with PixLab for user {user_id}")
+            front_url = ekyc_data['frontUrl']
+            
+            # Call PixLab DocScan
+            docscan_result = self.call_pixlab_docscan(front_url)
+            verification_results['docscan_result'] = docscan_result
+            
+            # Check if it's a valid document
+            if docscan_result.get('status') != 'ok':
+                verification_results['validation_errors'].append(
+                    f"Document validation failed: {docscan_result.get('error', 'Invalid document')}"
+                )
+                return {
+                    "success": False,
+                    "error": "Invalid IC document. Please upload a clear image of your MyKad.",
+                    "validation_errors": verification_results['validation_errors']
+                }
+            
+            # Check if it's actually a document
+            if not docscan_result.get('is_document'):
+                verification_results['validation_errors'].append(
+                    "Uploaded image is not recognized as a valid ID document"
+                )
+                return {
+                    "success": False,
+                    "error": "Not a valid ID document. Please upload your MyKad.",
+                    "validation_errors": verification_results['validation_errors']
+                }
+            
+            # Check if it's a Malaysian IC
+            if docscan_result.get('country') != 'my':
+                verification_results['validation_errors'].append(
+                    f"Document is from {docscan_result.get('country', 'unknown country')}, not Malaysia"
+                )
+                return {
+                    "success": False,
+                    "error": "Please upload a valid Malaysian MyKad",
+                    "validation_errors": verification_results['validation_errors']
+                }
+            
+            # Check document quality/confidence
+            confidence = docscan_result.get('confidence', 0)
+            if confidence < 0.8:  # 80% threshold
+                verification_results['validation_errors'].append(
+                    f"Document quality too low: {confidence:.0%}. Please upload a clearer image."
+                )
+                return {
+                    "success": False,
+                    "error": "Image quality too low. Please upload a clearer photo of your IC.",
+                    "validation_errors": verification_results['validation_errors']
+                }
+            
+            # Extract information from the IC
+            fields = docscan_result.get('fields', {})
+            extracted_info = {
+                'name': fields.get('fullName', ''),
+                'ic_number': fields.get('idNumber', '') or fields.get('documentNumber', ''),
+                'date_of_birth': fields.get('dateOfBirth', ''),
+                'address': fields.get('address', ''),
+                'gender': fields.get('gender', ''),
+                'nationality': fields.get('nationality', 'MALAYSIA')
+            }
+            
+            # Step 2: Get the biometric face URL from Step 2
+            biometric_face_url = None
+            if self.client:
+                bio_result = self.client.table("biometric_data") \
+                    .select("face_image_url") \
+                    .eq("user_id", user_id) \
+                    .eq("biometric_type", "face") \
+                    .order("capture_timestamp", desc=True) \
+                    .limit(1) \
+                    .execute()
+                
+                if bio_result.data and bio_result.data[0].get('face_image_url'):
+                    biometric_face_url = bio_result.data[0]['face_image_url']
+                    logger.info(f"✅ Found biometric face URL: {biometric_face_url}")
+                else:
+                    logger.warning("⚠️ No biometric face URL found")
+            
+            # Step 3: Face matching between biometric face and IC face
+            face_match_score = 0.0
+            face_match_confidence = 0.0
+            face_match_passed = False
+            
+            if docscan_result.get('face_url') and biometric_face_url:
+                logger.info("🔍 Comparing faces with PixLab FaceCompare")
+                
+                # Call PixLab FaceCompare
+                face_compare_result = self.call_pixlab_facecompare(
+                    biometric_face_url,  # Source: biometric face from Step 2
+                    docscan_result['face_url']  # Target: face from IC
+                )
+                verification_results['face_match_result'] = face_compare_result
+                
+                if face_compare_result.get('status') == 200:
+                    same_face = face_compare_result.get('same_face', False)
+                    face_match_confidence = face_compare_result.get('confidence', 0.0)
+                    face_match_score = 1.0 if same_face else 0.0
+                    
+                    # Require high confidence for face matching
+                    face_match_passed = same_face and face_match_confidence >= 0.85
+                    
+                    if not face_match_passed:
+                        verification_results['validation_errors'].append(
+                            f"Face verification failed. Confidence: {face_match_confidence:.0%}"
+                        )
+                else:
+                    verification_results['validation_errors'].append(
+                        "Face comparison failed. Please try again."
+                    )
+            else:
+                verification_results['validation_errors'].append(
+                    "Could not extract face from IC or biometric data missing"
+                )
+            
+            # Step 4: Determine overall verification status
+            verification_status = 'pending'
+            if docscan_result.get('status') == 'ok' and face_match_passed:
+                verification_status = 'verified'
+                verification_results['verified'] = True
+            elif docscan_result.get('status') == 'ok' and not face_match_passed:
+                verification_status = 'face_mismatch'
+            else:
+                verification_status = 'failed'
+            
+            # If verification failed, return error
+            if verification_status != 'verified':
+                error_msg = "eKYC verification failed. "
+                if verification_status == 'face_mismatch':
+                    error_msg += "Face on IC does not match your biometric photo."
+                else:
+                    error_msg += "Please ensure you upload a clear photo of your MyKad."
+                
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "validation_errors": verification_results['validation_errors'],
+                    "verification": verification_results
+                }
+            
+            # Step 5: Store the verified documents
+            front_record = {
+                "user_id": user_id,
+                "document_type": "ic_front",
+                "document_url": ekyc_data['frontUrl'],
+                "verification_status": verification_status,
+                "extracted_info": extracted_info,
+                "face_match_score": face_match_score,
+                "face_match_confidence": face_match_confidence,
+                "document_confidence": confidence,
+                "pixlab_face_url": docscan_result.get('face_url', ''),
+                "created_at": datetime.now().isoformat()
+            }
+            ekyc_records.append(front_record)
             
             # Store back document
             if ekyc_data.get('backUrl'):
@@ -383,7 +552,196 @@ class SupabaseManager:
                     "user_id": user_id,
                     "document_type": "ic_back",
                     "document_url": ekyc_data['backUrl'],
-                    "verification_status": "pending",
+                    "verification_status": verification_status,
+                    "created_at": datetime.now().isoformat()
+                }
+                ekyc_records.append(back_record)
+            
+            # Insert into database
+            if self.client and ekyc_records:
+                for record in ekyc_records:
+                    self.client.table("ekyc_documents").insert(record).execute()
+                
+                logger.info(f"✅ Step 4 Complete: eKYC documents verified and stored for {user_id}")
+            
+            return {
+                "success": True,
+                "message": "eKYC documents verified and stored successfully",
+                "documents_count": len(ekyc_records),
+                "verification": {
+                    "docscan_result": {
+                        "status": docscan_result.get('status'),
+                        "is_document": docscan_result.get('is_document'),
+                        "country": docscan_result.get('country'),
+                        "confidence": confidence,
+                        "extracted_info": extracted_info
+                    },
+                    "face_match_result": {
+                        "same_face": face_match_passed,
+                        "confidence": face_match_confidence,
+                        "score": face_match_score
+                    },
+                    "verified": verification_results['verified'],
+                    "validation_errors": verification_results['validation_errors']
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Step 4 Error - eKYC storage/verification failed: {e}")
+            return {
+                "success": False, 
+                "error": str(e),
+                "validation_errors": ["System error during verification"]
+            }
+
+    # ========== HELPER METHODS ==========
+    
+
+
+    def call_pixlab_docscan(self, image_url: str) -> Dict:
+        """Call PixLab DOCSCAN API for MyKad processing"""
+        try:
+            logger.info(f"PixLab DocScan Response: {json.dumps(result, indent=2)}")
+            logger.info(f"PixLab DocScan Request - URL: {image_url}, Key: {PIXLAB_API_KEY[:10]}...")
+            payload = {
+                "img": image_url,
+                "type": "idcard",
+                "country": "my",  # Malaysia
+                "key": PIXLAB_API_KEY
+            }
+            
+            logger.info(f"Calling PixLab DOCSCAN API with URL: {image_url}")
+            response = requests.post("https://api.pixlab.io/docscan", data=payload, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"PixLab DOCSCAN response status: {result.get('status')}")
+                return result
+            else:
+                logger.error(f"PixLab API error: {response.status_code} - {response.text}")
+                return {"status": "error", "error": f"API error: {response.status_code}"}
+                
+        except Exception as e:
+            logger.error(f"PixLab API call failed: {str(e)}")
+            return {"status": "error", "error": str(e)}
+
+    def call_pixlab_facecompare(self, biometric_face_url: str, ic_face_url: str) -> Dict:
+        """Call PixLab FaceCompare API"""
+        try:
+            logger.info(f"PixLab FaceCompare Response: {json.dumps(result, indent=2)}")
+            params = {
+                'src': biometric_face_url,
+                'target': ic_face_url,
+                'key': PIXLAB_API_KEY
+            }
+            
+            logger.info(f"Calling PixLab FaceCompare API")
+            response = requests.get('https://api.pixlab.io/facecompare', params=params, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"PixLab FaceCompare result: same_face={result.get('same_face')}, confidence={result.get('confidence')}")
+                return result
+            else:
+                logger.error(f"PixLab FaceCompare error: {response.status_code}")
+                return {"status": "error", "error": f"API error: {response.status_code}"}
+                
+        except Exception as e:
+            logger.error(f"PixLab FaceCompare failed: {str(e)}")
+            return {"status": "error", "error": str(e)}
+
+    async def store_ekyc_documents(self, user_id: str, ekyc_data: Dict) -> Dict:
+        """
+        Step 4: Store eKYC documents and perform verification with PixLab
+        """
+        try:
+            ekyc_records = []
+            verification_results = {
+                'docscan_result': None,
+                'face_match_result': None,
+                'verified': False
+            }
+            
+            # Store front document
+            if ekyc_data.get('frontUrl'):
+                # First, call PixLab DocScan on the front IC
+                logger.info(f"Processing front IC with PixLab for user {user_id}")
+                docscan_result = self.call_pixlab_docscan(ekyc_data['frontUrl'])
+                verification_results['docscan_result'] = docscan_result
+                
+                # Extract information from DocScan result
+                extracted_info = {}
+                if docscan_result.get('status') == 'ok' and docscan_result.get('fields'):
+                    fields = docscan_result.get('fields', {})
+                    extracted_info = {
+                        'name': fields.get('fullName', ''),
+                        'ic_number': fields.get('idNumber', '') or fields.get('documentNumber', ''),
+                        'date_of_birth': fields.get('dateOfBirth', ''),
+                        'address': fields.get('address', ''),
+                        'gender': fields.get('gender', ''),
+                        'nationality': fields.get('nationality', 'MALAYSIA')
+                    }
+                
+                # Get the user's biometric face URL
+                biometric_face_url = None
+                if self.client:
+                    # Get the stored biometric face URL
+                    bio_result = self.client.table("biometric_data") \
+                        .select("face_image_url") \
+                        .eq("user_id", user_id) \
+                        .eq("biometric_type", "face") \
+                        .order("capture_timestamp", desc=True) \
+                        .limit(1) \
+                        .execute()
+                    
+                    if bio_result.data and bio_result.data[0].get('face_image_url'):
+                        biometric_face_url = bio_result.data[0]['face_image_url']
+                
+                # If we have both the IC face and biometric face, compare them
+                face_match_score = 0.0
+                face_match_confidence = 0.0
+                if docscan_result.get('face_url') and biometric_face_url:
+                    logger.info("Comparing faces with PixLab FaceCompare")
+                    face_compare_result = self.call_pixlab_facecompare(
+                        biometric_face_url, 
+                        docscan_result['face_url']
+                    )
+                    verification_results['face_match_result'] = face_compare_result
+                    
+                    if face_compare_result.get('status') == 200:
+                        face_match_score = 1.0 if face_compare_result.get('same_face', False) else 0.0
+                        face_match_confidence = face_compare_result.get('confidence', 0.0)
+                
+                # Determine verification status
+                verification_status = 'pending'
+                if docscan_result.get('status') == 'ok' and face_match_score > 0.5:
+                    verification_status = 'verified'
+                    verification_results['verified'] = True
+                elif docscan_result.get('status') == 'ok':
+                    verification_status = 'face_mismatch'
+                else:
+                    verification_status = 'failed'
+                
+                front_record = {
+                    "user_id": user_id,
+                    "document_type": "ic_front",
+                    "document_url": ekyc_data['frontUrl'],
+                    "verification_status": verification_status,
+                    "extracted_info": extracted_info,
+                    "face_match_score": face_match_score,
+                    "face_match_confidence": face_match_confidence,
+                    "docscan_result": docscan_result,
+                    "created_at": datetime.now().isoformat()
+                }
+                ekyc_records.append(front_record)
+            
+            # Store back document (simplified - no verification needed)
+            if ekyc_data.get('backUrl'):
+                back_record = {
+                    "user_id": user_id,
+                    "document_type": "ic_back",
+                    "document_url": ekyc_data['backUrl'],
+                    "verification_status": verification_results['verified'] and 'verified' or 'pending',
                     "created_at": datetime.now().isoformat()
                 }
                 ekyc_records.append(back_record)
@@ -392,20 +750,20 @@ class SupabaseManager:
                 for record in ekyc_records:
                     self.client.table("ekyc_documents").insert(record).execute()
                 
-                logger.info(f"✅ Step 4 Complete: eKYC documents stored for {user_id}")
+                logger.info(f"✅ Step 4 Complete: eKYC documents stored and verified for {user_id}")
             
             return {
                 "success": True,
-                "message": "eKYC documents stored successfully",
-                "documents_count": len(ekyc_records)
+                "message": "eKYC documents stored and verified successfully",
+                "documents_count": len(ekyc_records),
+                "verification": verification_results
             }
             
         except Exception as e:
-            logger.error(f"Step 4 Error - eKYC storage failed: {e}")
+            logger.error(f"Step 4 Error - eKYC storage/verification failed: {e}")
             return {"success": False, "error": str(e)}
 
-    # ========== HELPER METHODS ==========
-    
+
     def _generate_face_embedding(self, face_data_b64: str) -> List[float]:
         """Generate face embedding for recognition"""
         try:
@@ -709,6 +1067,7 @@ def register():
     """
     try:
         data = request.get_json()
+        print("DEBUG - Request JSON:", data)
         
         # Validate required fields
         required_fields = ['username', 'email', 'password', 'faceData', 'livenessData', 'behavioralData', 'ekycFiles']
@@ -736,14 +1095,24 @@ def register():
         
         user_id = credentials_result['user_id']
         
+
+        # Step 2: Store biometric data
+
+        # Print the data before you call the coroutine
+        # print("DEBUG - biometric_data received:", {
+        #     'face_data': data['faceData'],
+        #     'liveness_data': data['livenessData']
+        # })
+
         # Step 2: Store biometric data
         biometric_result = asyncio.run(
             supabase_manager.store_biometric_data(user_id, {
                 'face_data': data['faceData'],
-                'liveness_data': data['livenessData']
+                'liveness_data': data['livenessData'],
+                'face_url': data.get('faceUrl', '')  
             })
         )
-        
+
         if not biometric_result['success']:
             return jsonify(biometric_result), 400
         
@@ -763,6 +1132,9 @@ def register():
         if not ekyc_result['success']:
             return jsonify(ekyc_result), 400
         
+        # Extract verification results
+        verification_results = ekyc_result.get('verification', {})
+
         # All steps completed successfully
         logger.info(f"✅ Registration completed successfully for {user_id}")
         
@@ -776,6 +1148,7 @@ def register():
                 'behavioral': True,
                 'ekyc': True
             }
+            
         })
         
     except Exception as e:
@@ -792,6 +1165,7 @@ def behavioral_verify():
     """
     try:
         data = request.get_json()
+        # print("DEBUG - Request JSON:", data)
         
         # Validate required fields
         user_id = data.get('user_id')
@@ -838,6 +1212,7 @@ def behavioral_monitor():
     """
     try:
         data = request.get_json()
+        # print("DEBUG - Request JSON:", data)
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData', {})
         
@@ -938,11 +1313,23 @@ class EnhancedLivenessSession:
 USER_SESSIONS = {}
 session_lock = threading.Lock()
 
+# Add this test endpoint to your Flask app
+@app.route('/api/test-pixlab', methods=['GET'])
+def test_pixlab():
+    # Test with a sample Malaysian IC image
+    test_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/MyKad.png/300px-MyKad.png"
+    result = supabase_manager.call_pixlab_docscan(test_url)
+    return jsonify({
+        "docscan_result": result,
+        "api_key_first_10": PIXLAB_API_KEY[:10]
+    })
+
 @app.route('/api/sequential-liveness-detect', methods=['POST'])
 def sequential_liveness_detect_optimized():
     """Optimized liveness detection endpoint"""
     try:
         data = request.get_json()
+        # print("DEBUG - Request JSON:", data)
         user_id = data.get("user_id", "default_user")
         mode = data.get("mode", "registration")
         reset_counters = data.get("reset_counters", False)

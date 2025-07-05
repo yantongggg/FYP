@@ -1,5 +1,6 @@
 // Fixed UserHome.tsx with all TypeScript errors resolved
-
+import EKYCDocumentViewer from '../components/EKYCDocumentViewer';
+import { FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -790,7 +791,20 @@ const UserHome = () => {
             </div>
           </div>
         </motion.div>
-
+        {/* eKYC Documents Status */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="mt-8 terminal-border rounded-lg p-6"
+        >
+          <h2 className="text-2xl font-bold text-green-400 mb-6 flex items-center">
+            <FileText className="mr-3 h-6 w-6" />
+            eKYC_DOCUMENTS
+          </h2>
+          
+          <EKYCDocumentViewer userId={userData?.uid || ''} />
+        </motion.div>
         {/* System Status */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
