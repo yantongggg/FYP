@@ -10,11 +10,15 @@ import numpy as np
 import face_recognition
 from scipy.spatial import distance as dist
 from collections import defaultdict
-
 # from keras.models import load_model
 from facenet_pytorch import MTCNN
 import torch
 from torchvision import models, transforms
+from utils.supabase_manager import SupabaseManager
+
+supabase_manager = SupabaseManager()
+
+
 
 # Logger setup
 logging.basicConfig(
@@ -134,10 +138,12 @@ class UserState:
 # ============= LivenessDetector Class =============
 
 class LivenessDetector:
-    def __init__(self):
+    def __init__(self, supabase_manager):
         self.ear_threshold = EAR_THRESHOLD
         self.mar_threshold = MAR_THRESHOLD
         self.user_states = defaultdict(UserState)
+        self.supabase_manager = supabase_manager
+       
 
     def get_user_state(self, user_id):
         return self.user_states[user_id]
@@ -156,6 +162,7 @@ class LivenessDetector:
             return 0.5
         try:
             import torchvision.transforms as transforms
+            from PIL import Image
 
             # Convert to PIL Image
             from PIL import Image
@@ -173,10 +180,12 @@ class LivenessDetector:
             # Inference
             with torch.no_grad():
                 output = FAS_MODEL(input_tensor)
-                prob = torch.nn.functional.softmax(output, dim=1)[0, 0].item()
-            print("prediction",prob)
-
+                # FIX: Return REAL probability (index 1) instead of FAKE probability (index 0)
+                prob = torch.nn.functional.softmax(output, dim=1)[0, 1].item()  # ← Changed from [0, 0] to [0, 1]
+            
+            print("Real probability:", prob)
             return prob
+            
         except Exception as e:
             logger.error(f"ResNet18 prediction error: {e}")
             return 0.5
@@ -196,6 +205,15 @@ class LivenessDetector:
         return False
 
     def process_frame_for_user(self, frame, user_id):
+        """Enhanced process_frame_for_user with complete debugging"""
+        
+        # ===== CONFIGURABLE THRESHOLDS =====
+        REAL_SCORE_THRESHOLD = 0.2
+        MIN_BLINKS = 3
+        MIN_MOUTH_OPENS = 2  
+        MIN_HEAD_MOVEMENTS = 2
+        
+        # ===== INITIALIZATION CHECKS =====
         if MTCNN_MODEL is None:
             return {
                 "success": False,
@@ -209,6 +227,8 @@ class LivenessDetector:
             }
 
         user_state = self.get_user_state(user_id)
+        if not hasattr(user_state, "reference_photo_saved"):
+            user_state.reference_photo_saved = False
         user_state.frames_processed += 1
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -218,6 +238,8 @@ class LivenessDetector:
         real_score = 0.0
         current_eye_closed = False
         current_mouth_open = False
+        ear = None
+        mar = None
 
         if boxes is not None and len(boxes) > 0:
             face_detected = True
@@ -234,7 +256,7 @@ class LivenessDetector:
             if face_crop.size > 0:
                 logger.info(f"Face crop shape: {face_crop.shape}")
                 real_score = self._predict_fas(face_crop)
-            
+                logger.info(f"🎯 Anti-spoofing score: {real_score:.3f} (threshold: {REAL_SCORE_THRESHOLD})")
 
             face_locations = [(y1, x2, y2, x1)]
             landmarks = face_recognition.face_landmarks(rgb_frame, face_locations)
@@ -267,8 +289,8 @@ class LivenessDetector:
                 elif not current_mouth_open and user_state.last_mouth_state:
                     if not user_state.mouth_completed:
                         user_state.total_mouth_open += 1
-                        logger.info(f"User {user_id}: Mouth open detected! Total: {user_state.total_mouth_open}")
-                        if user_state.total_mouth_open >= 2:
+                        logger.info(f"✨ User {user_id}: Mouth open detected! Total: {user_state.total_mouth_open}/{MIN_MOUTH_OPENS}")
+                        if user_state.total_mouth_open >= MIN_MOUTH_OPENS:
                             user_state.mouth_completed = True
                     user_state.mouth_open_frames = 0
                 user_state.last_mouth_state = current_mouth_open
@@ -315,7 +337,7 @@ class LivenessDetector:
         return self.process_frame_for_user(frame, "default_user")
 
 # ============= Singleton Detector =============
-DETECTOR = LivenessDetector()
+DETECTOR = LivenessDetector(supabase_manager)
 
 # ============= API Helper Functions =============
 def initialize_detector():
@@ -335,24 +357,24 @@ def process_liveness_request(frame_data: str, reset_counters: bool = False):
     frame = process_base64_image(frame_data)
     return DETECTOR.process_frame(frame)
 
-def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
-    try:
-        if user_id is None:
-            user_id = "default_user"
-        if reset_counters:
-            DETECTOR.reset_user_counters(user_id)
-        frame = process_base64_image(face_image_b64)
-        result = DETECTOR.process_frame_for_user(frame, user_id)
-        return result
-    except Exception as e:
-        logger.error(f"process_frame_api error: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "face_detected": False,
-            "blink_count": 0,
-            "mouth_open_count": 0,
-            "head_movement_count": 0,
-            "face_real_score": 0.0,
-            "liveness_passed": False
-        }
+# def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
+#     try:
+#         if user_id is None:
+#             user_id = "default_user"
+#         if reset_counters:
+#             DETECTOR.reset_user_counters(user_id)
+#         frame = process_base64_image(face_image_b64)
+#         result = DETECTOR.process_frame_for_user(frame, user_id)
+#         return result
+#     except Exception as e:
+#         logger.error(f"process_frame_api error: {e}")
+#         return {
+#             "success": False,
+#             "error": str(e),
+#             "face_detected": False,
+#             "blink_count": 0,
+#             "mouth_open_count": 0,
+#             "head_movement_count": 0,
+#             "face_real_score": 0.0,
+#             "liveness_passed": False
+#         }

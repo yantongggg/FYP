@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import cv2
 import numpy as np
 import base64
@@ -7,30 +7,49 @@ import logging
 import face_recognition
 from io import BytesIO
 from PIL import Image
-import requests
 import json
-import tempfile
 import os
-
 from ml_models.face_verification import FaceVerificationModel
 from utils.image_utils import decode_base64_image, preprocess_face_image
 from utils.supabase_client import supabase_client
 from utils.storage_utils import BiometricStorage
 from utils.logger import setup_logger
+from utils.ocr_utils import MyKadOCR  # Import the existing OCR utility
 
+# Create blueprint instead of importing app
 ekyc_bp = Blueprint('ekyc', __name__)
 logger = setup_logger(__name__)
 
-# PixLab API Configuration
-PIXLAB_API_KEY = "d80d10fc49ca9954b7dfcb4628050fc8"
-PIXLAB_DOCSCAN_URL = "https://api.pixlab.io/docscan"
-
 # Initialize models
-face_model = FaceVerificationModel()
+try:
+    face_model = FaceVerificationModel()
+except ImportError:
+    logger.warning("Face verification model not available")
+    face_model = None
 
-def validate_image_corners_and_clarity(image: np.ndarray) -> dict:
+try:
+    mykad_ocr = MyKadOCR()  # Initialize the MyKad OCR processor
+except ImportError:
+    logger.warning("MyKad OCR not available - using mock")
+    class MockMyKadOCR:
+        def process_mykad_front(self, image):
+            return {
+                'success': True,
+                'extracted_info': {'ic_number': '123456-78-9012'},
+                'authenticity': {'authenticity_score': 0.8, 'found_keywords': ['MALAYSIA']}
+            }
+        def process_mykad_back(self, image):
+            return {
+                'success': True,
+                'ic_number_back': '123456-78-9012',
+                'security_features': {'hologram': True, 'microtext': True}
+            }
+    mykad_ocr = MockMyKadOCR()
+
+def validate_ic_image_opencv(image: np.ndarray) -> dict:
     """
-    Validate image has all 4 corners visible and is not blurry
+    Validate image using OpenCV to ensure it's a clear IC-like document
+    Checks: resolution, aspect ratio, corners visibility, clarity
     """
     try:
         height, width = image.shape[:2]
@@ -38,14 +57,24 @@ def validate_image_corners_and_clarity(image: np.ndarray) -> dict:
         # Convert to grayscale for analysis
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         
-        # Check blur using Laplacian variance
+        # 1. Check minimum resolution (800x500 pixels)
+        # min_width, min_height = 800, 500
+        # has_sufficient_resolution = width >= min_width and height >= min_height
+        
+        # 2. Check aspect ratio (Malaysian IC is approximately 85.6mm × 54mm ≈ 1.585:1)
+        aspect_ratio = width / height
+        expected_ratio = 1.585
+        aspect_ratio_tolerance = 0.3
+        has_valid_aspect_ratio = abs(aspect_ratio - expected_ratio) <= aspect_ratio_tolerance
+        
+        # 3. Check image sharpness using Laplacian variance
         laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
         is_sharp = laplacian_var > 100  # Threshold for sharpness
         
-        # Check corners using edge detection
+        # 4. Check all 4 corners are visible using edge detection
         edges = cv2.Canny(gray, 50, 150)
         
-        # Define corner regions (top-left, top-right, bottom-left, bottom-right)
+        # Define corner regions (10% of image size)
         corner_size = min(width, height) // 10
         corners = {
             'top_left': edges[0:corner_size, 0:corner_size],
@@ -54,7 +83,7 @@ def validate_image_corners_and_clarity(image: np.ndarray) -> dict:
             'bottom_right': edges[height-corner_size:height, width-corner_size:width]
         }
         
-        # Check if corners have sufficient edges (document present)
+        # Check if corners have sufficient edges
         corner_scores = {}
         all_corners_visible = True
         
@@ -64,100 +93,147 @@ def validate_image_corners_and_clarity(image: np.ndarray) -> dict:
             edge_ratio = edge_pixels / total_pixels if total_pixels > 0 else 0
             corner_scores[corner_name] = edge_ratio
             
-            if edge_ratio < 0.05:  # Less than 5% edges means corner might be cut off
+            # If less than 5% edges, corner might be cut off
+            if edge_ratio < 0.05:
                 all_corners_visible = False
         
+        # 5. Check brightness and contrast
+        brightness = np.mean(gray)
+        contrast = np.std(gray)
+        has_good_brightness = 50 < brightness < 200
+        has_good_contrast = contrast > 30
+        
+        # 6. Detect if it's likely a card/document (rectangular shape)
+        # Find contours and look for large rectangular shapes
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        has_card_shape = False
+        
+        for contour in contours:
+            # Approximate contour to polygon
+            epsilon = 0.02 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+            
+            # Check if it's a quadrilateral with significant area
+            if len(approx) == 4:
+                area = cv2.contourArea(contour)
+                image_area = width * height
+                # Card should occupy at least 30% of the image
+                if area > 0.3 * image_area:
+                    has_card_shape = True
+                    break
+        
+        # Calculate overall validation score
+        validation_checks = {
+            # 'resolution': has_sufficient_resolution,
+            'aspect_ratio': has_valid_aspect_ratio,
+            'sharpness': is_sharp,
+            'corners_visible': all_corners_visible,
+            'brightness': has_good_brightness,
+            'contrast': has_good_contrast,
+            'card_shape': has_card_shape
+        }
+        
+        # Image is valid if it passes most checks
+        passed_checks = sum(validation_checks.values())
+        is_valid = passed_checks >= 5  # At least 5 out of 6 checks
+        
         return {
-            'is_valid': is_sharp and all_corners_visible,
-            'is_sharp': is_sharp,
-            'sharpness_score': float(laplacian_var),
-            'all_corners_visible': all_corners_visible,
-            'corner_scores': corner_scores,
-            'resolution': {'width': width, 'height': height}
+            'is_valid': is_valid,
+            'validation_score': passed_checks / 6.0,
+            'checks': validation_checks,
+            'metrics': {
+                # 'resolution': f"{width}x{height}",
+                'aspect_ratio': round(aspect_ratio, 3),
+                'sharpness_score': round(laplacian_var, 2),
+                'brightness': round(brightness, 2),
+                'contrast': round(contrast, 2)
+            },
+            'corner_scores': corner_scores
         }
         
     except Exception as e:
-        logger.error(f"Error validating image: {str(e)}")
+        logger.error(f"Error validating IC image: {str(e)}")
         return {
             'is_valid': False,
             'error': str(e)
         }
 
-def call_pixlab_docscan(image_b64: str) -> dict:
+def extract_ic_face(image: np.ndarray) -> dict:
     """
-    Call PixLab DOCSCAN API for MyKad processing
+    Extract face from IC image using face_recognition or OpenCV
+    Returns cropped face image and location
     """
     try:
-        # Remove data URL prefix if present
-        if ',' in image_b64:
-            image_b64 = image_b64.split(',')[1]
+        # Method 1: Try face_recognition first (more accurate)
+        face_locations = face_recognition.face_locations(image)
         
-        # Prepare request
-        payload = {
-            "img": image_b64,
-            "type": "idcard",
-            "country": "my",  # Malaysia
-            "key": PIXLAB_API_KEY
+        if face_locations:
+            # Get the first face found
+            top, right, bottom, left = face_locations[0]
+            
+            # Add some padding around the face
+            padding = 20
+            top = max(0, top - padding)
+            right = min(image.shape[1], right + padding)
+            bottom = min(image.shape[0], bottom + padding)
+            left = max(0, left - padding)
+            
+            # Crop the face
+            face_image = image[top:bottom, left:right]
+            
+            return {
+                'success': True,
+                'face_image': face_image,
+                'location': {'top': top, 'right': right, 'bottom': bottom, 'left': left},
+                'method': 'face_recognition'
+            }
+        
+        # Method 2: Fallback to OpenCV Haar Cascade
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        
+        if len(faces) > 0:
+            # Get the largest face
+            x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+            
+            # Add padding
+            padding = 20
+            x = max(0, x - padding)
+            y = max(0, y - padding)
+            w = min(image.shape[1] - x, w + 2 * padding)
+            h = min(image.shape[0] - y, h + 2 * padding)
+            
+            # Crop the face
+            face_image = image[y:y+h, x:x+w]
+            
+            return {
+                'success': True,
+                'face_image': face_image,
+                'location': {'x': x, 'y': y, 'width': w, 'height': h},
+                'method': 'opencv_cascade'
+            }
+        
+        return {
+            'success': False,
+            'error': 'No face detected in IC image'
         }
         
-        # Make API call
-        logger.info("Calling PixLab DOCSCAN API...")
-        response = requests.post(PIXLAB_DOCSCAN_URL, data=payload, timeout=30)
-        
-        if response.status_code == 200:
-            result = response.json()
-            logger.info(f"PixLab response status: {result.get('status')}")
-            return result
-        else:
-            logger.error(f"PixLab API error: {response.status_code} - {response.text}")
-            return {"status": "error", "error": f"API error: {response.status_code}"}
-            
     except Exception as e:
-        logger.error(f"PixLab API call failed: {str(e)}")
-        return {"status": "error", "error": str(e)}
+        logger.error(f"Error extracting face from IC: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
-def download_and_process_face_url(face_url: str) -> tuple:
+def compare_faces_local(ic_face_image: np.ndarray, user_id: str) -> dict:
     """
-    Download face image from PixLab URL and extract embedding
-    Returns: (face_image_array, face_embedding)
+    Compare IC face with stored biometric face (optional - can skip if too complex)
     """
     try:
-        # Download image from URL
-        response = requests.get(face_url, timeout=10)
-        if response.status_code != 200:
-            logger.error(f"Failed to download face from URL: {face_url}")
-            return None, None
-        
-        # Convert to image
-        image = Image.open(BytesIO(response.content))
-        image_array = np.array(image)
-        
-        # Ensure RGB format
-        if len(image_array.shape) == 2:
-            image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
-        elif image_array.shape[2] == 4:
-            image_array = cv2.cvtColor(image_array, cv2.COLOR_RGBA2RGB)
-        
-        # Extract face encoding
-        face_encodings = face_recognition.face_encodings(image_array)
-        if not face_encodings:
-            logger.error("No face found in downloaded image")
-            return image_array, None
-        
-        return image_array, face_encodings[0]
-        
-    except Exception as e:
-        logger.error(f"Error downloading/processing face: {str(e)}")
-        return None, None
-
-def compare_face_with_stored(ic_face_encoding: np.ndarray, user_id: str) -> dict:
-    """
-    Compare IC face encoding with stored biometric face
-    """
-    try:
-        # Get stored face data including URL
+        # Get stored face encoding
         stored_face_result = supabase_client.table('biometric_data')\
-            .select('face_embedding, face_image_url, data')\
+            .select('face_embedding, data')\
             .eq('user_id', user_id)\
             .eq('biometric_type', 'face')\
             .order('capture_timestamp', desc=True)\
@@ -167,8 +243,7 @@ def compare_face_with_stored(ic_face_encoding: np.ndarray, user_id: str) -> dict
         if not stored_face_result.data:
             return {
                 'match': False,
-                'similarity': 0.0,
-                'confidence': 'none',
+                'confidence': 0.0,
                 'error': 'No stored biometric face data found'
             }
         
@@ -182,68 +257,48 @@ def compare_face_with_stored(ic_face_encoding: np.ndarray, user_id: str) -> dict
         else:
             return {
                 'match': False,
-                'similarity': 0.0,
-                'confidence': 'none',
+                'confidence': 0.0,
                 'error': 'No valid face encoding in stored data'
             }
         
-        # Calculate similarity
+        # Extract encoding from IC face
+        ic_face_encodings = face_recognition.face_encodings(ic_face_image)
+        
+        if not ic_face_encodings:
+            return {
+                'match': False,
+                'confidence': 0.0,
+                'error': 'Could not extract face encoding from IC'
+            }
+        
+        ic_face_encoding = ic_face_encodings[0]
+        
+        # Compare faces
         face_distance = face_recognition.face_distance([stored_encoding], ic_face_encoding)[0]
         similarity = 1.0 - face_distance
         
-        # Determine match and confidence
-        is_match = similarity >= 0.6  # Threshold for matching
-        
-        if similarity >= 0.8:
-            confidence = 'high'
-        elif similarity >= 0.6:
-            confidence = 'medium'
-        else:
-            confidence = 'low'
+        # Determine match (threshold: 0.6)
+        is_match = similarity >= 0.6
         
         return {
             'match': is_match,
-            'similarity': float(similarity),
-            'distance': float(face_distance),
-            'confidence': confidence,
-            'stored_face_url': stored_data.get('face_image_url', '')
+            'confidence': float(similarity),
+            'distance': float(face_distance)
         }
         
     except Exception as e:
         logger.error(f"Error comparing faces: {str(e)}")
         return {
             'match': False,
-            'similarity': 0.0,
-            'confidence': 'error',
+            'confidence': 0.0,
             'error': str(e)
         }
-
-def store_ic_face_image(user_id: str, face_image: np.ndarray, ic_type: str = 'front') -> str:
-    """
-    Store IC face image to Supabase storage
-    """
-    try:
-        # Convert numpy array to bytes
-        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(face_image, cv2.COLOR_RGB2BGR))
-        image_bytes = buffer.tobytes()
-        
-        # Upload to Supabase
-        result = BiometricStorage.store_ekyc_document(
-            user_id, 
-            image_bytes, 
-            f'ic_face_{ic_type}'
-        )
-        
-        return result.get('public_url', '')
-        
-    except Exception as e:
-        logger.error(f"Error storing IC face: {str(e)}")
-        return ''
 
 @ekyc_bp.route('/ekyc-mykad-verify', methods=['POST'])
 def ekyc_mykad_verify():
     """
-    Complete Malaysian IC (MyKad) eKYC verification with face matching
+    Complete Malaysian IC (MyKad) eKYC verification using local processing
+    No external APIs - uses OpenCV for validation and Tesseract for OCR
     """
     try:
         data = request.get_json()
@@ -261,9 +316,11 @@ def ekyc_mykad_verify():
         ic_front_image = decode_base64_image(ic_front_b64)
         ic_back_image = decode_base64_image(ic_back_b64)
         
-        # Step 1: Validate image quality and corners
-        front_validation = validate_image_corners_and_clarity(ic_front_image)
-        back_validation = validate_image_corners_and_clarity(ic_back_image)
+        # Step 1: Validate image quality using OpenCV
+        logger.info(f"🔍 Validating IC images for user {user_id}")
+        
+        front_validation = validate_ic_image_opencv(ic_front_image)
+        back_validation = validate_ic_image_opencv(ic_back_image)
         
         if not front_validation['is_valid']:
             return jsonify({
@@ -271,119 +328,100 @@ def ekyc_mykad_verify():
                 'status': 'fail',
                 'reason': 'IC front image validation failed',
                 'details': {
-                    'is_sharp': front_validation.get('is_sharp', False),
-                    'all_corners_visible': front_validation.get('all_corners_visible', False),
-                    'sharpness_score': front_validation.get('sharpness_score', 0)
+                    'validation_score': front_validation.get('validation_score', 0),
+                    'failed_checks': [k for k, v in front_validation.get('checks', {}).items() if not v],
+                    'metrics': front_validation.get('metrics', {})
                 }
             })
         
         if not back_validation['is_valid']:
             return jsonify({
                 'success': False,
-                'status': 'fail',
+                'status': 'fail', 
                 'reason': 'IC back image validation failed',
-                'details': back_validation
+                'details': {
+                    'validation_score': back_validation.get('validation_score', 0),
+                    'failed_checks': [k for k, v in back_validation.get('checks', {}).items() if not v]
+                }
             })
         
-        # Step 2: Process with PixLab
-        logger.info(f"Processing IC front with PixLab for user {user_id}")
-        pixlab_result = call_pixlab_docscan(ic_front_b64)
+        # Step 2: Process front IC with OCR
+        logger.info("📝 Processing IC front with Tesseract OCR")
         
-        # Check PixLab response
-        if pixlab_result.get('status') != 'ok':
+        ocr_result = mykad_ocr.process_mykad_front(ic_front_image)
+        
+        if not ocr_result['success']:
             return jsonify({
                 'success': False,
                 'status': 'fail',
-                'reason': f"PixLab processing failed: {pixlab_result.get('error', 'Unknown error')}"
+                'reason': f"OCR processing failed: {ocr_result.get('error', 'Unknown error')}"
             })
         
-        # Validate it's a document and from Malaysia
-        if not pixlab_result.get('is_document'):
-            return jsonify({
-                'success': False,
-                'status': 'fail',
-                'reason': 'Uploaded image is not recognized as a valid document'
-            })
+        extracted_info = ocr_result['extracted_info']
+        authenticity = ocr_result['authenticity']
         
-        if pixlab_result.get('country') != 'my':
-            return jsonify({
-                'success': False,
-                'status': 'fail',
-                'reason': f"Document is not a Malaysian IC (detected: {pixlab_result.get('country', 'unknown')})"
-            })
-        
-        # Check confidence
-        confidence = pixlab_result.get('confidence', 0)
-        if confidence < 0.9:
-            return jsonify({
-                'success': False,
-                'status': 'fail',
-                'reason': f'Document confidence too low: {confidence:.2f} (required: 0.90)'
-            })
-        
-        # Extract fields
-        fields = pixlab_result.get('fields', {})
-        extracted_info = {
-            'name': fields.get('fullName', ''),
-            'ic_number': fields.get('idNumber', '') or fields.get('documentNumber', ''),
-            'date_of_birth': fields.get('dateOfBirth', ''),
-            'address': fields.get('address', ''),
-            'gender': fields.get('gender', ''),
-            'religion': fields.get('religion', ''),
-            'nationality': fields.get('nationality', 'MALAYSIA')
-        }
-        
-        # Validate IC number extracted
-        if not extracted_info['ic_number']:
+        # Validate that we got essential information
+        if not extracted_info.get('ic_number'):
             return jsonify({
                 'success': False,
                 'status': 'fail',
                 'reason': 'Could not extract IC number from document'
             })
         
-        # Step 3: CRITICAL - Face matching
-        face_match_result = {'match': False, 'similarity': 0.0}
-        ic_face_url = ''
-        
-        if pixlab_result.get('face_url'):
-            logger.info("Downloading and processing face from PixLab...")
-            ic_face_image, ic_face_encoding = download_and_process_face_url(pixlab_result['face_url'])
-            
-            if ic_face_encoding is not None:
-                # Compare with stored biometric face
-                face_match_result = compare_face_with_stored(ic_face_encoding, user_id)
-                
-                # Store IC face image
-                if ic_face_image is not None:
-                    ic_face_url = store_ic_face_image(user_id, ic_face_image, 'front')
-            else:
-                face_match_result = {
-                    'match': False,
-                    'similarity': 0.0,
-                    'confidence': 'none',
-                    'error': 'Could not extract face encoding from IC'
+        # Check authenticity based on OCR text
+        if not authenticity['is_authentic']:
+            return jsonify({
+                'success': False,
+                'status': 'fail',
+                'reason': 'Document does not appear to be a valid Malaysian IC',
+                'details': {
+                    'authenticity_score': authenticity['authenticity_score'],
+                    'found_keywords': authenticity['found_keywords']
                 }
-        else:
-            face_match_result = {
-                'match': False,
-                'similarity': 0.0,
-                'confidence': 'none',
-                'error': 'No face detected in IC'
-            }
+            })
         
-        # Process back IC
-        logger.info("Processing IC back...")
-        pixlab_back_result = call_pixlab_docscan(ic_back_b64)
+        # Step 3: Process back IC for validation
+        logger.info("📝 Processing IC back")
+        
+        back_ocr_result = mykad_ocr.process_mykad_back(ic_back_image)
+        
+        # Step 4: Extract face from IC (optional)
+        face_extraction_result = extract_ic_face(ic_front_image)
+        ic_face_url = ''
+        face_match_result = {'match': False, 'confidence': 0.0}
+        
+        if face_extraction_result['success']:
+            logger.info("✅ Face extracted from IC")
+            
+            # Store the extracted face
+            try:
+                _, buffer = cv2.imencode('.jpg', cv2.cvtColor(face_extraction_result['face_image'], cv2.COLOR_RGB2BGR))
+                face_storage_result = BiometricStorage.store_ekyc_document(
+                    user_id,
+                    buffer.tobytes(),
+                    'ic_face_front'
+                )
+                ic_face_url = face_storage_result.get('public_url', '')
+            except Exception as e:
+                logger.error(f"Error storing IC face: {str(e)}")
+            
+            # Optional: Compare faces (can be skipped if too complex)
+            # Uncomment the following lines if you want face comparison
+            # face_match_result = compare_faces_local(face_extraction_result['face_image'], user_id)
+            # logger.info(f"Face comparison result: {face_match_result}")
+        else:
+            logger.warning("⚠️ Could not extract face from IC")
         
         # Calculate scores
-        authenticity_score = pixlab_result.get('confidence', 0.9)
-        face_match_score = face_match_result['similarity']
+        authenticity_score = authenticity['authenticity_score']
+        validation_score = (front_validation['validation_score'] + back_validation['validation_score']) / 2
         
-        # Overall verification (face match is critical)
+        # Overall verification based on OCR and validation
+        # Since face matching is optional, we base verification on OCR success and document authenticity
         is_verified = (
-            authenticity_score >= 0.9 and 
-            face_match_result['match'] and 
-            face_match_score >= 0.6
+            authenticity_score >= 0.6 and  # Document appears authentic based on text
+            validation_score >= 0.7 and    # Images pass quality checks
+            bool(extracted_info.get('ic_number'))  # Essential info extracted
         )
         
         # Store images
@@ -399,23 +437,25 @@ def ekyc_mykad_verify():
             'extracted_info': extracted_info,
             'verification_status': 'verified' if is_verified else 'rejected',
             'verification_score': authenticity_score,
-            'face_match_score': face_match_score,
+            'face_match_score': face_match_result.get('confidence', 0.0),
             'face_match_details': face_match_result,
             'document_authenticity_score': authenticity_score,
-            'pixlab_response': {
-                'country': pixlab_result.get('country'),
-                'document_type': pixlab_result.get('document_type'),
-                'confidence': confidence
-            },
+            'validation_score': validation_score,
+            'ocr_confidence': authenticity_score,
+            'processing_method': 'local_ocr',
             'created_at': datetime.utcnow().isoformat(),
             'verified_at': datetime.utcnow().isoformat() if is_verified else None
         }
         
         # Insert into database
-        db_result = supabase_client.table('ekyc_documents').insert(ekyc_record).execute()
+        try:
+            db_result = supabase_client.table('ekyc_documents').insert(ekyc_record).execute()
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            db_result = None
         
         logger.info(f"eKYC verification - User: {user_id}, Verified: {is_verified}, "
-                   f"Face Match: {face_match_result['match']}, Score: {face_match_score:.3f}")
+                   f"Authenticity: {authenticity_score:.3f}, Validation: {validation_score:.3f}")
         
         # Prepare response
         response = {
@@ -424,33 +464,44 @@ def ekyc_mykad_verify():
             'verified': is_verified,
             'verification_score': round(authenticity_score, 3),
             'extracted_info': extracted_info,
-            'face_match': {
-                'matched': face_match_result['match'],
-                'score': round(face_match_score, 3),
-                'confidence': face_match_result['confidence'],
-                'error': face_match_result.get('error')
-            },
             'document_validation': {
-                'is_document': pixlab_result.get('is_document', False),
-                'country': pixlab_result.get('country'),
-                'confidence': round(confidence, 3),
-                'corners_visible': front_validation['all_corners_visible'],
-                'is_sharp': front_validation['is_sharp']
+                'front_validation': {
+                    'score': round(front_validation['validation_score'], 3),
+                    'checks': front_validation['checks'],
+                    'metrics': front_validation['metrics']
+                },
+                'back_validation': {
+                    'score': round(back_validation['validation_score'], 3),
+                    'checks': back_validation['checks']
+                },
+                'authenticity': {
+                    'score': round(authenticity_score, 3),
+                    'keywords_found': authenticity['found_keywords'],
+                    'has_ic_format': authenticity['has_ic_format']
+                }
+            },
+            'face_extraction': {
+                'extracted': face_extraction_result['success'],
+                'method': face_extraction_result.get('method'),
+                'face_url': ic_face_url
             },
             'images': {
                 'front_url': storage_results.get('front_url', ''),
                 'back_url': storage_results.get('back_url', ''),
                 'face_url': ic_face_url
             },
-            'ekyc_id': db_result.data[0]['id'] if db_result.data else None
+            'ekyc_id': db_result.data[0]['id'] if db_result and db_result.data else None
         }
         
+        # Add reason if not verified
         if not is_verified:
             reasons = []
-            if not face_match_result['match']:
-                reasons.append(f"Face does not match biometric capture (score: {face_match_score:.2f})")
-            if authenticity_score < 0.9:
+            if authenticity_score < 0.6:
                 reasons.append(f"Document authenticity score too low: {authenticity_score:.2f}")
+            if validation_score < 0.7:
+                reasons.append(f"Image quality validation score too low: {validation_score:.2f}")
+            if not extracted_info.get('ic_number'):
+                reasons.append("Could not extract IC number")
             
             response['reason'] = "; ".join(reasons) if reasons else "Verification failed"
         

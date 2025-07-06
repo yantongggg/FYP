@@ -115,7 +115,7 @@ const MyAnomalies = () => {
         id: `mock-anomaly-${i}`,
         event_ts: date.toISOString(),
         anomaly_type: anomalyTypes[i % anomalyTypes.length],
-        score: 0.3 + Math.random() * 0.6,
+        score: 0.2 + Math.random() * 0.6,
         action: actions[i % actions.length],
         details: {
           description: `Anomaly detected in ${anomalyTypes[i % anomalyTypes.length].replace('_', ' ')}`,

@@ -13,6 +13,18 @@ class MyKadOCR:
     """OCR utilities specifically for Malaysian IC (MyKad) processing"""
     
     def __init__(self):
+        # Set Tesseract path for Windows
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+        self.tesseract_configs = [
+        '--oem 3 --psm 6',  # Default config without char whitelist
+        '--oem 3 --psm 7',  # Single text line
+        '--oem 3 --psm 8',  # Single word
+        '--oem 3 --psm 13', # Raw line
+        '--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789-'  # Numbers and dash only
+    ]
+    
+        
         # Configure Tesseract for better OCR results
         self.tesseract_config = '--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/., '
         
@@ -28,13 +40,16 @@ class MyKadOCR:
         ]
     
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """Preprocess image for better OCR results"""
+        """Preprocess image for better OCR results using THRESH_TRUNC as per Malaysian IC OCR repo"""
         try:
             # Convert to grayscale
             if len(image.shape) == 3:
                 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             else:
                 gray = image.copy()
+            
+            # Apply THRESH_TRUNC as per the GitHub repo
+            gray = cv2.threshold(gray, 127, 255, cv2.THRESH_TRUNC)[1]
             
             # Apply CLAHE for better contrast
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -43,7 +58,7 @@ class MyKadOCR:
             # Denoise
             denoised = cv2.fastNlMeansDenoising(enhanced)
             
-            # Apply threshold
+            # Apply additional threshold for better text extraction
             _, thresh = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
             return thresh
@@ -51,30 +66,33 @@ class MyKadOCR:
         except Exception as e:
             logger.error(f"Error preprocessing image: {str(e)}")
             return image
-    
+        
     def extract_ic_number(self, text: str) -> Optional[str]:
-        """Extract IC number from OCR text"""
+        """Extract IC number from OCR text with multiple patterns"""
         try:
-            # Find IC number pattern
-            matches = re.findall(self.ic_number_pattern, text)
+            logger.info(f"OCR extracted text: {repr(text)}")  # Debug logging
             
-            if matches:
-                ic_number = matches[0]
-                # Validate IC number format
-                if self.validate_ic_number_format(ic_number):
-                    return ic_number
+            # Multiple IC number patterns to try
+            patterns = [
+                r'(\d{6}-\d{2}-\d{4})',           # Standard format
+                r'(\d{6}\s*-\s*\d{2}\s*-\s*\d{4})', # With spaces
+                r'(\d{6}\s+\d{2}\s+\d{4})',       # Space separated
+                r'(\d{12})',                       # All digits together
+                r'(\d{6}[-\s]?\d{2}[-\s]?\d{4})', # Flexible separators
+            ]
             
-            # Try alternative extraction methods
-            # Look for 12-digit sequences with dashes
-            alt_pattern = r'(\d{6}[-\s]\d{2}[-\s]\d{4})'
-            alt_matches = re.findall(alt_pattern, text)
+            for pattern in patterns:
+                matches = re.findall(pattern, text)
+                for match in matches:
+                    # Normalize the format
+                    digits_only = re.sub(r'[^\d]', '', match)
+                    if len(digits_only) == 12:
+                        formatted = f"{digits_only[:6]}-{digits_only[6:8]}-{digits_only[8:]}"
+                        if self.validate_ic_number_format(formatted):
+                            logger.info(f"IC number extracted: {formatted}")
+                            return formatted
             
-            for match in alt_matches:
-                # Normalize format
-                normalized = re.sub(r'[-\s]', '-', match)
-                if self.validate_ic_number_format(normalized):
-                    return normalized
-            
+            logger.warning(f"No valid IC number found in text: {text[:200]}...")
             return None
             
         except Exception as e:
@@ -318,20 +336,38 @@ class MyKadOCR:
             # Preprocess image
             processed_image = self.preprocess_image(image)
             
-            # Extract text using OCR
-            text = pytesseract.image_to_string(processed_image, config=self.tesseract_config)
+            # Try multiple OCR configurations
+            text = None
+            ic_number = None
             
-            # Extract IC number first (needed for other extractions)
-            ic_number = self.extract_ic_number(text)
+            for config in self.tesseract_configs:
+                try:
+                    text = pytesseract.image_to_string(processed_image, config=config)
+                    ic_number = self.extract_ic_number(text)
+                    if ic_number:
+                        logger.info(f"IC number found with config: {config}")
+                        break
+                except Exception as e:
+                    logger.warning(f"OCR config {config} failed: {e}")
+                    continue
+            
+            if not ic_number:
+                # Try with original image if preprocessing failed
+                try:
+                    text = pytesseract.image_to_string(image, config=self.tesseract_configs[0])
+                    ic_number = self.extract_ic_number(text)
+                except Exception as e:
+                    logger.error(f"Fallback OCR failed: {e}")
             
             if not ic_number:
                 return {
                     'success': False,
                     'error': 'Could not extract IC number',
-                    'extracted_info': {}
+                    'extracted_info': {},
+                    'debug_text': text[:500] if text else "No text extracted"
                 }
             
-            # Extract other information
+            # Rest of your existing extraction code...
             extracted_info = {
                 'ic_number': ic_number,
                 'name': self.extract_name(text, ic_number),
@@ -357,7 +393,26 @@ class MyKadOCR:
                 'success': False,
                 'error': str(e),
                 'extracted_info': {}
-            }
+        }
+
+    def preprocess_image_alternative(self, image: np.ndarray) -> np.ndarray:
+        """Alternative preprocessing for difficult images"""
+        try:
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image.copy()
+            
+            # Try adaptive threshold instead of fixed threshold
+            adaptive_thresh = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            )
+            
+            return adaptive_thresh
+            
+        except Exception as e:
+            logger.error(f"Alternative preprocessing failed: {e}")
+            return image
     
     def process_mykad_back(self, image: np.ndarray) -> Dict:
         """Process MyKad back image and validate"""
@@ -464,7 +519,7 @@ class MyKadOCR:
             
             # Quality checks
             quality_checks = {
-                'sufficient_resolution': width >= min_width and height >= min_height,
+                # 'sufficient_resolution': width >= min_width and height >= min_height,
                 'sufficient_sharpness': laplacian_var > 100,  # Threshold for sharpness
                 'good_brightness': 50 < brightness < 200,     # Good brightness range
                 'sufficient_contrast': contrast > 30,         # Minimum contrast
@@ -478,7 +533,7 @@ class MyKadOCR:
                 'quality_score': quality_score,
                 'quality_checks': quality_checks,
                 'metrics': {
-                    'resolution': f"{width}x{height}",
+                    # 'resolution': f"{width}x{height}",
                     'sharpness': laplacian_var,
                     'brightness': brightness,
                     'contrast': contrast

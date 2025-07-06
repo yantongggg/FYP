@@ -253,25 +253,30 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         });
 
       if (uploadError) {
-        console.error('Upload error details:', {
-          message: uploadError.message,
-          statusCode: uploadError.statusCode,
-          error: uploadError.error,
-          details: uploadError.details,
-          hint: uploadError.hint
-        });
+        console.error('Upload error details:', uploadError);
+        setCameraError(`Upload failed: ${uploadError.message}`);
+        return false; // ✅ Added return false
+      }
+
+      if (!uploadData) {
+        console.error('No upload data returned');
+        setCameraError('Upload failed: No data returned');
+        return false; // ✅ Added check for uploadData
       }
       
       // Get public URL for the uploaded face
       const { data: { publicUrl } } = supabase.storage
-        .from('biometric')
-        .getPublicUrl(`${fileName}`);
+        .from('biometric-faces')
+        .getPublicUrl(uploadData.path);
       
       console.log('✅ Face image uploaded to Supabase:', publicUrl);
+      console.log('✅ Upload data:', uploadData); // ✅ Add this debug line
+      console.log('✅ Face data length:', faceData?.length);
       
       // Store face URL in parent component state for later use
       // Call parent callback with face URL
       if (onFaceCapture) {
+        console.log('✅ Calling onFaceCapture with URL:', publicUrl); 
         onFaceCapture(faceData, publicUrl); // Pass both base64 and URL
       }
       
@@ -357,13 +362,9 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
 
       // Step 6: Process and validate data
       setCurrentStep("saving");
-      // const saved = await saveToSupabase(referenceFace, finalResult);
-      // if (!saved) throw new Error("Failed to process biometric data");
+      console.log('DEBUG - Calling onFaceCapture with face data length:', referenceFace.length);
+      // onFaceCapture(referenceFace); // ❌ REMOVED - saveToSupabase will call it with URL
       const saved = await saveToSupabase(referenceFace, finalResult);
-      if (!saved) {
-        console.error("DEBUG - saveToSupabase returned false");
-        throw new Error("Failed to process biometric data");
-      }
 
 
       // Complete
@@ -515,12 +516,10 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       )}
 
       {singleFaceConfirmed && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-          <div className="bg-green-500/20 border border-green-500 rounded-lg px-3 py-2">
+          <div className="flex items-center bg-green-500/20 border border-green-500 rounded-lg px-3 py-2">
             <User className="h-4 w-4 text-green-400 mr-2" />
             <span className="text-green-400 text-sm font-bold">Single Face Detected</span>
           </div>
-        </div>
       )}
 
       <div

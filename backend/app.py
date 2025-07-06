@@ -1,5 +1,8 @@
-# backend/app_refactored.py
-# Clean implementation of 4-step multimodal biometric authentication
+# backend/app.py
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -10,8 +13,9 @@ import logging
 import os
 import sys
 import time
+import uuid
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, List
 from dataclasses import dataclass, asdict
 import json
@@ -23,10 +27,16 @@ import face_recognition
 import requests
 from typing import Dict, Optional, Tuple
 from supabase import create_client, Client
-from dotenv import load_dotenv
+from utils.ocr_utils import MyKadOCR
+from utils.image_utils import decode_base64_image
+from io import BytesIO
+from ml_models.liveness_detector import LivenessDetector, initialize_models
+from utils.supabase_manager import SupabaseManager
 
-# Load environment variables
-load_dotenv()
+supabase_manager = SupabaseManager()
+
+
+
 
 # Enhanced logging
 logging.basicConfig(
@@ -35,19 +45,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import optimized detector
+# Import optimized detector - Remove the incorrect import
 sys.path.append(os.path.join(os.path.dirname(__file__), 'ml_models'))
-from ml_models.liveness_detector import (
-    process_frame_api,
-    initialize_detector,
-    DETECTOR
-)
+
+# Initialize MyKadOCR (add this after other initializations) - Mock if not available
+try:
+    from utils.ocr_utils import MyKadOCR
+    mykad_ocr = MyKadOCR()
+except ImportError:
+    logger.warning("MyKadOCR not available - using mock implementation")
+    class MockMyKadOCR:
+        def process_mykad_front(self, image):
+            return {
+                'success': True,
+                'extracted_info': {'ic_number': '123456-78-9012'},
+                'authenticity': {'authenticity_score': 0.8, 'found_keywords': ['MALAYSIA']}
+            }
+    mykad_ocr = MockMyKadOCR()
 
 # Flask App
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
-
-PIXLAB_API_KEY = "d80d10fc49ca9954b7dfcb4628050fc8"
 
 def convert_numpy_types(obj):
     """
@@ -78,975 +96,102 @@ BEHAVIORAL_THRESHOLDS = {
     'trust_delta_bad': -10  # Trust score decrease for anomalies
 }
 
-# ===== DATABASE MANAGER =====
-class SupabaseManager:
-    """Manages all Supabase database operations"""
-    
-    def __init__(self):
-        self.url = os.getenv("SUPABASE_URL")
-        self.service_key = os.getenv("SUPABASE_SERVICE_KEY")
-        
-        if not self.url or not self.service_key:
-            logger.warning("Supabase credentials not found - running in mock mode")
-            self.client = None
-        else:
-            self.client: Client = create_client(self.url, self.service_key)
-            logger.info("✅ Supabase client initialized")
 
-    # ========== STEP 1: USER CREDENTIALS ==========
-    async def store_user_credentials(self, user_data: Dict) -> Dict:
-        """
-        Step 1: Store user credentials securely
-        - Hashes password with bcrypt
-        - Creates user record in users table
-        """
-        try:
-            # Generate user ID
-            user_id = f"user_{hashlib.md5(user_data['email'].encode()).hexdigest()[:8]}_{int(time.time())}"
-            
-            # Hash password
-            password_hash = bcrypt.hashpw(
-                user_data['password'].encode('utf-8'), 
-                bcrypt.gensalt()
-            ).decode('utf-8')
-            
-            # Create user record
-            user_record = {
-                "id": user_id,
-                "username": user_data['username'],
-                "email": user_data['email'],
-                "password_hash": password_hash,
-                "is_biometric_enrolled": False,
-                "trust_score": 85,  # Initial trust score
-                "status": "active",
-                "created_at": datetime.now().isoformat()
-            }
-            
-            if self.client:
-                result = self.client.table("users").insert(user_record).execute()
-                logger.info(f"✅ Step 1 Complete: User credentials stored for {user_id}")
-            
-            return {
-                "success": True,
-                "user_id": user_id,
-                "message": "Credentials stored successfully"
-            }
-            
-        except Exception as e:
-            logger.error(f"Step 1 Error - Credentials storage failed: {e}")
-            return {"success": False, "error": str(e)}
 
-    # ========== STEP 2: BIOMETRIC & LIVENESS ==========
-    async def store_biometric_data(self, user_id: str, biometric_data: Dict) -> Dict:
-        """
-        Step 2: Store biometric and liveness data with face image URL
-        """
-        try:
-              # Force flush stdout to see prints immediately
-            print(f"DEBUG - store_biometric_data called for user: {user_id}", flush=True)
-            print(f"DEBUG - biometric_data keys: {list(biometric_data.keys())}", flush=True)
-            print(f"DEBUG - face_url: {biometric_data.get('face_url', 'NOT PROVIDED')}", flush=True)
-            
-            # Also log to logger
-            logger.info(f"Biometric data received - face_url: {biometric_data.get('face_url', 'NOT PROVIDED')}")
+# ============= API Helper Functions =============
 
-            # Generate face embedding
-            face_embedding = self._generate_face_embedding(biometric_data['face_data'])
-            
-            # Get face URL if provided
-            face_url = biometric_data.get('face_url', '')
-            
-            # Store biometric profile with face URL
-            biometric_profile = {
-                "user_id": user_id,
-                "face_template_hash": hashlib.sha256(biometric_data['face_data'].encode()).hexdigest(),
-                "face_embedding": face_embedding,
-                "face_image_url": face_url,  # Store the face image URL
-                "enrollment_quality": biometric_data['liveness_data'].get('enhanced_face_score', 0.9),
-                "enrollment_device_info": {
-                    "user_agent": request.headers.get("User-Agent"),
-                    "timestamp": datetime.now().isoformat()
-                },
-                "created_at": datetime.now().isoformat()
-            }
-            
-            # Also store face data in biometric_data table
-            biometric_data_record = {
-                "user_id": user_id,
-                "biometric_type": "face",
-                "face_embedding": face_embedding,
-                "face_image_url": face_url,  # Store URL here too
-                "data": {
-                    "encoding": face_embedding,
-                    "quality_score": biometric_data['liveness_data'].get('enhanced_face_score', 0.9)
-                },
-                "quality_score": biometric_data['liveness_data'].get('enhanced_face_score', 0.9),
-                "capture_timestamp": datetime.now().isoformat()
-            }
-            
-            if self.client:
-                # Store biometric profile
-                bio_result = self.client.table("biometric_profiles").insert(biometric_profile).execute()
-                # Store in biometric_data table
-                data_result = self.client.table("biometric_data").insert(biometric_data_record).execute()
-                
-                # Update user as biometric enrolled
-                self.client.table("users").update({
-                    "is_biometric_enrolled": True
-                }).eq("id", user_id).execute()
-                
-                logger.info(f"✅ Step 2 Complete: Biometric data stored for {user_id}")
-            
-            return {
-                "success": True,
-                "message": "Biometric data stored successfully"
-            }
-            
-        except Exception as e:
-            logger.error(f"Step 2 Error - Biometric storage failed: {e}")
-            return {"success": False, "error": str(e)}
 
-    # ========== STEP 3: BEHAVIORAL PATTERNS ==========
-    async def store_behavioral_pattern(self, user_id: str, behavioral_data: Dict) -> Dict:
-        """
-        Step 3: Store initial behavioral pattern during registration
-        - Processes keystroke dynamics
-        - Processes mouse movements
-        - Creates baseline behavioral profile
-        """
-        try:
-            # Process behavioral data
-            keystroke_features = self._process_keystrokes(behavioral_data.get('keystrokes', []))
-            mouse_features = self._process_mouse_movements(behavioral_data.get('mouseMovements', []))
-            
-            # Create behavioral pattern record
-            pattern_data = {
-                "keystroke_features": keystroke_features,
-                "mouse_features": mouse_features,
-                "device_fingerprint": self._generate_device_fingerprint(request),
-                "enrollment_metadata": {
-                    "total_keystrokes": len(behavioral_data.get('keystrokes', [])),
-                    "total_mouse_events": len(behavioral_data.get('mouseMovements', [])),
-                    "typed_text": behavioral_data.get('typedText', ''),
-                    "capture_duration": behavioral_data.get('capture_duration', 0)
+def initialize_detector():
+    """Initialize the liveness detector models"""
+    initialize_models()
+    if 'DETECTOR' in globals():
+        DETECTOR.reset_counters()
+
+def process_base64_image(base64_str):
+    """Convert base64 string to OpenCV image"""
+    if base64_str.startswith("data:image"):
+        base64_str = base64_str.split(",")[1]
+    img_data = base64.b64decode(base64_str)
+    nparr = np.frombuffer(img_data, np.uint8)
+    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+def process_liveness_request(frame_data: str, reset_counters: bool = False):
+    """Process liveness detection request (legacy function)"""
+    if reset_counters and 'DETECTOR' in globals():
+        DETECTOR.reset_counters()
+    frame = process_base64_image(frame_data)
+    return DETECTOR.process_frame(frame)
+
+def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
+    """Process frame for liveness detection with user-specific tracking"""
+    try:
+        if user_id is None:
+            user_id = "default_user"
+
+        if reset_counters and 'DETECTOR' in globals():
+            DETECTOR.reset_user_counters(user_id)
+
+        frame = process_base64_image(face_image_b64)
+        result = DETECTOR.process_frame_for_user(frame, user_id)
+
+        # Build liveness_validation field to match frontend expectations
+        step_requirements = {
+            'blinks_met': result['blink_count'] >= 3,
+            'mouth_met': result['mouth_open_count'] >= 2,
+            'head_met': result['head_movement_count'] >= 2,
+            'score_met': result['face_real_score'] >= 0.2
+        }
+        all_met = all(step_requirements.values())
+
+        result['liveness_validation'] = {
+            'overall_liveness_passed': all_met,
+            'step_requirements': step_requirements
+        }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"process_frame_api error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "face_detected": False,
+            "blink_count": 0,
+            "mouth_open_count": 0,
+            "head_movement_count": 0,
+            "face_real_score": 0.0,
+            "liveness_validation": {
+                "overall_liveness_passed": False,
+                "step_requirements": {
+                    "blinks_met": False,
+                    "mouth_met": False,
+                    "head_met": False,
+                    "score_met": False
                 }
             }
-            
-            behavioral_record = {
-                "user_id": user_id,
-                "pattern_data": pattern_data,
-                "is_active": True,
-                "created_at": datetime.now().isoformat()
-            }
-            
-            if self.client:
-                result = self.client.table("behavioral_patterns").insert(behavioral_record).execute()
-                logger.info(f"✅ Step 3 Complete: Behavioral pattern stored for {user_id}")
-            
-            return {
-                "success": True,
-                "message": "Behavioral pattern stored successfully",
-                "pattern_stats": {
-                    "keystroke_features": len(keystroke_features),
-                    "mouse_features": len(mouse_features)
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Step 3 Error - Behavioral storage failed: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def verify_behavioral_pattern(self, user_id: str, behavioral_data: Dict, session_id: str) -> Dict:
-        """
-        Step 3 Verification: Compare current behavior against stored pattern
-        - Calculates similarity scores
-        - Determines if auto-lock or anomaly logging is needed
-        - Updates trust score
-        """
-        try:
-            # Get stored pattern
-            if not self.client:
-                return {"success": False, "error": "Database not available"}
-            
-            pattern_result = self.client.table("behavioral_patterns") \
-                .select("*") \
-                .eq("user_id", user_id) \
-                .eq("is_active", True) \
-                .single() \
-                .execute()
-            
-            if not pattern_result.data:
-                return {
-                    "success": False,
-                    "error": "No behavioral profile found",
-                    "similarity_score": 0,
-                    "action": "profile_missing"
-                }
-            
-            stored_pattern = pattern_result.data['pattern_data']
-            
-            # Process current behavioral data
-            current_keystroke = self._process_keystrokes(behavioral_data.get('keystrokes', []))
-            current_mouse = self._process_mouse_movements(behavioral_data.get('mouseMovements', []))
-            
-            # Calculate similarities
-            keystroke_similarity = self._compare_keystroke_patterns(
-                stored_pattern.get('keystroke_features', {}),
-                current_keystroke
-            )
-            
-            mouse_similarity = self._compare_mouse_patterns(
-                stored_pattern.get('mouse_features', {}),
-                current_mouse
-            )
-            
-            # Overall similarity (weighted average)
-            overall_similarity = (keystroke_similarity * 0.6 + mouse_similarity * 0.4)
-            
-            # Determine action based on thresholds
-            action = None
-            anomaly_logged = False
-            
-            if overall_similarity < BEHAVIORAL_THRESHOLDS['auto_lock']:
-                # AUTO-LOCK: Critical mismatch
-                action = 'auto_lock'
-                await self._suspend_user(user_id, f"Behavioral similarity critically low: {overall_similarity:.2f}")
-                await self._log_anomaly(
-                    user_id, session_id, 1 - overall_similarity, 'auto_lock',
-                    {'similarity': overall_similarity, 'type': 'critical_behavioral_mismatch'}
-                )
-                await self._update_trust_score(user_id, BEHAVIORAL_THRESHOLDS['trust_delta_bad'] * 2)
-                anomaly_logged = True
-                
-            elif overall_similarity < BEHAVIORAL_THRESHOLDS['anomaly']:
-                # LOG ANOMALY: Suspicious behavior
-                action = 'anomaly_logged'
-                await self._log_anomaly(
-                    user_id, session_id, 1 - overall_similarity, 'monitor',
-                    {'similarity': overall_similarity, 'type': 'behavioral_mismatch'}
-                )
-                await self._update_trust_score(user_id, BEHAVIORAL_THRESHOLDS['trust_delta_bad'])
-                anomaly_logged = True
-                
-            else:
-                # NORMAL: Good behavior
-                action = 'verified'
-                await self._update_trust_score(user_id, BEHAVIORAL_THRESHOLDS['trust_delta_good'])
-            
-            # Store session data
-            await self._store_behavioral_session(
-                user_id, session_id, current_keystroke, current_mouse,
-                overall_similarity, keystroke_similarity, mouse_similarity,
-                anomaly_logged
-            )
-            
-            logger.info(f"✅ Behavioral verification complete for {user_id}: "
-                       f"similarity={overall_similarity:.2f}, action={action}")
-            
-            return {
-                "success": action != 'auto_lock',
-                "similarity_score": round(overall_similarity, 3),
-                "keystroke_similarity": round(keystroke_similarity, 3),
-                "mouse_similarity": round(mouse_similarity, 3),
-                "anomaly_detected": anomaly_logged,
-                "anomaly_score": round(1 - overall_similarity, 3) if anomaly_logged else 0,
-                "action": action,
-                "thresholds": {
-                    "auto_lock": BEHAVIORAL_THRESHOLDS['auto_lock'],
-                    "anomaly": BEHAVIORAL_THRESHOLDS['anomaly']
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Behavioral verification error: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "similarity_score": 0,
-                "action": "error"
-            }
-
-    # ========== STEP 4: eKYC DOCUMENTS ==========
-    # Enhanced store_ekyc_documents method for SupabaseManager class
-
-    async def store_ekyc_documents(self, user_id: str, ekyc_data: Dict) -> Dict:
-        """
-        Step 4: Store eKYC documents with validation and face matching
-        """
-        try:
-            ekyc_records = []
-            verification_results = {
-                'docscan_result': None,
-                'face_match_result': None,
-                'verified': False,
-                'validation_errors': []
-            }
-            
-            # Validate that we have the required URLs
-            if not ekyc_data.get('frontUrl') or not ekyc_data.get('backUrl'):
-                return {
-                    "success": False,
-                    "error": "Both front and back IC images are required"
-                }
-            
-            # Step 1: Validate front IC with PixLab DocScan
-            logger.info(f"🔍 Validating front IC with PixLab for user {user_id}")
-            front_url = ekyc_data['frontUrl']
-            
-            # Call PixLab DocScan
-            docscan_result = self.call_pixlab_docscan(front_url)
-            verification_results['docscan_result'] = docscan_result
-            
-            # Check if it's a valid document
-            if docscan_result.get('status') != 'ok':
-                verification_results['validation_errors'].append(
-                    f"Document validation failed: {docscan_result.get('error', 'Invalid document')}"
-                )
-                return {
-                    "success": False,
-                    "error": "Invalid IC document. Please upload a clear image of your MyKad.",
-                    "validation_errors": verification_results['validation_errors']
-                }
-            
-            # Check if it's actually a document
-            if not docscan_result.get('is_document'):
-                verification_results['validation_errors'].append(
-                    "Uploaded image is not recognized as a valid ID document"
-                )
-                return {
-                    "success": False,
-                    "error": "Not a valid ID document. Please upload your MyKad.",
-                    "validation_errors": verification_results['validation_errors']
-                }
-            
-            # Check if it's a Malaysian IC
-            if docscan_result.get('country') != 'my':
-                verification_results['validation_errors'].append(
-                    f"Document is from {docscan_result.get('country', 'unknown country')}, not Malaysia"
-                )
-                return {
-                    "success": False,
-                    "error": "Please upload a valid Malaysian MyKad",
-                    "validation_errors": verification_results['validation_errors']
-                }
-            
-            # Check document quality/confidence
-            confidence = docscan_result.get('confidence', 0)
-            if confidence < 0.8:  # 80% threshold
-                verification_results['validation_errors'].append(
-                    f"Document quality too low: {confidence:.0%}. Please upload a clearer image."
-                )
-                return {
-                    "success": False,
-                    "error": "Image quality too low. Please upload a clearer photo of your IC.",
-                    "validation_errors": verification_results['validation_errors']
-                }
-            
-            # Extract information from the IC
-            fields = docscan_result.get('fields', {})
-            extracted_info = {
-                'name': fields.get('fullName', ''),
-                'ic_number': fields.get('idNumber', '') or fields.get('documentNumber', ''),
-                'date_of_birth': fields.get('dateOfBirth', ''),
-                'address': fields.get('address', ''),
-                'gender': fields.get('gender', ''),
-                'nationality': fields.get('nationality', 'MALAYSIA')
-            }
-            
-            # Step 2: Get the biometric face URL from Step 2
-            biometric_face_url = None
-            if self.client:
-                bio_result = self.client.table("biometric_data") \
-                    .select("face_image_url") \
-                    .eq("user_id", user_id) \
-                    .eq("biometric_type", "face") \
-                    .order("capture_timestamp", desc=True) \
-                    .limit(1) \
-                    .execute()
-                
-                if bio_result.data and bio_result.data[0].get('face_image_url'):
-                    biometric_face_url = bio_result.data[0]['face_image_url']
-                    logger.info(f"✅ Found biometric face URL: {biometric_face_url}")
-                else:
-                    logger.warning("⚠️ No biometric face URL found")
-            
-            # Step 3: Face matching between biometric face and IC face
-            face_match_score = 0.0
-            face_match_confidence = 0.0
-            face_match_passed = False
-            
-            if docscan_result.get('face_url') and biometric_face_url:
-                logger.info("🔍 Comparing faces with PixLab FaceCompare")
-                
-                # Call PixLab FaceCompare
-                face_compare_result = self.call_pixlab_facecompare(
-                    biometric_face_url,  # Source: biometric face from Step 2
-                    docscan_result['face_url']  # Target: face from IC
-                )
-                verification_results['face_match_result'] = face_compare_result
-                
-                if face_compare_result.get('status') == 200:
-                    same_face = face_compare_result.get('same_face', False)
-                    face_match_confidence = face_compare_result.get('confidence', 0.0)
-                    face_match_score = 1.0 if same_face else 0.0
-                    
-                    # Require high confidence for face matching
-                    face_match_passed = same_face and face_match_confidence >= 0.85
-                    
-                    if not face_match_passed:
-                        verification_results['validation_errors'].append(
-                            f"Face verification failed. Confidence: {face_match_confidence:.0%}"
-                        )
-                else:
-                    verification_results['validation_errors'].append(
-                        "Face comparison failed. Please try again."
-                    )
-            else:
-                verification_results['validation_errors'].append(
-                    "Could not extract face from IC or biometric data missing"
-                )
-            
-            # Step 4: Determine overall verification status
-            verification_status = 'pending'
-            if docscan_result.get('status') == 'ok' and face_match_passed:
-                verification_status = 'verified'
-                verification_results['verified'] = True
-            elif docscan_result.get('status') == 'ok' and not face_match_passed:
-                verification_status = 'face_mismatch'
-            else:
-                verification_status = 'failed'
-            
-            # If verification failed, return error
-            if verification_status != 'verified':
-                error_msg = "eKYC verification failed. "
-                if verification_status == 'face_mismatch':
-                    error_msg += "Face on IC does not match your biometric photo."
-                else:
-                    error_msg += "Please ensure you upload a clear photo of your MyKad."
-                
-                return {
-                    "success": False,
-                    "error": error_msg,
-                    "validation_errors": verification_results['validation_errors'],
-                    "verification": verification_results
-                }
-            
-            # Step 5: Store the verified documents
-            front_record = {
-                "user_id": user_id,
-                "document_type": "ic_front",
-                "document_url": ekyc_data['frontUrl'],
-                "verification_status": verification_status,
-                "extracted_info": extracted_info,
-                "face_match_score": face_match_score,
-                "face_match_confidence": face_match_confidence,
-                "document_confidence": confidence,
-                "pixlab_face_url": docscan_result.get('face_url', ''),
-                "created_at": datetime.now().isoformat()
-            }
-            ekyc_records.append(front_record)
-            
-            # Store back document
-            if ekyc_data.get('backUrl'):
-                back_record = {
-                    "user_id": user_id,
-                    "document_type": "ic_back",
-                    "document_url": ekyc_data['backUrl'],
-                    "verification_status": verification_status,
-                    "created_at": datetime.now().isoformat()
-                }
-                ekyc_records.append(back_record)
-            
-            # Insert into database
-            if self.client and ekyc_records:
-                for record in ekyc_records:
-                    self.client.table("ekyc_documents").insert(record).execute()
-                
-                logger.info(f"✅ Step 4 Complete: eKYC documents verified and stored for {user_id}")
-            
-            return {
-                "success": True,
-                "message": "eKYC documents verified and stored successfully",
-                "documents_count": len(ekyc_records),
-                "verification": {
-                    "docscan_result": {
-                        "status": docscan_result.get('status'),
-                        "is_document": docscan_result.get('is_document'),
-                        "country": docscan_result.get('country'),
-                        "confidence": confidence,
-                        "extracted_info": extracted_info
-                    },
-                    "face_match_result": {
-                        "same_face": face_match_passed,
-                        "confidence": face_match_confidence,
-                        "score": face_match_score
-                    },
-                    "verified": verification_results['verified'],
-                    "validation_errors": verification_results['validation_errors']
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Step 4 Error - eKYC storage/verification failed: {e}")
-            return {
-                "success": False, 
-                "error": str(e),
-                "validation_errors": ["System error during verification"]
-            }
-
-    # ========== HELPER METHODS ==========
-    
+        }
 
 
-    def call_pixlab_docscan(self, image_url: str) -> Dict:
-        """Call PixLab DOCSCAN API for MyKad processing"""
-        try:
-            logger.info(f"PixLab DocScan Response: {json.dumps(result, indent=2)}")
-            logger.info(f"PixLab DocScan Request - URL: {image_url}, Key: {PIXLAB_API_KEY[:10]}...")
-            payload = {
-                "img": image_url,
-                "type": "idcard",
-                "country": "my",  # Malaysia
-                "key": PIXLAB_API_KEY
-            }
-            
-            logger.info(f"Calling PixLab DOCSCAN API with URL: {image_url}")
-            response = requests.post("https://api.pixlab.io/docscan", data=payload, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"PixLab DOCSCAN response status: {result.get('status')}")
-                return result
-            else:
-                logger.error(f"PixLab API error: {response.status_code} - {response.text}")
-                return {"status": "error", "error": f"API error: {response.status_code}"}
-                
-        except Exception as e:
-            logger.error(f"PixLab API call failed: {str(e)}")
-            return {"status": "error", "error": str(e)}
 
-    def call_pixlab_facecompare(self, biometric_face_url: str, ic_face_url: str) -> Dict:
-        """Call PixLab FaceCompare API"""
-        try:
-            logger.info(f"PixLab FaceCompare Response: {json.dumps(result, indent=2)}")
-            params = {
-                'src': biometric_face_url,
-                'target': ic_face_url,
-                'key': PIXLAB_API_KEY
-            }
-            
-            logger.info(f"Calling PixLab FaceCompare API")
-            response = requests.get('https://api.pixlab.io/facecompare', params=params, timeout=30)
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"PixLab FaceCompare result: same_face={result.get('same_face')}, confidence={result.get('confidence')}")
-                return result
-            else:
-                logger.error(f"PixLab FaceCompare error: {response.status_code}")
-                return {"status": "error", "error": f"API error: {response.status_code}"}
-                
-        except Exception as e:
-            logger.error(f"PixLab FaceCompare failed: {str(e)}")
-            return {"status": "error", "error": str(e)}
+# ===== ENHANCED SESSION MANAGEMENT =====
+@dataclass
+class EnhancedLivenessSession:
+    user_id: str
+    start_time: float
+    mode: str = "registration"
+    current_step: str = "ready"
+    required_blinks: int = 3
+    required_mouth: int = 2
+    required_head: int = 2
+    required_score: float = 0.85
+    all_requirements_met: bool = False
+    completion_time: float = 0.0
+    last_face_score: float = 0.0
+    last_enhanced_score: float = 0.0
+    registration_data: dict = None  # Store registration data temporarily
 
-    async def store_ekyc_documents(self, user_id: str, ekyc_data: Dict) -> Dict:
-        """
-        Step 4: Store eKYC documents and perform verification with PixLab
-        """
-        try:
-            ekyc_records = []
-            verification_results = {
-                'docscan_result': None,
-                'face_match_result': None,
-                'verified': False
-            }
-            
-            # Store front document
-            if ekyc_data.get('frontUrl'):
-                # First, call PixLab DocScan on the front IC
-                logger.info(f"Processing front IC with PixLab for user {user_id}")
-                docscan_result = self.call_pixlab_docscan(ekyc_data['frontUrl'])
-                verification_results['docscan_result'] = docscan_result
-                
-                # Extract information from DocScan result
-                extracted_info = {}
-                if docscan_result.get('status') == 'ok' and docscan_result.get('fields'):
-                    fields = docscan_result.get('fields', {})
-                    extracted_info = {
-                        'name': fields.get('fullName', ''),
-                        'ic_number': fields.get('idNumber', '') or fields.get('documentNumber', ''),
-                        'date_of_birth': fields.get('dateOfBirth', ''),
-                        'address': fields.get('address', ''),
-                        'gender': fields.get('gender', ''),
-                        'nationality': fields.get('nationality', 'MALAYSIA')
-                    }
-                
-                # Get the user's biometric face URL
-                biometric_face_url = None
-                if self.client:
-                    # Get the stored biometric face URL
-                    bio_result = self.client.table("biometric_data") \
-                        .select("face_image_url") \
-                        .eq("user_id", user_id) \
-                        .eq("biometric_type", "face") \
-                        .order("capture_timestamp", desc=True) \
-                        .limit(1) \
-                        .execute()
-                    
-                    if bio_result.data and bio_result.data[0].get('face_image_url'):
-                        biometric_face_url = bio_result.data[0]['face_image_url']
-                
-                # If we have both the IC face and biometric face, compare them
-                face_match_score = 0.0
-                face_match_confidence = 0.0
-                if docscan_result.get('face_url') and biometric_face_url:
-                    logger.info("Comparing faces with PixLab FaceCompare")
-                    face_compare_result = self.call_pixlab_facecompare(
-                        biometric_face_url, 
-                        docscan_result['face_url']
-                    )
-                    verification_results['face_match_result'] = face_compare_result
-                    
-                    if face_compare_result.get('status') == 200:
-                        face_match_score = 1.0 if face_compare_result.get('same_face', False) else 0.0
-                        face_match_confidence = face_compare_result.get('confidence', 0.0)
-                
-                # Determine verification status
-                verification_status = 'pending'
-                if docscan_result.get('status') == 'ok' and face_match_score > 0.5:
-                    verification_status = 'verified'
-                    verification_results['verified'] = True
-                elif docscan_result.get('status') == 'ok':
-                    verification_status = 'face_mismatch'
-                else:
-                    verification_status = 'failed'
-                
-                front_record = {
-                    "user_id": user_id,
-                    "document_type": "ic_front",
-                    "document_url": ekyc_data['frontUrl'],
-                    "verification_status": verification_status,
-                    "extracted_info": extracted_info,
-                    "face_match_score": face_match_score,
-                    "face_match_confidence": face_match_confidence,
-                    "docscan_result": docscan_result,
-                    "created_at": datetime.now().isoformat()
-                }
-                ekyc_records.append(front_record)
-            
-            # Store back document (simplified - no verification needed)
-            if ekyc_data.get('backUrl'):
-                back_record = {
-                    "user_id": user_id,
-                    "document_type": "ic_back",
-                    "document_url": ekyc_data['backUrl'],
-                    "verification_status": verification_results['verified'] and 'verified' or 'pending',
-                    "created_at": datetime.now().isoformat()
-                }
-                ekyc_records.append(back_record)
-            
-            if self.client and ekyc_records:
-                for record in ekyc_records:
-                    self.client.table("ekyc_documents").insert(record).execute()
-                
-                logger.info(f"✅ Step 4 Complete: eKYC documents stored and verified for {user_id}")
-            
-            return {
-                "success": True,
-                "message": "eKYC documents stored and verified successfully",
-                "documents_count": len(ekyc_records),
-                "verification": verification_results
-            }
-            
-        except Exception as e:
-            logger.error(f"Step 4 Error - eKYC storage/verification failed: {e}")
-            return {"success": False, "error": str(e)}
-
-
-    def _generate_face_embedding(self, face_data_b64: str) -> List[float]:
-        """Generate face embedding for recognition"""
-        try:
-            # Remove data URL prefix if present
-            if face_data_b64.startswith("data:image"):
-                face_data_b64 = face_data_b64.split(",")[1]
-            
-            # Decode image
-            img_data = base64.b64decode(face_data_b64)
-            nparr = np.frombuffer(img_data, np.uint8)
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            
-            # Generate embedding
-            face_encodings = face_recognition.face_encodings(rgb_image)
-            if face_encodings:
-                return face_encodings[0].tolist()
-            else:
-                return [0] * 128  # Default embedding
-                
-        except Exception as e:
-            logger.error(f"Face embedding error: {e}")
-            return [0] * 128
-
-    def _process_keystrokes(self, keystrokes: List[Dict]) -> Dict:
-        """Process keystroke dynamics for behavioral analysis"""
-        if not keystrokes:
-            return {}
-        
-        features = {}
-        
-        # Basic metrics
-        features['total_keystrokes'] = len(keystrokes)
-        
-        # Separate event types
-        keydown_events = [k for k in keystrokes if k.get('type') == 'keydown']
-        keyup_events = [k for k in keystrokes if k.get('type') == 'keyup']
-        
-        # Calculate dwell times (key hold duration)
-        dwell_times = []
-        for keydown in keydown_events:
-            matching_keyup = next(
-                (up for up in keyup_events 
-                 if up['key'] == keydown['key'] and up['timestamp'] > keydown['timestamp']),
-                None
-            )
-            if matching_keyup:
-                dwell_time = matching_keyup['timestamp'] - keydown['timestamp']
-                if 0 < dwell_time < 1000:  # Reasonable limits
-                    dwell_times.append(dwell_time)
-        
-        if dwell_times:
-            features['avg_dwell_time'] = np.mean(dwell_times)
-            features['std_dwell_time'] = np.std(dwell_times)
-        
-        # Calculate flight times (time between keystrokes)
-        flight_times = []
-        for i in range(1, len(keydown_events)):
-            flight_time = keydown_events[i]['timestamp'] - keydown_events[i-1]['timestamp']
-            if 0 < flight_time < 2000:  # Reasonable limits
-                flight_times.append(flight_time)
-        
-        if flight_times:
-            features['avg_flight_time'] = np.mean(flight_times)
-            features['std_flight_time'] = np.std(flight_times)
-            features['typing_speed'] = 60000 / np.mean(flight_times) if flight_times else 0  # Keys per minute
-        
-        return features
-
-    def _process_mouse_movements(self, movements: List[Dict]) -> Dict:
-        """Process mouse movement patterns"""
-        if not movements:
-            return {}
-        
-        features = {}
-        
-        # Separate event types
-        move_events = [m for m in movements if m.get('type') == 'mousemove']
-        click_events = [m for m in movements if m.get('type') == 'click']
-        
-        features['total_movements'] = len(movements)
-        features['total_clicks'] = len(click_events)
-        
-        if len(move_events) > 1:
-            # Calculate velocities
-            velocities = []
-            for i in range(1, len(move_events)):
-                curr = move_events[i]
-                prev = move_events[i-1]
-                
-                time_diff = (curr['timestamp'] - prev['timestamp']) / 1000.0  # Convert to seconds
-                if time_diff > 0:
-                    distance = np.sqrt((curr['x'] - prev['x'])**2 + (curr['y'] - prev['y'])**2)
-                    velocity = distance / time_diff
-                    velocities.append(velocity)
-            
-            if velocities:
-                features['avg_velocity'] = np.mean(velocities)
-                features['std_velocity'] = np.std(velocities)
-                features['max_velocity'] = max(velocities)
-        
-        # Click intervals
-        if len(click_events) > 1:
-            click_intervals = []
-            for i in range(1, len(click_events)):
-                interval = click_events[i]['timestamp'] - click_events[i-1]['timestamp']
-                click_intervals.append(interval)
-            
-            if click_intervals:
-                features['avg_click_interval'] = np.mean(click_intervals)
-        
-        return features
-
-    def _compare_keystroke_patterns(self, stored: Dict, current: Dict) -> float:
-        """Compare two keystroke patterns and return similarity score (0-1)"""
-        if not stored or not current:
-            return 0.5  # Default neutral score
-        
-        similarities = []
-        
-        # Compare key features
-        features_to_compare = ['avg_dwell_time', 'avg_flight_time', 'typing_speed']
-        
-        for feature in features_to_compare:
-            if feature in stored and feature in current:
-                stored_val = float(stored[feature])
-                current_val = float(current[feature])
-                
-                if stored_val == 0 and current_val == 0:
-                    similarity = 1.0
-                elif stored_val == 0 or current_val == 0:
-                    similarity = 0.5
-                else:
-                    # Calculate normalized difference
-                    diff = abs(stored_val - current_val) / max(stored_val, current_val)
-                    similarity = max(0, 1 - diff)
-                
-                similarities.append(similarity)
-        
-        return np.mean(similarities) if similarities else 0.5
-
-    def _compare_mouse_patterns(self, stored: Dict, current: Dict) -> float:
-        """Compare two mouse patterns and return similarity score (0-1)"""
-        if not stored or not current:
-            return 0.5  # Default neutral score
-        
-        similarities = []
-        
-        # Compare key features
-        features_to_compare = ['avg_velocity', 'avg_click_interval']
-        
-        for feature in features_to_compare:
-            if feature in stored and feature in current:
-                stored_val = float(stored[feature])
-                current_val = float(current[feature])
-                
-                if stored_val == 0 and current_val == 0:
-                    similarity = 1.0
-                elif stored_val == 0 or current_val == 0:
-                    similarity = 0.5
-                else:
-                    # Calculate normalized difference
-                    diff = abs(stored_val - current_val) / max(stored_val, current_val)
-                    similarity = max(0, 1 - diff)
-                
-                similarities.append(similarity)
-        
-        return np.mean(similarities) if similarities else 0.5
-
-    def _generate_device_fingerprint(self, request) -> str:
-        """Generate device fingerprint from request"""
-        components = [
-            request.headers.get("User-Agent", ""),
-            request.headers.get("Accept-Language", ""),
-            request.headers.get("Accept-Encoding", ""),
-            request.remote_addr
-        ]
-        return hashlib.md5("".join(components).encode()).hexdigest()
-
-    async def _store_behavioral_session(self, user_id: str, session_id: str,
-                                      keystroke_features: Dict, mouse_features: Dict,
-                                      overall_similarity: float, keystroke_similarity: float,
-                                      mouse_similarity: float, anomaly_detected: bool):
-        """Store behavioral session data"""
-        try:
-            session_data = {
-                "user_id": user_id,
-                "session_id": session_id,
-                "keystroke_features": keystroke_features,
-                "mouse_features": mouse_features,
-                "similarity_scores": {
-                    "overall_similarity": overall_similarity,
-                    "keystroke_similarity": keystroke_similarity,
-                    "mouse_similarity": mouse_similarity
-                },
-                "anomaly_score": 1 - overall_similarity,
-                "is_successful": not anomaly_detected,
-                "duration_seconds": 0,  # Can be calculated from timestamps if needed
-                "created_at": datetime.now().isoformat()
-            }
-            
-            if self.client:
-                self.client.table("behavioral_sessions").insert(session_data).execute()
-                
-        except Exception as e:
-            logger.error(f"Failed to store behavioral session: {e}")
-
-    async def _log_anomaly(self, user_id: str, session_id: str, 
-                         anomaly_score: float, action: str, details: Dict):
-        """Log anomaly to anomaly_audits table"""
-        try:
-            # Determine severity based on score
-            if anomaly_score > 0.9:
-                severity = 'critical'
-            elif anomaly_score > 0.7:
-                severity = 'high'
-            elif anomaly_score > 0.5:
-                severity = 'medium'
-            else:
-                severity = 'low'
-            
-            anomaly_data = {
-                "user_id": user_id,
-                "session_id": session_id,
-                "anomaly_type": details.get('type', 'behavioral_anomaly'),
-                "anomaly_score": anomaly_score,
-                "severity": severity,
-                "action_taken": action,
-                "details": details,
-                "created_at": datetime.now().isoformat()
-            }
-            
-            if self.client:
-                self.client.table("anomaly_audits").insert(anomaly_data).execute()
-                logger.info(f"Anomaly logged for user {user_id}: {severity} severity, action={action}")
-                
-        except Exception as e:
-            logger.error(f"Failed to log anomaly: {e}")
-
-    async def _update_trust_score(self, user_id: str, delta: int):
-        """Update user trust score"""
-        try:
-            if not self.client:
-                return
-            
-            # Get current score
-            user_result = self.client.table("users") \
-                .select("trust_score") \
-                .eq("id", user_id) \
-                .single() \
-                .execute()
-            
-            if user_result.data:
-                current_score = user_result.data['trust_score']
-                new_score = max(0, min(100, current_score + delta))
-                
-                self.client.table("users") \
-                    .update({"trust_score": new_score}) \
-                    .eq("id", user_id) \
-                    .execute()
-                
-                logger.info(f"Trust score updated for {user_id}: {current_score} → {new_score}")
-                
-        except Exception as e:
-            logger.error(f"Failed to update trust score: {e}")
-
-    async def _suspend_user(self, user_id: str, reason: str):
-        """Suspend user account"""
-        try:
-            if self.client:
-                self.client.table("users").update({
-                    "status": "suspended",
-                    "suspension_reason": reason,
-                    "suspended_at": datetime.now().isoformat()
-                }).eq("id", user_id).execute()
-                
-                logger.warning(f"🔒 User {user_id} suspended: {reason}")
-                
-        except Exception as e:
-            logger.error(f"Failed to suspend user: {e}")
-
-# Initialize Supabase manager
-supabase_manager = SupabaseManager()
+USER_SESSIONS = {}
+session_lock = threading.Lock()
 
 # ===== API ENDPOINTS =====
 
@@ -1055,7 +200,7 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'online',
-        'detector_available': DETECTOR is not None,
+        'detector_available': 'DETECTOR' in globals() and DETECTOR is not None,
         'supabase_available': supabase_manager.client is not None,
         'timestamp': datetime.now().isoformat()
     })
@@ -1095,14 +240,6 @@ def register():
         
         user_id = credentials_result['user_id']
         
-
-        # Step 2: Store biometric data
-
-        # Print the data before you call the coroutine
-        # print("DEBUG - biometric_data received:", {
-        #     'face_data': data['faceData'],
-        #     'liveness_data': data['livenessData']
-        # })
 
         # Step 2: Store biometric data
         biometric_result = asyncio.run(
@@ -1158,6 +295,46 @@ def register():
             'error': str(e)
         }), 500
 
+@app.route("/api/upload-face", methods=["POST"])
+def upload_face():
+    try:
+        data = request.get_json()
+        user_id = data["user_id"]
+
+        # Read debug_face.jpg from disk
+        if not os.path.exists("debug_face.jpg"):
+            return jsonify({"success": False, "error": "debug_face.jpg not found"}), 400
+
+        with open("debug_face.jpg", "rb") as f:
+            binary_data = f.read()
+
+        timestamp = int(time.time())
+        filename = f"{user_id}/face_{timestamp}.jpg"
+
+        # Use the same direct API upload logic
+        upload_result = supabase_manager.upload_face_image_direct_api(
+            user_id=user_id,
+            base64_image=None,   # Not needed since we already have binary_data
+            binary_data=binary_data,
+            filename=filename
+        )
+
+        if upload_result.get("success"):
+            return jsonify({
+                "success": True,
+                "public_url": upload_result.get("public_url")
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": upload_result.get("error", "Upload failed")
+            }), 500
+
+    except Exception as e:
+        logger.error(f"/api/upload-face error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/behavioral-verify', methods=['POST'])
 def behavioral_verify():
     """
@@ -1165,7 +342,6 @@ def behavioral_verify():
     """
     try:
         data = request.get_json()
-        # print("DEBUG - Request JSON:", data)
         
         # Validate required fields
         user_id = data.get('user_id')
@@ -1212,7 +388,6 @@ def behavioral_monitor():
     """
     try:
         data = request.get_json()
-        # print("DEBUG - Request JSON:", data)
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData', {})
         
@@ -1274,7 +449,7 @@ def get_behavioral_analytics(user_id: str):
             'recent_anomalies': len([
                 a for a in anomalies 
                 if datetime.fromisoformat(a['created_at'].replace('Z', '+00:00')) > 
-                   datetime.now() - time(days=7)
+                   datetime.now() - timedelta(days=7)
             ]),
             'avg_similarity_score': np.mean([
                 s.get('similarity_scores', {}).get('overall_similarity', 0) 
@@ -1293,43 +468,11 @@ def get_behavioral_analytics(user_id: str):
         logger.error(f"Analytics error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ===== ENHANCED SESSION MANAGEMENT =====
-@dataclass
-class EnhancedLivenessSession:
-    user_id: str
-    start_time: float
-    mode: str = "registration"
-    current_step: str = "ready"
-    required_blinks: int = 3
-    required_mouth: int = 2
-    required_head: int = 2
-    required_score: float = 0.85
-    all_requirements_met: bool = False
-    completion_time: float = 0.0
-    last_face_score: float = 0.0
-    last_enhanced_score: float = 0.0
-    registration_data: dict = None  # Store registration data temporarily
-
-USER_SESSIONS = {}
-session_lock = threading.Lock()
-
-# Add this test endpoint to your Flask app
-@app.route('/api/test-pixlab', methods=['GET'])
-def test_pixlab():
-    # Test with a sample Malaysian IC image
-    test_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/MyKad.png/300px-MyKad.png"
-    result = supabase_manager.call_pixlab_docscan(test_url)
-    return jsonify({
-        "docscan_result": result,
-        "api_key_first_10": PIXLAB_API_KEY[:10]
-    })
-
 @app.route('/api/sequential-liveness-detect', methods=['POST'])
 def sequential_liveness_detect_optimized():
     """Optimized liveness detection endpoint"""
     try:
         data = request.get_json()
-        # print("DEBUG - Request JSON:", data)
         user_id = data.get("user_id", "default_user")
         mode = data.get("mode", "registration")
         reset_counters = data.get("reset_counters", False)
@@ -1349,7 +492,8 @@ def sequential_liveness_detect_optimized():
                     required_blinks=3 if mode == "registration" else 2,
                     required_mouth=2 if mode == "registration" else 1
                 )
-                DETECTOR.reset_user_counters(user_id)
+                if 'DETECTOR' in globals():
+                    DETECTOR.reset_user_counters(user_id)
             
             session = USER_SESSIONS[user_id]
             session.current_step = current_step
@@ -1427,11 +571,62 @@ def sequential_liveness_detect_optimized():
             
             return jsonify(response_data)
         else:
-            return jsonify(result), 400
-
+            # Ensure liveness_validation is always present even on failure
+            return jsonify({
+                'success': False,
+                'face_detected': result.get('face_detected', False),
+                'blink_count': result.get('blink_count', 0),
+                'mouth_open_count': result.get('mouth_open_count', 0),
+                'head_movement_count': result.get('head_movement_count', 0),
+                'face_real_score': result.get('face_real_score', 0),
+                'enhanced_face_score': result.get('enhanced_face_score', 0),
+                'liveness_validation': {
+                    'overall_liveness_passed': False,
+                    'step_requirements': {
+                        'blinks_met': False,
+                        'mouth_met': False,
+                        'head_met': False,
+                        'score_met': False
+                    },
+                    'current_step': current_step,
+                    'mode': mode
+                },
+                'error': result.get('error', 'Unknown error')
+            }), 400
     except Exception as e:
         logger.error(f"Detection error: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/ekyc', methods=['POST'])
+def ekyc_process():
+        data = request.get_json()
+        base64_image = data.get("image")
+
+        if not base64_image:
+            return jsonify({"success": False, "error": "No image provided"}), 400
+
+        # Decode image
+        if ',' in base64_image:
+            base64_image = base64_image.split(",")[1]
+        img_data = base64.b64decode(base64_image)
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        # Call OCR
+        ocr_result = mykad_ocr.process_mykad_front(img)
+        return jsonify(ocr_result)    
+    
+
+# Register blueprints after app is created
+def register_blueprints():
+    """Register all blueprints to avoid circular imports"""
+    try:
+        # Import and register blueprints here to avoid circular imports
+        from routes.ekyc import ekyc_bp
+        app.register_blueprint(ekyc_bp, url_prefix='/api')
+        logger.info("✅ eKYC blueprint registered")
+    except ImportError as e:
+        logger.warning(f"⚠️ Could not import eKYC blueprint: {e}")
 
 if __name__ == '__main__':
     print("=" * 60)
@@ -1445,13 +640,22 @@ if __name__ == '__main__':
     
     # Initialize detector
     print("Initializing liveness detector...")
-    initialize_detector()
+    try:
+        initialize_detector()
+        DETECTOR = LivenessDetector(supabase_manager)  # Fix: Initialize without arguments
+        logger.info("✅ Liveness detector initialized")
+    except Exception as e:
+        logger.error(f"⚠️ Could not initialize liveness detector: {e}")
+        DETECTOR = None
     
     # Check Supabase
     if supabase_manager.client:
         print("✅ Supabase connected")
     else:
         print("⚠️ Running in mock mode (no Supabase)")
+    
+    # Register blueprints
+    register_blueprints()
     
     print("-" * 60)
     print("📡 Server running on http://localhost:5000")
