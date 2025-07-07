@@ -4,8 +4,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, make_response
 import numpy as np
 import cv2
 import base64
@@ -32,6 +31,9 @@ from utils.image_utils import decode_base64_image
 from io import BytesIO
 from ml_models.liveness_detector import LivenessDetector, initialize_models
 from utils.supabase_manager import SupabaseManager
+from ml_models.face_verification import FaceVerificationModel
+from flask_cors import CORS, cross_origin
+
 
 supabase_manager = SupabaseManager()
 
@@ -63,9 +65,41 @@ except ImportError:
             }
     mykad_ocr = MockMyKadOCR()
 
+try:
+    face_verifier = FaceVerificationModel()
+    logger.info("✅ Face verification model initialized")
+except Exception as e:
+    logger.error(f"⚠️ Could not initialize face verification model: {e}")
+    face_verifier = None
+
 # Flask App
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000", 
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+            "http://localhost:5173",  # Vite dev server
+            "http://127.0.0.1:5173"
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": [
+            "Content-Type", 
+            "Authorization", 
+            "Access-Control-Allow-Credentials",
+            "Access-Control-Allow-Origin",
+            "Access-Control-Allow-Headers",
+            "Access-Control-Allow-Methods",
+            "X-Requested-With"
+        ],
+        "supports_credentials": False,  # Set to False to avoid credentials issues
+        "expose_headers": ["Content-Type", "Authorization"],
+        "max_age": 86400  # 24 hours
+    }
+})
+
 
 def convert_numpy_types(obj):
     """
@@ -195,14 +229,67 @@ session_lock = threading.Lock()
 
 # ===== API ENDPOINTS =====
 
-@app.route('/api/health', methods=['GET'])
+# ============= MANUAL CORS HEADERS =============
+@app.after_request
+def after_request(response):
+    # Get the origin from the request
+    origin = request.headers.get('Origin')
+    
+    # List of allowed origins
+    allowed_origins = [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:3001', 
+        'http://127.0.0.1:3001',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173'
+    ]
+    
+    # If origin is in allowed list, add CORS headers
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        response.headers['Access-Control-Max-Age'] = '86400'
+        # Do NOT set Access-Control-Allow-Credentials to avoid issues
+    
+    return response
+
+# ============= PREFLIGHT HANDLER =============
+@app.before_request  
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        origin = request.headers.get('Origin')
+        
+        allowed_origins = [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://localhost:3001', 
+            'http://127.0.0.1:3001',
+            'http://localhost:5173',
+            'http://127.0.0.1:5173'
+        ]
+        
+        if origin in allowed_origins:
+            response.headers.add("Access-Control-Allow-Origin", origin)
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+            response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            response.headers.add('Access-Control-Max-Age', '86400')
+        
+        return response
+
+@app.route('/api/health', methods=['GET', 'OPTIONS'])
+@cross_origin()
 def health_check():
-    """Health check endpoint"""
+    """Enhanced health check endpoint"""
     return jsonify({
         'status': 'online',
         'detector_available': 'DETECTOR' in globals() and DETECTOR is not None,
         'supabase_available': supabase_manager.client is not None,
-        'timestamp': datetime.now().isoformat()
+        'face_verifier_available': 'face_verifier' in globals() and face_verifier is not None,
+        'timestamp': datetime.now().isoformat(),
+        'cors_test': 'success'
     })
 
 @app.route('/api/check-user', methods=['POST'])
@@ -422,6 +509,51 @@ def upload_face():
     except Exception as e:
         logger.error(f"/api/upload-face error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/login', methods=['POST'])
+@cross_origin()
+def login_user():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({'success': False, 'error': 'Missing credentials'}), 400
+
+        # Get user by email
+        user_result = supabase_manager.client.table('users').select('*').eq('email', email).limit(1).execute()
+        if not user_result.data:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+
+        user = user_result.data[0]
+
+        # Validate password (assuming bcrypt)
+        if not bcrypt.checkpw(password.encode(), user['password'].encode()):
+            return jsonify({'success': False, 'error': 'Invalid password'}), 401
+
+        # If biometric is enrolled, trigger face verification step
+        if user.get('is_biometric_enrolled'):
+            return jsonify({
+                'success': False,
+                'error': 'BIOMETRIC_REQUIRED',
+                'user_id': user['id'],
+                'full_name': user.get('full_name', ''),
+                'email': user['email']
+            }), 401
+
+        # Otherwise, login success
+        return jsonify({
+            'success': True,
+            'user_id': user['id'],
+            'email': user['email'],
+            'full_name': user.get('full_name', ''),
+            'role': user.get('role', 'user')
+        })
+
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @app.route('/api/behavioral-verify', methods=['POST'])
@@ -716,6 +848,349 @@ def register_blueprints():
         logger.info("✅ eKYC blueprint registered")
     except ImportError as e:
         logger.warning(f"⚠️ Could not import eKYC blueprint: {e}")
+
+
+@app.route('/api/biometric-login-verify', methods=['POST', 'OPTIONS'])
+@cross_origin(origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'])
+def biometric_login_verify():
+    """
+    Enhanced biometric login verification with better error handling
+    """
+    try:
+        # Handle preflight
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin'))
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+            return response
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No JSON data provided'
+            }), 400
+        
+        user_id = data.get('user_id')
+        face_image_b64 = data.get('face_image')
+        
+        if not user_id or not face_image_b64:
+            return jsonify({
+                'success': False,
+                'error': 'User ID and face image are required'
+            }), 400
+        
+        logger.info(f"🔍 Starting biometric login verification for user: {user_id}")
+        
+        # Check if face verifier is available
+        if not face_verifier:
+            logger.warning("Face verifier not available, using fallback verification")
+            return fallback_face_verification(user_id, face_image_b64)
+        
+        # Get stored face embedding from database
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Query stored biometric data
+        stored_result = supabase_manager.client.table("biometric_data") \
+            .select("face_embedding, quality_score, created_at") \
+            .eq("user_id", user_id) \
+            .eq("biometric_type", "face") \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not stored_result.data:
+            return jsonify({
+                'success': False,
+                'error': 'No biometric data found for user'
+            }), 404
+        
+        stored_data = stored_result.data[0]
+        stored_embedding = stored_data['face_embedding']
+        
+        if not stored_embedding:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid stored face data'
+            }), 400
+        
+        logger.info(f"📊 Found stored embedding with {len(stored_embedding)} dimensions")
+        
+        # Process current face image
+        try:
+            frame = process_base64_image(face_image_b64)
+            if frame is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to process face image'
+                }), 400
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Error processing image: {str(e)}'
+            }), 400
+        
+        # Use enhanced face verification model
+        verification_result = face_verifier.verify_for_login(frame, stored_embedding)
+        
+        if not verification_result['success']:
+            logger.warning(f"❌ Face verification failed: {verification_result.get('error')}")
+            log_failed_attempt(user_id, verification_result)
+            
+            return jsonify({
+                'success': False,
+                'error': verification_result.get('error', 'Face verification failed'),
+                'similarity': verification_result.get('similarity', 0),
+                'threshold': face_verifier.LOGIN_THRESHOLD
+            }), 401
+        
+        # Check if face matches
+        is_match = verification_result.get('is_match', False)
+        similarity = verification_result.get('similarity', 0)
+        
+        if is_match:
+            logger.info(f"✅ Face verification successful: similarity={similarity:.3f}")
+        else:
+            logger.warning(f"❌ Face verification failed: similarity={similarity:.3f} below threshold={face_verifier.LOGIN_THRESHOLD}")
+        
+        # Log the authentication attempt
+        log_data = {
+            'user_id': user_id,
+            'success': is_match,
+            'biometric_scores': {
+                'face_similarity': float(similarity),
+                'face_distance': verification_result.get('distance', 0),
+                'quality_score': verification_result.get('quality_score', 0),
+                'confidence_level': verification_result.get('confidence_level', 'UNKNOWN')
+            },
+            'ip_addr': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'event_ts': datetime.now().isoformat(),
+            'failure_reason': None if is_match else 'biometric_similarity_low'
+        }
+        
+        try:
+            if supabase_manager.client:
+                supabase_manager.client.table("login_audit").insert(log_data).execute()
+                logger.info("📝 Login attempt logged successfully")
+        except Exception as e:
+            logger.error(f"Failed to log login attempt: {e}")
+        
+        # Return verification result
+        response_data = {
+            'success': is_match,
+            'similarity': float(similarity),
+            'threshold': face_verifier.LOGIN_THRESHOLD,
+            'quality_score': verification_result.get('quality_score', 0),
+            'confidence_level': verification_result.get('confidence_level', 'UNKNOWN'),
+            'message': 'Face verification successful' if is_match else f'Face similarity too low: {similarity:.3f}'
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Biometric login verification error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error during verification'
+        }), 500
+
+def fallback_face_verification(user_id: str, face_image_b64: str):
+    """
+    Fallback face verification using basic face_recognition library
+    """
+    try:
+        logger.info("🔄 Using fallback face verification")
+        
+        # Get stored face embedding
+        stored_result = supabase_manager.client.table("biometric_data") \
+            .select("face_embedding") \
+            .eq("user_id", user_id) \
+            .eq("biometric_type", "face") \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if not stored_result.data:
+            return jsonify({
+                'success': False,
+                'error': 'No biometric data found'
+            }), 404
+        
+        stored_embedding = stored_result.data[0]['face_embedding']
+        
+        # Process current face image
+        frame = process_base64_image(face_image_b64)
+        
+        # Extract face encoding from current image
+        face_encodings = face_recognition.face_encodings(frame)
+        if not face_encodings:
+            return jsonify({
+                'success': False,
+                'error': 'No face detected in image'
+            }), 400
+        
+        current_encoding = face_encodings[0]
+        
+        # Compare faces using relaxed threshold
+        stored_encoding_array = np.array(stored_embedding)
+        distance = face_recognition.face_distance([stored_encoding_array], current_encoding)[0]
+        similarity = 1.0 - distance
+        
+        # Very relaxed threshold for fallback
+        FALLBACK_THRESHOLD = 0.35
+        is_match = similarity >= FALLBACK_THRESHOLD
+        
+        logger.info(f"Fallback verification: similarity={similarity:.3f}, threshold={FALLBACK_THRESHOLD}")
+        
+        # Log the attempt
+        log_data = {
+            'user_id': user_id,
+            'success': is_match,
+            'biometric_scores': {
+                'face_similarity': float(similarity),
+                'face_distance': float(distance),
+                'verification_method': 'fallback'
+            },
+            'ip_addr': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'event_ts': datetime.now().isoformat()
+        }
+        
+        if supabase_manager.client:
+            supabase_manager.client.table("login_audit").insert(log_data).execute()
+        
+        return jsonify({
+            'success': is_match,
+            'similarity': float(similarity),
+            'threshold': FALLBACK_THRESHOLD,
+            'verification_method': 'fallback',
+            'message': 'Face verification successful (fallback)' if is_match else 'Face verification failed (fallback)'
+        })
+        
+    except Exception as e:
+        logger.error(f"Fallback verification error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Fallback verification failed'
+        }), 500
+
+def log_failed_attempt(user_id: str, verification_result: dict):
+    """
+    Log failed biometric authentication attempt
+    """
+    try:
+        log_data = {
+            'user_id': user_id,
+            'success': False,
+            'biometric_scores': {
+                'face_similarity': verification_result.get('similarity', 0),
+                'error': verification_result.get('error', 'Unknown error')
+            },
+            'ip_addr': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent', ''),
+            'event_ts': datetime.now().isoformat(),
+            'failure_reason': 'biometric_verification_error'
+        }
+        
+        if supabase_manager.client:
+            supabase_manager.client.table("login_audit").insert(log_data).execute()
+            
+    except Exception as e:
+        logger.error(f"Failed to log authentication attempt: {e}")
+
+@app.route('/api/check-biometric-enrollment/<user_id>', methods=['GET'])
+def check_biometric_enrollment(user_id: str):
+    """
+    Check if user has biometric data enrolled
+    """
+    try:
+        if not supabase_manager.client:
+            return jsonify({
+                'enrolled': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Check for face biometric data
+        result = supabase_manager.client.table("biometric_data") \
+            .select("id, created_at, quality_score") \
+            .eq("user_id", user_id) \
+            .eq("biometric_type", "face") \
+            .order("created_at", desc=True) \
+            .limit(1) \
+            .execute()
+        
+        enrolled = bool(result.data)
+        
+        response_data = {
+            'enrolled': enrolled,
+            'user_id': user_id
+        }
+        
+        if enrolled:
+            biometric_data = result.data[0]
+            response_data.update({
+                'enrollment_date': biometric_data['created_at'],
+                'quality_score': biometric_data.get('quality_score', 0)
+            })
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error checking biometric enrollment: {e}")
+        return jsonify({
+            'enrolled': False,
+            'error': 'Failed to check enrollment status'
+        }), 500
+
+# ============= DEBUG ROUTES ENDPOINT =============
+@app.route('/api/debug/routes', methods=['GET'])
+@cross_origin()
+def debug_routes():
+    """Debug endpoint to check available routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': str(rule)
+        })
+    return jsonify({
+        'total_routes': len(routes),
+        'routes': routes,
+        'cors_enabled': True
+    })
+
+# ============= ERROR HANDLERS =============
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'success': False,
+        'error': 'Endpoint not found',
+        'message': 'The requested API endpoint does not exist'
+    }), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({
+        'success': False,
+        'error': 'Method not allowed',
+        'message': 'The HTTP method is not allowed for this endpoint'
+    }), 405
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        'success': False,
+        'error': 'Internal server error',
+        'message': 'An unexpected error occurred'
+    }), 500
 
 if __name__ == '__main__':
     print("=" * 60)

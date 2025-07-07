@@ -38,8 +38,9 @@ interface LivenessMetrics {
 interface BiometricCaptureProps {
   onFaceCapture: (faceData: string, faceUrl?: string) => void;
   onLivenessCapture: (livenessData: any) => void;
-  mode?: "registration" | "authentication";
+  mode: "registration" | "authentication";
   userId?: string;
+  
 }
 
 type WorkflowStep =

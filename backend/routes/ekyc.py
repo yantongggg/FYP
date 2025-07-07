@@ -388,7 +388,7 @@ def ekyc_mykad_verify():
         # Step 4: Extract face from IC (optional)
         face_extraction_result = extract_ic_face(ic_front_image)
         ic_face_url = ''
-        face_match_result = {'match': False, 'confidence': 0.0}
+        # face_match_result = {'match': False, 'confidence': 0.0}
         
         if face_extraction_result['success']:
             logger.info("✅ Face extracted from IC")
@@ -428,28 +428,37 @@ def ekyc_mykad_verify():
         storage_results = store_ekyc_images(user_id, ic_front_b64, ic_back_b64)
         
         # Store eKYC record
-        ekyc_record = {
-            'user_id': user_id,
-            'document_type': 'mykad',
-            'id_document_url': storage_results.get('front_url', ''),
-            'id_document_back_url': storage_results.get('back_url', ''),
-            'ic_face_url': ic_face_url,
-            'extracted_info': extracted_info,
-            'verification_status': 'verified' if is_verified else 'rejected',
-            'verification_score': authenticity_score,
-            'face_match_score': face_match_result.get('confidence', 0.0),
-            'face_match_details': face_match_result,
-            'document_authenticity_score': authenticity_score,
-            'validation_score': validation_score,
-            'ocr_confidence': authenticity_score,
-            'processing_method': 'local_ocr',
-            'created_at': datetime.utcnow().isoformat(),
-            'verified_at': datetime.utcnow().isoformat() if is_verified else None
-        }
-        
-        # Insert into database
+        ekyc_records = [
+            {
+                'user_id': user_id,
+                'document_type': 'ic_front',
+                'id_document_url': storage_results.get('front_url', ''),
+                'ic_face_url': ic_face_url,
+                'extracted_info': extracted_info,
+                'verification_status': 'verified' if is_verified else 'rejected',
+                'verification_score': authenticity_score,
+                'document_authenticity_score': authenticity_score,
+                'validation_score': validation_score,
+                'ocr_confidence': authenticity_score,
+                'processing_method': 'local_ocr',
+                'created_at': datetime.utcnow().isoformat(),
+                'verified_at': datetime.utcnow().isoformat() if is_verified else None
+            },
+            {
+                'user_id': user_id,
+                'document_type': 'ic_back',
+                'id_document_url': storage_results.get('back_url', ''),  
+                'document_authenticity_score': authenticity_score,        
+                'validation_score': back_validation['validation_score'], 
+                'verification_status': 'verified' if is_verified else 'rejected',
+                'created_at': datetime.utcnow().isoformat()
+            }
+]
+
+
+        # Insert both into database
         try:
-            db_result = supabase_client.table('ekyc_documents').insert(ekyc_record).execute()
+            db_result = supabase_client.table('ekyc_documents').insert(ekyc_records).execute()
         except Exception as e:
             logger.error(f"Database error: {e}")
             db_result = None

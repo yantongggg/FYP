@@ -506,8 +506,6 @@ const EditProfile = () => {
               )}
             </div>
           )}
-
-          {/* eKYC Tab */}
           {activeTab === 'ekyc' && (
             <div className="space-y-6">
               <h2 className="text-xl font-bold text-green-400 mb-6 flex items-center">
@@ -515,75 +513,18 @@ const EditProfile = () => {
                 eKYC_DOCUMENT_VERIFICATION
               </h2>
 
-              <div className="p-4 bg-yellow-600/20 border border-yellow-500/30 rounded-lg mb-6">
-                <p className="text-yellow-400 text-sm font-bold mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                  ⚠️ IMPORTANT INSTRUCTIONS:
+              <div className="p-4 bg-green-900/30 border border-green-500/30 rounded-lg">
+                <p className="text-green-400 font-mono text-sm mb-2">
+                  ✅ Your eKYC documents have been submitted successfully.
                 </p>
-                <ul className="text-yellow-300 text-sm space-y-1" style={{ fontFamily: 'IBM Plex Mono' }}>
-                  <li>• Upload BOTH front and back of your Malaysian IC (MyKad)</li>
-                  <li>• Ensure images are clear, well-lit, and not blurry</li>
-                  <li>• IC must be placed on a plain white background</li>
-                  <li>• Face on IC will be matched with your biometric profile</li>
-                </ul>
+                <p className="text-gray-400 font-mono text-sm">
+                  eKYC documents are securely stored and cannot be re-uploaded.
+                  Contact support for any verification issues.
+                </p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-green-400 font-bold mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                    IC FRONT (WITH PHOTO)
-                  </label>
-                  <div className="border-2 border-dashed border-green-500/50 rounded-lg p-6 text-center">
-                    <FileText className="h-12 w-12 text-green-400 mx-auto mb-2" />
-                    <p className="text-cyan-400 text-sm">Upload IC front side</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      id="ic-front"
-                    />
-                    <label
-                      htmlFor="ic-front"
-                      className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer"
-                    >
-                      UPLOAD FRONT
-                    </label>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-green-400 font-bold mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                    IC BACK (WITH SIGNATURE)
-                  </label>
-                  <div className="border-2 border-dashed border-green-500/50 rounded-lg p-6 text-center">
-                    <FileText className="h-12 w-12 text-green-400 mx-auto mb-2" />
-                    <p className="text-cyan-400 text-sm">Upload IC back side</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      id="ic-back"
-                    />
-                    <label
-                      htmlFor="ic-back"
-                      className="terminal-button mt-3 px-4 py-2 rounded inline-block cursor-pointer"
-                    >
-                      UPLOAD BACK
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleEKYCCapture({})}
-                className="terminal-button w-full py-3 px-6 rounded font-bold hover-glow mt-4"
-              >
-                <div className="flex items-center justify-center">
-                  <Save className="h-5 w-5 mr-2" />
-                  SUBMIT_DOCUMENTS
-                </div>
-              </button>
             </div>
           )}
+
         </motion.div>
       </div>
     </div>

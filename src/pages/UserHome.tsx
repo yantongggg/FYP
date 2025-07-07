@@ -1,884 +1,891 @@
-// Fixed UserHome.tsx with all TypeScript errors resolved
-import EKYCDocumentViewer from '../components/EKYCDocumentViewer';
-import { FileText } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  Clock, 
-  Activity, 
-  LogOut,
-  Eye,
-  Keyboard,
-  MousePointer,
-  Terminal,
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { motion } from 'framer-motion';
+import {
+  User,
+  Shield,
+  Camera,
+  FileText,
+  Activity,
   CheckCircle,
   AlertTriangle,
-  TrendingUp,
-  BarChart3,
-  History,
+  Eye,
+  Fingerprint,
+  Keyboard,
+  MousePointer,
   RefreshCw,
-  ChevronDown,
-  ChevronUp
+  TrendingUp,
+  Loader2,
+  Upload,
+  Edit3
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import BehavioralMonitor from '../components/BehavioralMonitor';
+import EKYCDocumentViewer from '../components/EKYCDocumentViewer';
 
-// =====================================
-// TYPE DEFINITIONS
-// =====================================
-
-interface BehavioralAnalytics {
-  total_sessions: number;
-  successful_sessions: number;
-  total_anomalies: number;
-  recent_anomalies: number;
-  avg_similarity_score: number;
-  sessions: SessionData[];
-  anomalies: AnomalyData[];
+interface BiometricData {
+  id: string;
+  biometric_type: string;
+  face_embedding?: number[];
+  face_image_url?: string;
+  quality_score: number;
+  capture_timestamp: string;
+  enrollment_device_info?: any;
+  created_at: string;
 }
 
-interface SessionData {
+interface BehavioralPattern {
   id: string;
-  session_type: string;
+  user_id: string;
+  pattern_data: {
+    keystroke_features?: any;
+    mouse_features?: any;
+    enrollment_metadata?: any;
+  };
+  is_active: boolean;
+  created_at: string;
+}
+
+interface EKYCDocument {
+  id: string;
+  document_type: string;
+  verification_status: string;
+  face_match_score: number;
+  document_authenticity_score: number;
+  created_at: string;
+  extracted_info?: any;
+  id_document_url?: string;
+}
+
+interface BehavioralSession {
+  id: string;
+  session_id: string;
   similarity_scores: {
-    overall_similarity?: number;
-    keystroke_similarity?: number;
-    mouse_similarity?: number;
-  } | null;
+    overall_similarity: number;
+    keystroke_similarity: number;
+    mouse_similarity: number;
+  };
   anomaly_score: number;
   is_successful: boolean;
   created_at: string;
-  duration_seconds: number;
 }
 
-interface AnomalyData {
+interface AnomalyAudit {
   id: string;
   anomaly_type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  action_taken: string;
   anomaly_score: number;
+  severity: string;
+  action_taken: string;
   created_at: string;
-  auto_resolved: boolean;
+  details?: any;
 }
 
-interface ExpandedSections {
-  profile: boolean;
-  security: boolean;
-  behavioral: boolean;
-  sessions: boolean;
-  anomalies: boolean;
+interface UserBiometricData {
+  biometrics: BiometricData[];
+  behavioralPatterns: BehavioralPattern[];
+  ekycDocuments: EKYCDocument[];
+  behavioralSessions: BehavioralSession[];
+  anomalies: AnomalyAudit[];
+  loading: boolean;
+  lastUpdated: Date | null;
 }
 
-interface BiometricStatus {
-  face: 'ENROLLED' | 'NOT_ENROLLED';
-  keystroke: 'ENROLLED' | 'NOT_ENROLLED';
-  behavioral: 'ACTIVE_MONITORING' | 'INACTIVE';
-  mouse: 'ACTIVE_MONITORING';
-}
+const UserHome: React.FC = () => {
+  const { userData } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [refreshing, setRefreshing] = useState(false);
 
-interface ThreatLevel {
-  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  color: string;
-}
-
-interface SupabaseRealtimePayload {
-  new: AnomalyData;
-  old: any;
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-}
-
-// =====================================
-// MAIN COMPONENT
-// =====================================
-
-const UserHome = () => {
-  // =====================================
-  // HOOKS & STATE
-  // =====================================
-
-  const { userData, logout } = useAuth();
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [analytics, setAnalytics] = useState<BehavioralAnalytics | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [expandedSections, setExpandedSections] = useState<ExpandedSections>({
-    profile: true,
-    security: true,
-    behavioral: false,
-    sessions: false,
-    anomalies: false
+  // Properly typed state for user biometric data
+  const [userBiometricData, setUserBiometricData] = useState<UserBiometricData>({
+    biometrics: [],
+    behavioralPatterns: [],
+    ekycDocuments: [],
+    behavioralSessions: [],
+    anomalies: [],
+    loading: true,
+    lastUpdated: null
   });
-  const [realTimeAnomalies, setRealTimeAnomalies] = useState<AnomalyData[]>([]);
 
-  // =====================================
-  // EFFECTS
-  // =====================================
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  // Load user behavioral analytics
-  useEffect(() => {
-    if (userData?.uid) {
-      loadBehavioralAnalytics();
-      setupRealtimeSubscriptions();
+  // Load all biometric data with proper user ID handling
+  const loadBiometricData = async () => {
+    if (!userData?.uid || userData.uid.includes('demo')) {
+      // Demo data
+      setUserBiometricData({
+        biometrics: [{
+          id: 'demo-bio-1',
+          biometric_type: 'face',
+          quality_score: 0.95,
+          capture_timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          face_image_url: 'https://via.placeholder.com/150'
+        }],
+        behavioralPatterns: [{
+          id: 'demo-behavioral-1',
+          user_id: userData?.uid ?? '',
+          pattern_data: {
+            keystroke_features: { avg_dwell_time: 120, typing_speed: 45 },
+            mouse_features: { avg_velocity: 150 },
+            enrollment_metadata: { total_keystrokes: 150, total_mouse_events: 80 }
+          },
+          is_active: true,
+          created_at: new Date().toISOString()
+        }],
+        ekycDocuments: [{
+          id: 'demo-ekyc-1',
+          document_type: 'ic_front',
+          verification_status: 'verified',
+          face_match_score: 0.92,
+          document_authenticity_score: 0.88,
+          created_at: new Date().toISOString()
+        }],
+        behavioralSessions: [],
+        anomalies: [],
+        loading: false,
+        lastUpdated: new Date()
+      });
+      return;
     }
-  }, [userData]);
 
-  // =====================================
-  // API FUNCTIONS
-  // =====================================
-
-  const loadBehavioralAnalytics = async (): Promise<void> => {
     try {
-      const response = await fetch(`http://localhost:5000/api/behavioral-analytics/${userData?.uid}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
+      setUserBiometricData(prev => ({ ...prev, loading: true }));
+      
+      console.log('🔍 Loading biometric data for user:', userData.uid);
+
+      // Load biometric data - try both user_id formats
+      const { data: biometrics, error: bioError } = await supabase
+        .from('biometric_data')
+        .select('*')
+        .eq('user_id', userData.uid)
+        .order('created_at', { ascending: false });
+
+      if (bioError) {
+        console.error('Error loading biometric data:', bioError);
+      }
+
+      // Load behavioral patterns
+      const { data: behavioralPatterns, error: behavError } = await supabase
+        .from('behavioral_patterns')
+        .select('*')
+        .eq('user_id', userData.uid)
+        .order('created_at', { ascending: false });
+
+      if (behavError) {
+        console.error('Error loading behavioral patterns:', behavError);
+      }
+
+      // Load eKYC documents  
+      const { data: ekycDocuments, error: ekycError } = await supabase
+        .from('ekyc_documents')
+        .select('*')
+        .eq('user_id', userData.uid)
+        .order('created_at', { ascending: false });
+
+      if (ekycError) {
+        console.error('Error loading eKYC documents:', ekycError);
+      }
+
+      // Load behavioral sessions - note: this table uses user_id as text
+      const { data: behavioralSessions, error: sessError } = await supabase
+        .from('behavioral_sessions')
+        .select('*')
+        .eq('user_id', userData.uid)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (sessError) {
+        console.error('Error loading behavioral sessions:', sessError);
+      }
+
+      // Load anomaly audits - note: this table uses user_id as text  
+      const { data: anomalies, error: anomError } = await supabase
+        .from('anomaly_audits')
+        .select('*')
+        .eq('user_id', userData.uid)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (anomError) {
+        console.error('Error loading anomalies:', anomError);
+      }
+
+      console.log('📊 Loaded data:', {
+        biometrics: biometrics?.length || 0,
+        behavioralPatterns: behavioralPatterns?.length || 0,  
+        ekycDocuments: ekycDocuments?.length || 0,
+        behavioralSessions: behavioralSessions?.length || 0,
+        anomalies: anomalies?.length || 0
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setAnalytics(data.analytics);
-      } else {
-        console.warn('Failed to load behavioral analytics');
-      }
+      setUserBiometricData({
+        biometrics: biometrics || [],
+        behavioralPatterns: behavioralPatterns || [],
+        ekycDocuments: ekycDocuments || [],
+        behavioralSessions: behavioralSessions || [],
+        anomalies: anomalies || [],
+        loading: false,
+        lastUpdated: new Date()
+      });
+
     } catch (error) {
-      console.error('Error loading analytics:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading biometric data:', error);
+      setUserBiometricData(prev => ({ ...prev, loading: false }));
     }
   };
 
-  const setupRealtimeSubscriptions = (): (() => void) => {
-    if (!userData?.uid) return () => {};
+  // Real-time subscription for biometric data updates
+  useEffect(() => {
+    if (!userData?.uid || userData.uid.includes('demo')) return;
 
-    // Subscribe to new anomalies for this user
-    const channel = supabase
-      .channel(`user_${userData.uid}_anomalies`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'anomaly_audits',
-          filter: `user_id=eq.${userData.uid}`
-        },
-        (payload: SupabaseRealtimePayload) => {
-          console.log('New anomaly detected:', payload);
-          setRealTimeAnomalies(prev => [payload.new, ...prev.slice(0, 4)]);
-          loadBehavioralAnalytics();
-        }
-      )
+    const subscription = supabase
+      .channel('user-biometric-updates')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'biometric_data',
+        filter: `user_id=eq.${userData.uid}`
+      }, () => {
+        console.log('Biometric data updated, refreshing...');
+        loadBiometricData();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public', 
+        table: 'behavioral_patterns',
+        filter: `user_id=eq.${userData.uid}`
+      }, () => {
+        console.log('Behavioral patterns updated, refreshing...');
+        loadBiometricData();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'ekyc_documents',
+        filter: `user_id=eq.${userData.uid}`
+      }, () => {
+        console.log('eKYC documents updated, refreshing...');
+        loadBiometricData();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'behavioral_sessions',
+        filter: `user_id=eq.${userData.uid}`
+      }, () => {
+        console.log('Behavioral sessions updated, refreshing...');
+        loadBiometricData();
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      subscription.unsubscribe();
     };
+  }, [userData?.uid]);
+
+  // Initial load
+  useEffect(() => {
+    loadBiometricData();
+  }, [userData?.uid]);
+
+  // Manual refresh function
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadBiometricData();
+    setRefreshing(false);
   };
 
-  const handleLogout = async (): Promise<void> => {
+  // Handle re-enrollment
+  const handleReEnroll = async (type: string) => {
     try {
-      await logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  // =====================================
-  // UI HELPER FUNCTIONS
-  // =====================================
-
-  const toggleSection = (section: keyof ExpandedSections): void => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  const getSuccessRate = (): number => {
-    if (!analytics || analytics.total_sessions === 0) return 0;
-    return (analytics.successful_sessions / analytics.total_sessions) * 100;
-  };
-
-  const getSecurityScore = (): number => {
-    if (!analytics) return 50;
-    
-    const successRate = getSuccessRate();
-    const recentAnomalies = analytics.recent_anomalies;
-    const avgSimilarity = analytics.avg_similarity_score * 100;
-    
-    // Calculate composite security score
-    const score = (successRate * 0.4) + (avgSimilarity * 0.4) + ((7 - Math.min(recentAnomalies, 7)) / 7 * 20);
-    return Math.round(Math.max(0, Math.min(100, score)));
-  };
-
-  const getThreatLevel = (): ThreatLevel => {
-    const securityScore = getSecurityScore();
-    const recentAnomalies = analytics?.recent_anomalies || 0;
-    
-    if (securityScore > 80 && recentAnomalies === 0) {
-      return { level: 'LOW', color: 'text-green-400' };
-    }
-    if (securityScore > 60 && recentAnomalies < 3) {
-      return { level: 'MEDIUM', color: 'text-yellow-400' };
-    }
-    if (securityScore > 40) {
-      return { level: 'HIGH', color: 'text-orange-400' };
-    }
-    return { level: 'CRITICAL', color: 'text-red-400' };
-  };
-
-  const getSeverityColor = (severity: string): string => {
-    switch (severity) {
-      case 'critical': return 'text-red-400 border-red-500';
-      case 'high': return 'text-orange-400 border-orange-500';
-      case 'medium': return 'text-yellow-400 border-yellow-500';
-      default: return 'text-blue-400 border-blue-500';
-    }
-  };
-
-  const formatMemberSince = (userData: any): string => {
-    try {
-      if (userData?.createdAt) {
-        // Handle Firebase Timestamp
-        if (typeof userData.createdAt.toDate === 'function') {
-          return userData.createdAt.toDate().toLocaleDateString();
-        }
-        // Handle regular Date object or ISO string
-        return new Date(userData.createdAt).toLocaleDateString();
+      console.log(`🔄 Starting re-enrollment for ${type}`);
+      
+      if (type === 'face') {
+        // Redirect to registration page or open biometric capture modal
+        alert('Face re-enrollment will open biometric capture. Redirect to registration page.');
+      } else if (type === 'keystroke') {
+        alert('Keystroke re-enrollment will start behavioral capture. Redirect to registration page.');
+      } else if (type === 'scroll') {
+        alert('Scroll behavior re-enrollment will start behavioral capture. Redirect to registration page.');
       }
-      return 'UNKNOWN';
+      
     } catch (error) {
-      console.error('Error formatting member since date:', error);
-      return 'UNKNOWN';
+      console.error('Re-enrollment error:', error);
     }
   };
 
-  // =====================================
-  // COMPUTED VALUES
-  // =====================================
-
-  const biometricStatus: BiometricStatus = {
-    face: userData?.faceData ? 'ENROLLED' : 'NOT_ENROLLED',
-    keystroke: (analytics?.total_sessions || 0) > 0 ? 'ENROLLED' : 'NOT_ENROLLED',
-    behavioral: analytics ? 'ACTIVE_MONITORING' : 'INACTIVE',
-    mouse: 'ACTIVE_MONITORING'
-  };
-
-  const securityScore = getSecurityScore();
-  const threatLevel = getThreatLevel();
-
-  // =====================================
-  // RENDER GUARDS
-  // =====================================
-
-  if (loading) {
+  if (!userData) {
     return (
       <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="h-12 w-12 text-green-400 mx-auto mb-4 animate-spin" />
-          <p className="text-green-400 font-mono">LOADING_USER_ANALYTICS...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mx-auto mb-4" />
+          <p className="text-cyan-400">Loading user data...</p>
         </div>
       </div>
     );
   }
 
-  // =====================================
-  // MAIN RENDER
-  // =====================================
+  const tabs = [
+    { id: 'overview', name: 'Overview', icon: User },
+    { id: 'biometric', name: 'Biometric', icon: Fingerprint },
+    { id: 'behavioral', name: 'Behavioral', icon: Activity },
+    { id: 'ekyc', name: 'eKYC', icon: FileText },
+    { id: 'security', name: 'Security', icon: Shield }
+  ];
+
+  // Calculate enhanced statistics
+  const biometricStats = {
+    faceEnrolled: userBiometricData.biometrics.some((bio: BiometricData) => bio.biometric_type === 'face'),
+    keystrokeEnrolled: userBiometricData.behavioralPatterns.some((pattern: BehavioralPattern) => 
+      pattern.pattern_data?.keystroke_features && Object.keys(pattern.pattern_data.keystroke_features).length > 0
+    ),
+    scrollEnrolled: userBiometricData.behavioralPatterns.some((pattern: BehavioralPattern) => 
+      pattern.pattern_data?.mouse_features && Object.keys(pattern.pattern_data.mouse_features).length > 0
+    ),
+    ekycVerified: userBiometricData.ekycDocuments.some((doc: EKYCDocument) => doc.verification_status === 'verified'),
+    behavioralSessions: userBiometricData.behavioralSessions.length,
+    recentAnomalies: userBiometricData.anomalies.filter((anomaly: AnomalyAudit) => {
+      const anomalyDate = new Date(anomaly.created_at);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return anomalyDate > weekAgo;
+    }).length
+  };
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-      <BehavioralMonitor 
-        userId={userData?.uid || ''} 
-        isActive={true}
-        onVerificationComplete={(result) => {
-          if (result.success) {
-            loadBehavioralAnalytics(); // Refresh analytics
-          }
-        }}
-      />
-      
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex justify-between items-center mb-8"
+          className="mb-8"
         >
-          <div>
-            <h1 className="text-4xl font-bold text-green-400 mb-2 glitch-text">
-              WELCOME, {userData?.username?.toUpperCase() || 'USER'}
-            </h1>
-            <p className="text-cyan-400 font-mono">USER_DASHBOARD // BEHAVIORAL_ANALYTICS_ACTIVE</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-right">
-              <p className="text-green-400 font-mono text-sm">SYSTEM_TIME</p>
-              <p className="text-cyan-400 font-mono">{currentTime.toLocaleTimeString()}</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-green-400 mb-2" style={{ fontFamily: 'Orbitron' }}>
+                USER PROFILE TERMINAL
+              </h1>
+              <p className="text-cyan-400" style={{ fontFamily: 'IBM Plex Mono' }}>
+                Welcome back, {userData.username}
+              </p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="terminal-button px-4 py-2 rounded font-bold"
-            >
-              <LogOut className="h-4 w-4 mr-2 inline" />
-              LOGOUT
-            </button>
+            <div className="flex items-center space-x-4">
+              {userBiometricData.lastUpdated && (
+                <div className="text-sm text-gray-400">
+                  Last updated: {userBiometricData.lastUpdated.toLocaleTimeString()}
+                </div>
+              )}
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="terminal-button px-4 py-2 rounded flex items-center"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
         </motion.div>
 
-        {/* Real-time Anomaly Alerts */}
-        <AnimatePresence>
-          {realTimeAnomalies.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <AlertTriangle className="h-5 w-5 text-red-400 mr-2" />
-                  <span className="text-red-400 font-bold">NEW SECURITY ALERT</span>
-                </div>
-                <button
-                  onClick={() => setRealTimeAnomalies([])}
-                  className="text-gray-400 hover:text-white"
-                >
-                  ×
-                </button>
+        {/* Enhanced Quick Stats */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+        >
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400">Face Biometric</p>
+                <p className={`text-lg font-bold ${biometricStats.faceEnrolled ? 'text-green-400' : 'text-red-400'}`}>
+                  {biometricStats.faceEnrolled ? 'ENROLLED' : 'NOT_ENROLLED'}
+                </p>
               </div>
-              <p className="text-red-300 text-sm mt-1">
-                {realTimeAnomalies[0].anomaly_type} detected at {formatDate(realTimeAnomalies[0].created_at)}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Profile Information */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-2 terminal-border rounded-lg"
-          >
-            <div 
-              className="flex justify-between items-center p-6 cursor-pointer"
-              onClick={() => toggleSection('profile')}
-            >
-              <h2 className="text-2xl font-bold text-green-400 flex items-center">
-                <Terminal className="mr-3 h-6 w-6" />
-                USER_PROFILE_DATA
-              </h2>
-              {expandedSections.profile ? <ChevronUp className="h-5 w-5 text-green-400" /> : <ChevronDown className="h-5 w-5 text-green-400" />}
+              <Camera className={`h-8 w-8 ${biometricStats.faceEnrolled ? 'text-green-400' : 'text-gray-400'}`} />
             </div>
-            
-            <AnimatePresence>
-              {expandedSections.profile && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-6 pb-6"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">USERNAME:</label>
-                        <p className="text-green-400 font-bold font-mono">{userData?.username || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">EMAIL:</label>
-                        <p className="text-green-400 font-bold font-mono">{userData?.email || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">ACCESS_LEVEL:</label>
-                        <span className="inline-block px-3 py-1 bg-blue-600/20 text-blue-400 rounded text-sm font-bold font-mono border border-blue-500/30">
-                          {userData?.role?.toUpperCase() || 'USER'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">MEMBER_SINCE:</label>
-                        <p className="text-green-400 font-bold font-mono">
-                          {formatMemberSince(userData)}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">LAST_LOGIN:</label>
-                        <p className="text-green-400 font-bold font-mono">
-                          {currentTime.toLocaleDateString()} {currentTime.toLocaleTimeString()}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm text-cyan-400 font-mono">STATUS:</label>
-                        <span className="inline-block px-3 py-1 bg-green-600/20 text-green-400 rounded text-sm font-bold font-mono border border-green-500/30">
-                          ACTIVE
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+          </div>
 
-          {/* Security Metrics */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-6"
-          >
-            <div className="terminal-border rounded-lg">
-              <div 
-                className="flex justify-between items-center p-6 cursor-pointer"
-                onClick={() => toggleSection('security')}
-              >
-                <h3 className="text-lg font-bold text-green-400 flex items-center">
-                  <Shield className="mr-2 h-5 w-5" />
-                  SECURITY_SCORE
-                </h3>
-                {expandedSections.security ? <ChevronUp className="h-5 w-5 text-green-400" /> : <ChevronDown className="h-5 w-5 text-green-400" />}
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400">Keystroke Dynamics</p>
+                <p className={`text-lg font-bold ${biometricStats.keystrokeEnrolled ? 'text-green-400' : 'text-red-400'}`}>
+                  {biometricStats.keystrokeEnrolled ? 'ENROLLED' : 'NOT_ENROLLED'}
+                </p>
               </div>
-              
-              <AnimatePresence>
-                {expandedSections.security && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="px-6 pb-6"
-                  >
-                    <div className="text-center mb-4">
-                      <div className="text-4xl font-bold text-green-400 mb-2 neon-glow">{securityScore}%</div>
-                      <p className="text-cyan-400 text-sm font-mono">
-                        {securityScore > 80 ? 'EXCELLENT_SECURITY' : 
-                         securityScore > 60 ? 'GOOD_SECURITY' : 
-                         securityScore > 40 ? 'FAIR_SECURITY' : 'NEEDS_ATTENTION'}
-                      </p>
+              <Keyboard className={`h-8 w-8 ${biometricStats.keystrokeEnrolled ? 'text-green-400' : 'text-gray-400'}`} />
+            </div>
+          </div>
+
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400">Scroll Behavior</p>
+                <p className={`text-lg font-bold ${biometricStats.scrollEnrolled ? 'text-green-400' : 'text-red-400'}`}>
+                  {biometricStats.scrollEnrolled ? 'ENROLLED' : 'NOT_ENROLLED'}
+                </p>
+              </div>
+              <MousePointer className={`h-8 w-8 ${biometricStats.scrollEnrolled ? 'text-green-400' : 'text-gray-400'}`} />
+            </div>
+          </div>
+
+          <div className="glass-card rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-400">eKYC Status</p>
+                <p className={`text-lg font-bold ${biometricStats.ekycVerified ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {biometricStats.ekycVerified ? 'VERIFIED' : 'PENDING'}
+                </p>
+              </div>
+              <FileText className={`h-8 w-8 ${biometricStats.ekycVerified ? 'text-green-400' : 'text-gray-400'}`} />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="flex space-x-1 bg-black/20 rounded-lg p-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  activeTab === tab.id
+                    ? 'bg-green-600/20 text-green-400 border border-green-500/30'
+                    : 'text-gray-400 hover:text-cyan-400'
+                }`}
+              >
+                <tab.icon className="h-4 w-4 mr-2" />
+                {tab.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* User Information */}
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">User Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-400">Username</p>
+                    <p className="text-cyan-400 font-bold">{userData.username}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400">Email</p>
+                    <p className="text-cyan-400">{userData.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400">Role</p>
+                    <p className="text-cyan-400">{userData.role?.toUpperCase()}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-400">Trust Score</p>
+                    <p className="text-yellow-400">{userData.trust_score || 85}/100</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enrollment Status Overview */}
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">Biometric Enrollment Status</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                    <div className="flex items-center">
+                      <Camera className={`h-5 w-5 mr-3 ${biometricStats.faceEnrolled ? 'text-green-400' : 'text-red-400'}`} />
+                      <span className="text-cyan-400">Face Recognition</span>
                     </div>
-                    
-                    {analytics && (
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Success Rate:</span>
-                          <span className="text-green-400">{getSuccessRate().toFixed(1)}%</span>
+                    {biometricStats.faceEnrolled ? (
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <button
+                        onClick={() => handleReEnroll('face')}
+                        className="terminal-button px-2 py-1 text-xs rounded"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                    <div className="flex items-center">
+                      <Keyboard className={`h-5 w-5 mr-3 ${biometricStats.keystrokeEnrolled ? 'text-green-400' : 'text-red-400'}`} />
+                      <span className="text-cyan-400">Keystroke Dynamics</span>
+                    </div>
+                    {biometricStats.keystrokeEnrolled ? (
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <button
+                        onClick={() => handleReEnroll('keystroke')}
+                        className="terminal-button px-2 py-1 text-xs rounded"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                    <div className="flex items-center">
+                      <MousePointer className={`h-5 w-5 mr-3 ${biometricStats.scrollEnrolled ? 'text-green-400' : 'text-red-400'}`} />
+                      <span className="text-cyan-400">Scroll Behavior</span>
+                    </div>
+                    {biometricStats.scrollEnrolled ? (
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <button
+                        onClick={() => handleReEnroll('scroll')}
+                        className="terminal-button px-2 py-1 text-xs rounded"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                    <div className="flex items-center">
+                      <FileText className={`h-5 w-5 mr-3 ${biometricStats.ekycVerified ? 'text-green-400' : 'text-yellow-400'}`} />
+                      <span className="text-cyan-400">eKYC Documents</span>
+                    </div>
+                    {biometricStats.ekycVerified ? (
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    ) : (
+                      <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">Recent Activity</h3>
+                {userBiometricData.behavioralSessions.length > 0 ? (
+                  <div className="space-y-3">
+                    {userBiometricData.behavioralSessions.slice(0, 5).map((session: BehavioralSession) => (
+                      <div key={session.id} className="flex items-center justify-between p-3 bg-black/20 rounded">
+                        <div className="flex items-center">
+                          <Activity className="h-5 w-5 text-cyan-400 mr-3" />
+                          <div>
+                            <p className="text-cyan-400 text-sm">Behavioral Session</p>
+                            <p className="text-gray-400 text-xs">
+                              Similarity: {(session.similarity_scores?.overall_similarity * 100 || 0).toFixed(1)}%
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Avg Similarity:</span>
-                          <span className="text-green-400">{(analytics.avg_similarity_score * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Recent Anomalies:</span>
-                          <span className={analytics.recent_anomalies > 0 ? "text-yellow-400" : "text-green-400"}>
-                            {analytics.recent_anomalies}
+                        <div className="flex items-center">
+                          {session.is_successful ? (
+                            <CheckCircle className="h-5 w-5 text-green-400" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-red-400" />
+                          )}
+                          <span className="text-gray-400 text-xs ml-2">
+                            {new Date(session.created_at).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
-                    )}
-                  </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-center py-4">No recent activity</p>
                 )}
-              </AnimatePresence>
-            </div>
-
-            <div className="terminal-border rounded-lg p-6">
-              <h3 className="text-lg font-bold text-green-400 mb-4 flex items-center">
-                <AlertTriangle className="mr-2 h-5 w-5" />
-                THREAT_LEVEL
-              </h3>
-              <div className="text-center">
-                <div className={`text-2xl font-bold mb-2 ${threatLevel.color}`}>{threatLevel.level}</div>
-                <p className="text-cyan-400 text-sm font-mono">
-                  {threatLevel.level === 'LOW' ? 'NO_ANOMALIES_DETECTED' :
-                   threatLevel.level === 'MEDIUM' ? 'MONITORING_REQUIRED' :
-                   threatLevel.level === 'HIGH' ? 'INCREASED_MONITORING' : 'IMMEDIATE_ATTENTION_REQUIRED'}
-                </p>
               </div>
             </div>
-          </motion.div>
-        </div>
+          )}
 
-        {/* Behavioral Analytics */}
-        {analytics && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 terminal-border rounded-lg"
-          >
-            <div 
-              className="flex justify-between items-center p-6 cursor-pointer"
-              onClick={() => toggleSection('behavioral')}
-            >
-              <h2 className="text-2xl font-bold text-green-400 flex items-center">
-                <BarChart3 className="mr-3 h-6 w-6" />
-                BEHAVIORAL_ANALYTICS
-              </h2>
-              {expandedSections.behavioral ? <ChevronUp className="h-5 w-5 text-green-400" /> : <ChevronDown className="h-5 w-5 text-green-400" />}
-            </div>
-            
-            <AnimatePresence>
-              {expandedSections.behavioral && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-6 pb-6"
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                    <div className="text-center p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                      <Activity className="h-8 w-8 text-blue-400 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-blue-400">{analytics.total_sessions}</p>
-                      <p className="text-sm text-cyan-400 font-mono">TOTAL_SESSIONS</p>
-                    </div>
-                    <div className="text-center p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
-                      <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-green-400">{analytics.successful_sessions}</p>
-                      <p className="text-sm text-cyan-400 font-mono">SUCCESSFUL</p>
-                    </div>
-                    <div className="text-center p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-                      <AlertTriangle className="h-8 w-8 text-yellow-400 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-yellow-400">{analytics.total_anomalies}</p>
-                      <p className="text-sm text-cyan-400 font-mono">TOTAL_ANOMALIES</p>
-                    </div>
-                    <div className="text-center p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-                      <TrendingUp className="h-8 w-8 text-purple-400 mx-auto mb-2" />
-                      <p className="text-2xl font-bold text-purple-400">{(analytics.avg_similarity_score * 100).toFixed(0)}%</p>
-                      <p className="text-sm text-cyan-400 font-mono">AVG_SIMILARITY</p>
-                    </div>
+          {activeTab === 'biometric' && (
+            <div className="space-y-6">
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">Biometric Enrollment Status</h3>
+                
+                {userBiometricData.loading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mx-auto mb-4" />
+                    <p className="text-cyan-400">Loading biometric data...</p>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        )}
-
-        {/* Recent Sessions */}
-        {analytics && analytics.sessions.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="mt-8 terminal-border rounded-lg"
-          >
-            <div 
-              className="flex justify-between items-center p-6 cursor-pointer"
-              onClick={() => toggleSection('sessions')}
-            >
-              <h2 className="text-2xl font-bold text-green-400 flex items-center">
-                <History className="mr-3 h-6 w-6" />
-                RECENT_SESSIONS
-              </h2>
-              {expandedSections.sessions ? <ChevronUp className="h-5 w-5 text-green-400" /> : <ChevronDown className="h-5 w-5 text-green-400" />}
-            </div>
-            
-            <AnimatePresence>
-              {expandedSections.sessions && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-6 pb-6"
-                >
+                ) : (
                   <div className="space-y-4">
-                    {analytics.sessions.map((session: SessionData) => (
-                      <div key={session.id} className="glass-card rounded p-4">
-                        <div className="flex justify-between items-center mb-2">
+                    {userBiometricData.biometrics.map((biometric: BiometricData) => (
+                      <div key={biometric.id} className="flex items-center justify-between p-4 bg-black/20 rounded">
+                        <div className="flex items-center">
+                          <Camera className="h-6 w-6 text-green-400 mr-3" />
+                          <div>
+                            <p className="text-cyan-400 font-bold">{biometric.biometric_type.toUpperCase()}</p>
+                            <p className="text-gray-400 text-sm">
+                              Quality: {(biometric.quality_score * 100).toFixed(1)}%
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                              Enrolled: {new Date(biometric.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          {biometric.face_image_url && (
+                            <img
+                              src={biometric.face_image_url}
+                              alt="Face biometric"
+                              className="w-16 h-16 rounded border-2 border-green-400 mr-4"
+                            />
+                          )}
+                          <CheckCircle className="h-6 w-6 text-green-400" />
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {userBiometricData.biometrics.length === 0 && (
+                      <div className="text-center py-8">
+                        <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-400">No biometric data enrolled</p>
+                        <button
+                          onClick={() => handleReEnroll('face')}
+                          className="terminal-button mt-4 px-4 py-2 rounded"
+                        >
+                          Enroll Face Biometric
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'behavioral' && (
+            <div className="space-y-6">
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">Behavioral Patterns</h3>
+                
+                {userBiometricData.behavioralPatterns.length > 0 ? (
+                  <div className="space-y-4">
+                    {userBiometricData.behavioralPatterns.map((pattern: BehavioralPattern) => (
+                      <div key={pattern.id} className="p-4 bg-black/20 rounded">
+                        <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center">
-                            {session.is_successful ? (
-                              <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
-                            ) : (
-                              <AlertTriangle className="h-5 w-5 text-red-400 mr-2" />
-                            )}
-                            <span className="text-cyan-400 font-mono text-sm">
-                              {session.session_type.toUpperCase()}
+                            <Activity className="h-5 w-5 text-cyan-400 mr-3" />
+                            <span className="text-cyan-400 font-bold">
+                              Behavioral Pattern {pattern.is_active && '(Active)'}
                             </span>
                           </div>
                           <span className="text-gray-400 text-sm">
-                            {formatDate(session.created_at)}
+                            {new Date(pattern.created_at).toLocaleDateString()}
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <span className="text-gray-400">Overall Score:</span>
-                            <span className={`ml-2 font-bold ${
-                              (session.similarity_scores?.overall_similarity || 0) > 0.7 ? 'text-green-400' : 'text-yellow-400'
-                            }`}>
-                              {((session.similarity_scores?.overall_similarity || 0) * 100).toFixed(0)}%
-                            </span>
+                            <h4 className="text-green-400 font-bold mb-2">Keystroke Dynamics</h4>
+                            {pattern.pattern_data?.keystroke_features ? (
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Typing Speed:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.keystroke_features.typing_speed?.toFixed(1) || 'N/A'} WPM
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Avg Dwell Time:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.keystroke_features.avg_dwell_time?.toFixed(1) || 'N/A'} ms
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Total Keystrokes:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.enrollment_metadata?.total_keystrokes || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-red-400 text-sm">Not enrolled</p>
+                            )}
                           </div>
+                          
                           <div>
-                            <span className="text-gray-400">Duration:</span>
-                            <span className="ml-2 text-cyan-400">{session.duration_seconds}s</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400">Anomaly Score:</span>
-                            <span className={`ml-2 font-bold ${
-                              session.anomaly_score > 0.5 ? 'text-red-400' : 'text-green-400'
-                            }`}>
-                              {(session.anomaly_score * 100).toFixed(0)}%
-                            </span>
+                            <h4 className="text-green-400 font-bold mb-2">Mouse Patterns</h4>
+                            {pattern.pattern_data?.mouse_features ? (
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Avg Velocity:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.mouse_features.avg_velocity?.toFixed(1) || 'N/A'} px/s
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Total Movements:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.mouse_features.total_movements || 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-400">Total Clicks:</span>
+                                  <span className="text-cyan-400">
+                                    {pattern.pattern_data.mouse_features.total_clicks || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-red-400 text-sm">Not enrolled</p>
+                            )}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        )}
+                ) : (
+                  <div className="text-center py-8">
+                    <MousePointer className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-400">No behavioral patterns enrolled</p>
+                    <button
+                      onClick={() => handleReEnroll('keystroke')}
+                      className="terminal-button mt-4 px-4 py-2 rounded"
+                    >
+                      Enroll Behavioral Patterns
+                    </button>
+                  </div>
+                )}
+              </div>
 
-        {/* Anomaly History */}
-        {analytics && analytics.anomalies.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mt-8 terminal-border rounded-lg"
-          >
-            <div 
-              className="flex justify-between items-center p-6 cursor-pointer"
-              onClick={() => toggleSection('anomalies')}
-            >
-              <h2 className="text-2xl font-bold text-green-400 flex items-center">
-                <AlertTriangle className="mr-3 h-6 w-6" />
-                ANOMALY_HISTORY
-              </h2>
-              {expandedSections.anomalies ? <ChevronUp className="h-5 w-5 text-green-400" /> : <ChevronDown className="h-5 w-5 text-green-400" />}
-            </div>
-            
-            <AnimatePresence>
-              {expandedSections.anomalies && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-6 pb-6"
-                >
-                  <div className="space-y-4">
-                    {analytics.anomalies.map((anomaly: AnomalyData) => (
-                      <div key={anomaly.id} className={`glass-card rounded p-4 border-l-4 ${getSeverityColor(anomaly.severity)}`}>
-                        <div className="flex justify-between items-center mb-2">
+              {/* Recent Sessions */}
+              {userBiometricData.behavioralSessions.length > 0 && (
+                <div className="glass-card rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-green-400 mb-4">Recent Sessions</h3>
+                  <div className="space-y-3">
+                    {userBiometricData.behavioralSessions.map((session: BehavioralSession) => (
+                      <div key={session.id} className="p-3 bg-black/20 rounded">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-cyan-400 font-bold">Session {session.session_id}</span>
                           <div className="flex items-center">
-                            <AlertTriangle className={`h-5 w-5 mr-2 ${getSeverityColor(anomaly.severity).split(' ')[0]}`} />
-                            <span className="font-bold text-white">
-                              {anomaly.anomaly_type.toUpperCase().replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className={`px-2 py-1 rounded text-xs font-bold ${
-                              anomaly.severity === 'critical' ? 'bg-red-600/20 text-red-400' :
-                              anomaly.severity === 'high' ? 'bg-orange-600/20 text-orange-400' :
-                              anomaly.severity === 'medium' ? 'bg-yellow-600/20 text-yellow-400' :
-                              'bg-blue-600/20 text-blue-400'
-                            }`}>
-                              {anomaly.severity.toUpperCase()}
-                            </span>
+                            {session.is_successful ? (
+                              <CheckCircle className="h-4 w-4 text-green-400 mr-2" />
+                            ) : (
+                              <AlertTriangle className="h-4 w-4 text-red-400 mr-2" />
+                            )}
                             <span className="text-gray-400 text-sm">
-                              {formatDate(anomaly.created_at)}
+                              {new Date(session.created_at).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
                         
                         <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-400">Score:</span>
-                            <span className="ml-2 text-red-400 font-bold">
-                              {(anomaly.anomaly_score * 100).toFixed(0)}%
-                            </span>
+                          <div className="text-center">
+                            <p className="text-gray-400">Overall</p>
+                            <p className="text-cyan-400 font-bold">
+                              {((session.similarity_scores?.overall_similarity || 0) * 100).toFixed(1)}%
+                            </p>
                           </div>
-                          <div>
-                            <span className="text-gray-400">Action:</span>
-                            <span className="ml-2 text-cyan-400">{anomaly.action_taken}</span>
+                          <div className="text-center">
+                            <p className="text-gray-400">Keystroke</p>
+                            <p className="text-green-400 font-bold">
+                              {((session.similarity_scores?.keystroke_similarity || 0) * 100).toFixed(1)}%
+                            </p>
                           </div>
-                          <div>
-                            <span className="text-gray-400">Status:</span>
-                            <span className={`ml-2 ${anomaly.auto_resolved ? 'text-green-400' : 'text-yellow-400'}`}>
-                              {anomaly.auto_resolved ? 'RESOLVED' : 'ACTIVE'}
-                            </span>
+                          <div className="text-center">
+                            <p className="text-gray-400">Mouse</p>
+                            <p className="text-blue-400 font-bold">
+                              {((session.similarity_scores?.mouse_similarity || 0) * 100).toFixed(1)}%
+                            </p>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
-          </motion.div>
-        )}
 
-        {/* Biometric Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 terminal-border rounded-lg p-6"
-        >
-          <h2 className="text-2xl font-bold text-green-400 mb-6">BIOMETRIC_AUTHENTICATION_STATUS</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="terminal-border rounded-lg p-4 bg-green-900/10">
-              <div className="flex items-center justify-between mb-3">
-                <Eye className="h-8 w-8 text-green-400" />
-                <span className={`px-2 py-1 rounded text-xs font-bold font-mono ${
-                  biometricStatus.face === 'ENROLLED' 
-                    ? 'bg-green-600/20 text-green-400 border border-green-500/30' 
-                    : 'bg-red-600/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {biometricStatus.face}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-green-400 font-mono">FACIAL_RECOGNITION</h3>
-              <p className="text-cyan-400 text-sm font-mono">Face template for authentication</p>
+              {/* Anomalies */}
+              {userBiometricData.anomalies.length > 0 && (
+                <div className="glass-card rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-red-400 mb-4">Security Anomalies</h3>
+                  <div className="space-y-3">
+                    {userBiometricData.anomalies.map((anomaly: AnomalyAudit) => (
+                      <div key={anomaly.id} className="p-3 bg-red-900/20 border border-red-500/30 rounded">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-red-400 font-bold">
+                              {anomaly.anomaly_type.replace(/_/g, ' ').toUpperCase()}
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                              Severity: {anomaly.severity.toUpperCase()} | Score: {(anomaly.anomaly_score * 100).toFixed(1)}%
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-gray-400 text-xs">
+                              {new Date(anomaly.created_at).toLocaleDateString()}
+                            </p>
+                            <p className="text-yellow-400 text-sm">Action: {anomaly.action_taken}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+          )}
 
-            <div className="terminal-border rounded-lg p-4 bg-green-900/10">
-              <div className="flex items-center justify-between mb-3">
-                <Keyboard className="h-8 w-8 text-green-400" />
-                <span className={`px-2 py-1 rounded text-xs font-bold font-mono ${
-                  biometricStatus.keystroke === 'ENROLLED' 
-                    ? 'bg-green-600/20 text-green-400 border border-green-500/30' 
-                    : 'bg-red-600/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {biometricStatus.keystroke}
-                </span>
+          {activeTab === 'ekyc' && userData?.uid && (
+            <div className="space-y-6">
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">eKYC Document Verification</h3>
+                
+                {/* FIXED: Use EKYCDocumentViewer component instead of custom rendering */}
+                <EKYCDocumentViewer userId={userData.uid} />
               </div>
-              <h3 className="text-lg font-bold text-green-400 font-mono">KEYSTROKE_DYNAMICS</h3>
-              <p className="text-cyan-400 text-sm font-mono">Typing pattern recognition</p>
             </div>
+          )}
 
-            <div className="terminal-border rounded-lg p-4 bg-green-900/10">
-              <div className="flex items-center justify-between mb-3">
-                <MousePointer className="h-8 w-8 text-green-400" />
-                <span className={`px-2 py-1 rounded text-xs font-bold font-mono ${
-                  biometricStatus.behavioral === 'ACTIVE_MONITORING' 
-                    ? 'bg-green-600/20 text-green-400 border border-green-500/30' 
-                    : 'bg-red-600/20 text-red-400 border border-red-500/30'
-                }`}>
-                  {biometricStatus.behavioral}
-                </span>
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <div className="glass-card rounded-lg p-6">
+                <h3 className="text-lg font-bold text-green-400 mb-4">Security Overview</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                      <div className="flex items-center">
+                        <Shield className="h-5 w-5 text-green-400 mr-3" />
+                        <span className="text-cyan-400">Multi-Factor Authentication</span>
+                      </div>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                      <div className="flex items-center">
+                        <Eye className="h-5 w-5 text-green-400 mr-3" />
+                        <span className="text-cyan-400">Biometric Verification</span>
+                      </div>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-black/20 rounded">
+                      <div className="flex items-center">
+                        <Activity className="h-5 w-5 text-green-400 mr-3" />
+                        <span className="text-cyan-400">Behavioral Monitoring</span>
+                      </div>
+                      <CheckCircle className="h-5 w-5 text-green-400" />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-center p-6 bg-gradient-to-br from-green-900/20 to-cyan-900/20 rounded">
+                      <TrendingUp className="h-12 w-12 text-green-400 mx-auto mb-4" />
+                      <p className="text-2xl font-bold text-green-400 mb-2">
+                        {userData.trust_score || 85}/100
+                      </p>
+                      <p className="text-gray-400">Trust Score</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-green-400 font-mono">BEHAVIORAL_PATTERNS</h3>
-              <p className="text-cyan-400 text-sm font-mono">Mouse & interaction analysis</p>
             </div>
-
-            <div className="terminal-border rounded-lg p-4 bg-green-900/10">
-              <div className="flex items-center justify-between mb-3">
-                <Activity className="h-8 w-8 text-green-400" />
-                <span className="px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs font-bold font-mono border border-green-500/30">
-                  {biometricStatus.mouse}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-green-400 font-mono">CONTINUOUS_MONITOR</h3>
-              <p className="text-cyan-400 text-sm font-mono">Real-time behavior analysis</p>
-            </div>
-          </div>
-        </motion.div>
-        {/* eKYC Documents Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="mt-8 terminal-border rounded-lg p-6"
-        >
-          <h2 className="text-2xl font-bold text-green-400 mb-6 flex items-center">
-            <FileText className="mr-3 h-6 w-6" />
-            eKYC_DOCUMENTS
-          </h2>
-          
-          <EKYCDocumentViewer userId={userData?.uid || ''} />
-        </motion.div>
-        {/* System Status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="mt-8 terminal-border rounded-lg p-6"
-        >
-          <h2 className="text-2xl font-bold text-green-400 mb-6 flex items-center">
-            <Clock className="mr-3 h-6 w-6" />
-            SYSTEM_STATUS
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-2 neon-glow" />
-              <p className="text-green-400 font-bold font-mono">AUTHENTICATION_ACTIVE</p>
-              <p className="text-cyan-400 text-sm font-mono">All systems operational</p>
-            </div>
-            <div className="text-center">
-              <Shield className="h-12 w-12 text-green-400 mx-auto mb-2 neon-glow" />
-              <p className="text-green-400 font-bold font-mono">ENCRYPTION_ENABLED</p>
-              <p className="text-cyan-400 text-sm font-mono">Data secured with AES-256</p>
-            </div>
-            <div className="text-center">
-              <Activity className="h-12 w-12 text-green-400 mx-auto mb-2 neon-glow" />
-              <p className="text-green-400 font-bold font-mono">MONITORING_ACTIVE</p>
-              <p className="text-cyan-400 text-sm font-mono">Real-time threat detection</p>
-            </div>
-          </div>
+          )}
         </motion.div>
       </div>
-
-      {/* Styles */}
-      <style>{`
-        .glass-card {
-          background: rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .terminal-border {
-          background: rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .terminal-button {
-          background: linear-gradient(45deg, #059669, #0891b2);
-          color: white;
-          border: 1px solid #10b981;
-          transition: all 0.3s ease;
-        }
-
-        .terminal-button:hover:not(:disabled) {
-          background: linear-gradient(45deg, #0891b2, #059669);
-          box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-          transform: translateY(-2px);
-        }
-
-        .glitch-text {
-          animation: glitch 2s infinite;
-        }
-
-        .neon-glow {
-          text-shadow: 0 0 5px #10b981, 0 0 10px #10b981, 0 0 15px #10b981;
-        }
-
-        @keyframes glitch {
-          0%, 100% { text-shadow: 0 0 5px #10b981; }
-          25% { text-shadow: -2px 0 #10b981, 2px 0 #06b6d4; }
-          50% { text-shadow: 2px 0 #10b981, -2px 0 #06b6d4; }
-          75% { text-shadow: 0 0 5px #10b981; }
-        }
-      `}</style>
     </div>
   );
 };

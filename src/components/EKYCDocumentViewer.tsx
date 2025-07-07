@@ -6,6 +6,7 @@ interface EKYCDocument {
   id: string;
   document_type: string;
   id_document_url: string;
+  id_document_back_url: string;
   verification_status: string;
   face_match_score: number;
   document_authenticity_score: number;
@@ -20,8 +21,6 @@ interface EKYCDocumentViewerProps {
 const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
   const [documents, setDocuments] = useState<EKYCDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  const [
-    , setSelectedDoc] = useState<EKYCDocument | null>(null);
 
   useEffect(() => {
     loadEKYCDocuments();
@@ -36,7 +35,6 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
       setDocuments(data || []);
     } catch (error) {
       console.error('Error loading eKYC documents:', error);
@@ -58,7 +56,9 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
     );
   }
 
-  const latestDoc = documents[0];
+  const frontDoc = documents.find((doc) => doc.document_type.toLowerCase().includes('front'));
+  const backDoc = documents.find((doc) => doc.document_type.toLowerCase().includes('back'));
+  console.log('📄 BackDoc:', backDoc);
 
   return (
     <div className="space-y-6">
@@ -66,62 +66,85 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-green-400">LATEST_VERIFICATION</h3>
           <span className={`px-3 py-1 rounded text-sm font-bold ${
-            latestDoc.verification_status === 'verified' 
+            frontDoc?.verification_status === 'verified'
               ? 'bg-green-600/20 text-green-400 border border-green-500/30'
               : 'bg-red-600/20 text-red-400 border border-red-500/30'
           }`}>
-            {latestDoc.verification_status.toUpperCase()}
+            {frontDoc?.verification_status.toUpperCase()}
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <p className="text-sm text-gray-400 mb-1">Document Type:</p>
-            <p className="text-cyan-400 font-bold">{latestDoc.document_type.toUpperCase()}</p>
+            <p className="text-cyan-400 font-bold">{frontDoc?.document_type.toUpperCase()}</p>
           </div>
           <div>
             <p className="text-sm text-gray-400 mb-1">Submitted:</p>
-            <p className="text-cyan-400">{new Date(latestDoc.created_at).toLocaleDateString()}</p>
+            <p className="text-cyan-400">
+              {frontDoc?.created_at ? new Date(frontDoc.created_at).toLocaleDateString() : 'N/A'}
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-3 bg-blue-900/20 border border-blue-500/30 rounded">
-            <Eye className="h-6 w-6 text-blue-400 mx-auto mb-1" />
-            <p className="text-sm text-gray-400">Face Match</p>
-            <p className="text-lg font-bold text-blue-400">
-              {(latestDoc.face_match_score * 100).toFixed(0)}%
-            </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">IC Front</p>
+            <img src={frontDoc?.id_document_url} alt="IC Front" className="w-full border rounded" />
           </div>
-          <div className="text-center p-3 bg-green-900/20 border border-green-500/30 rounded">
+          <div className="text-center">
+            <p className="text-sm text-gray-400 mb-2">IC Back</p>
+            <img src={backDoc?.id_document_back_url || backDoc?.id_document_url} alt="IC Back" className="w-full border rounded" />
+          </div>
+        </div>
+
+        {frontDoc?.extracted_info && (
+          <>
+        <div className="mt-4 p-4 bg-black/30 rounded">
+          <h4 className="text-sm font-bold text-green-400 mb-3">EXTRACTED_INFORMATION</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm font-mono text-cyan-400">
+            <div>
+              <p><span className="text-gray-400">NAME:</span> {frontDoc.extracted_info?.name || 'N/A'}</p>
+              <p><span className="text-gray-400">GENDER:</span> {frontDoc.extracted_info?.gender || 'N/A'}</p>
+              <p><span className="text-gray-400">RELIGION:</span> {frontDoc.extracted_info?.religion || 'N/A'}</p>
+            </div>
+            <div>
+              <p><span className="text-gray-400">ADDRESS:</span> {frontDoc.extracted_info?.address || 'N/A'}</p>
+              <p><span className="text-gray-400">IC NUMBER:</span> {frontDoc.extracted_info?.ic_number || 'N/A'}</p>
+              <p><span className="text-gray-400">DATE OF BIRTH:</span> {frontDoc.extracted_info?.date_of_birth || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
+          </>
+        )}
+        <div className="flex justify-center gap-6 mt-6 flex-wrap">
+          {/* Authenticity */}
+          <div className="text-center p-3 bg-green-900/20 border border-green-500/30 rounded w-40">
             <Shield className="h-6 w-6 text-green-400 mx-auto mb-1" />
             <p className="text-sm text-gray-400">Authenticity</p>
             <p className="text-lg font-bold text-green-400">
-              {(latestDoc.document_authenticity_score * 100).toFixed(0)}%
+              {typeof frontDoc?.document_authenticity_score === 'number'
+                ? `${(frontDoc.document_authenticity_score * 100).toFixed(0)}%`
+                : '0%'}
             </p>
           </div>
-          <div className="text-center p-3 bg-purple-900/20 border border-purple-500/30 rounded">
+
+          {/* Status */}
+          <div className="text-center p-3 bg-purple-900/20 border border-purple-500/30 rounded w-40">
             <CheckCircle className="h-6 w-6 text-purple-400 mx-auto mb-1" />
             <p className="text-sm text-gray-400">Status</p>
-            <p className="text-lg font-bold text-purple-400">
-              {latestDoc.verification_status === 'verified' ? 'VERIFIED' : 'PENDING'}
+            <p className={`text-lg font-bold ${
+              frontDoc?.verification_status === 'verified'
+                ? 'text-green-400'
+                : frontDoc?.verification_status === 'rejected'
+                ? 'text-red-400'
+                : 'text-yellow-400'
+            }`}>
+              {frontDoc?.verification_status.toUpperCase()}
             </p>
           </div>
         </div>
-
-        {latestDoc.extracted_info && (
-          <div className="mt-4 p-4 bg-black/30 rounded">
-            <h4 className="text-sm font-bold text-green-400 mb-2">EXTRACTED_INFORMATION</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              {Object.entries(latestDoc.extracted_info).map(([key, value]) => (
-                <div key={key} className="flex justify-between">
-                  <span className="text-gray-400">{key.replace(/_/g, ' ').toUpperCase()}:</span>
-                  <span className="text-cyan-400">{String(value)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="text-center">

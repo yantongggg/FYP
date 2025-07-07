@@ -192,6 +192,29 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const subscription = supabase
+      .channel('custom-ekyc-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ekyc_documents',
+        },
+        (payload: any) => {
+          console.log('Realtime update:', payload);
+          loadAdminData();  // Refetch latest ekyc data
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, []);
+
+
   const fetchUserBiometricData = async (userId: string) => {
     try {
       // Try enhanced endpoint first, fallback to Supabase
@@ -906,7 +929,7 @@ const AdminDashboard: React.FC = () => {
                         key={anomaly.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="glass-card rounded-lg p-4"
+                        className="ekyc-card"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
@@ -970,7 +993,7 @@ const AdminDashboard: React.FC = () => {
                         key={log.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="glass-card rounded-lg p-4"
+                        className="ekyc-card"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
@@ -1056,7 +1079,7 @@ const AdminDashboard: React.FC = () => {
                         key={doc.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="glass-card rounded-lg p-4"
+                        className="ekyc-card"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
@@ -1088,7 +1111,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                           <div>
-                            <div className="flex items-center text-gray-400 text-sm mb-1">
+                            {/* <div className="flex items-center text-gray-400 text-sm mb-1">
                               <Eye className="h-4 w-4 mr-1" />
                               Face Match: <span className={`ml-1 ${
                                 (doc.face_match_score || 0) >= 0.8 ? 'text-green-400' : 
@@ -1096,8 +1119,9 @@ const AdminDashboard: React.FC = () => {
                               } font-bold`}>
                                 {((doc.face_match_score || 0) * 100).toFixed(0)}%
                               </span>
-                            </div>
-                            <div className="flex items-center text-gray-400 text-sm">
+                            </div> */}
+                            {doc.document_type === 'ic_front' && (
+                            <div className="flex items-center text-gray-400 text-sm mb-1">
                               <Shield className="h-4 w-4 mr-1" />
                               Authenticity: <span className={`ml-1 ${
                                 (doc.document_authenticity_score || 0) >= 0.8 ? 'text-green-400' : 
@@ -1106,6 +1130,9 @@ const AdminDashboard: React.FC = () => {
                                 {((doc.document_authenticity_score || 0) * 100).toFixed(0)}%
                               </span>
                             </div>
+                          )}
+
+
                           </div>
                         </div>
                       </motion.div>
@@ -1199,6 +1226,22 @@ const AdminDashboard: React.FC = () => {
         .neon-glow {
           text-shadow: 0 0 5px #10b981, 0 0 10px #10b981, 0 0 15px #10b981;
         }
+
+        .ekyc-card {
+          background: rgba(0, 255, 128, 0.05); /* Light green tint */
+          border-radius: 12px;
+          border: 1px solid rgba(0, 255, 128, 0.2); /* Neon green border */
+          backdrop-filter: blur(10px); /* Glassmorphism effect */
+          box-shadow: 0 0 12px rgba(0, 255, 128, 0.08);
+          padding: 1.5rem;
+          color: #d1fae5; /* Soft green text */
+          transition: all 0.3s ease;
+        }
+
+        .ekyc-card:hover {
+          box-shadow: 0 0 20px rgba(0, 255, 128, 0.3);
+        }
+
 
         @keyframes glitch {
           0%, 100% { text-shadow: 0 0 5px #10b981; }
