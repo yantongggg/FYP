@@ -24,6 +24,8 @@ import {
 import BiometricCapture from '../components/BiometricCapture';
 import { supabase } from '../lib/supabase';
 
+
+
 interface FormData {
   username: string;
   email: string;
@@ -690,6 +692,7 @@ if (!livenessData) {
     setLoading(true);
     try {
       console.log('🚀 Starting registration process...');
+      
       // Prepare complete registration data - FIXED structure
       const registrationData = {
         username: formData.username,
@@ -781,65 +784,118 @@ if (!livenessData) {
         }
       });
 
-      } catch (error) {
-    console.error(error);
-    setErrors({ submit: 'Registration failed. Please try again.' });
-  } finally {
-    setLoading(false);
-  }
-};
+      // 🚀 MISSING PART: Actually send the data to backend
+      const response = await fetch('http://localhost:5000/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registrationData)
+      });
+
+      const result = await response.json();
+      console.log('📥 Registration response:', result);
+
+      if (response.ok && result.success) {
+        // ✅ SUCCESS: Set success state and show success message
+        setSuccess(true);
+        setVerificationResults(result.verification || null);
+        
+        console.log('✅ Registration successful for user:', result.user_id);
+        
+        // Redirect to login after 3 seconds
+        setTimeout(() => {
+          navigate('/login', { 
+            state: { 
+              message: 'Registration successful! Please login with your credentials.',
+              email: formData.email 
+            }
+          });
+        }, 3000);
+        
+      } else {
+        // ❌ FAILURE: Show error message
+        setErrors({ 
+          submit: result.error || 'Registration failed. Please try again.' 
+        });
+        console.error('❌ Registration failed:', result);
+      }
+
+    } catch (error) {
+      console.error('🚨 Registration error:', error);
+      setErrors({ 
+        submit: 'Network error. Please check your connection and try again.' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Success screen
   if (success) {
-    return (
-      <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-modal rounded-lg p-8 text-center max-w-md"
-        >
-          <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4 neon-glow" />
-          <h2 className="text-2xl font-bold text-green-400 mb-2 glitch-text" style={{ fontFamily: 'Orbitron' }}>
-            REGISTRATION SUCCESSFUL!
-          </h2>
-          <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
-            Complete biometric profile created with eKYC verification
-          </p>
-          {/* Show verification results if available */}
-          {verificationResults && (
-            <div className="mt-6 glass-card rounded-lg p-4">
-              <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Document Scan:</span>
-                  <span className={verificationResults.docscan_result?.status === 'ok' ? 'text-green-400' : 'text-red-400'}>
-                    {verificationResults.docscan_result?.status === 'ok' ? '✅ Valid ID' : '❌ Invalid'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Face Match:</span>
-                  <span className={verificationResults.face_match_result?.same_face ? 'text-green-400' : 'text-yellow-400'}>
-                    {verificationResults.face_match_result?.same_face 
-                      ? `✅ Matched (${(verificationResults.face_match_result.confidence * 100).toFixed(0)}%)`
-                      : '⚠️ No Match'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Overall Status:</span>
-                  <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
-                    {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
-                  </span>
-                </div>
+  return (
+    <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-modal rounded-lg p-8 text-center max-w-md"
+      >
+        <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4 neon-glow" />
+        <h2 className="text-2xl font-bold text-green-400 mb-2 glitch-text" style={{ fontFamily: 'Orbitron' }}>
+          REGISTRATION SUCCESSFUL!
+        </h2>
+        <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
+          Complete biometric profile created with eKYC verification
+        </p>
+        
+        {/* Show verification results if available */}
+        {verificationResults && (
+          <div className="mt-6 glass-card rounded-lg p-4">
+            <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-300">Biometric:</span>
+                <span className="text-green-400">✅ Enrolled</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-300">eKYC Status:</span>
+                <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
+                  {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-300">Account Status:</span>
+                <span className="text-green-400">✅ Active</span>
               </div>
             </div>
-          )}
-          <div className="text-green-400 text-sm" style={{ fontFamily: 'IBM Plex Mono' }}>
-            Redirecting to login terminal...
           </div>
-        </motion.div>
-      </div>
-    );
-  }
+        )}
+        
+        <div className="mt-6">
+          <div className="text-green-400 text-sm mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
+            Redirecting to login terminal in 3 seconds...
+          </div>
+          <div className="flex justify-center">
+            <Loader2 className="h-6 w-6 text-cyan-400 animate-spin" />
+          </div>
+        </div>
+        
+        {/* Manual redirect button */}
+        <button
+          onClick={() => navigate('/login', { 
+            state: { 
+              message: 'Registration successful! Please login with your credentials.',
+              email: formData.email 
+            }
+          })}
+          className="mt-4 terminal-button px-4 py-2 rounded text-sm"
+        >
+          GO TO LOGIN NOW
+        </button>
+      </motion.div>
+    </div>
+  );
+}
 
   const steps = [
     { number: 1, title: 'Credentials', icon: User, description: 'Basic account information' },
