@@ -15,6 +15,7 @@
     "@mediapipe/face_detection": "^0.4.1646425229",
     "@mediapipe/face_mesh": "^0.4.1633559619",
     "@supabase/supabase-js": "^2.50.2",
+    "bcryptjs": "^3.0.2",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",

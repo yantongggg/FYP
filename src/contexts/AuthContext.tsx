@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import bcrypt from 'bcryptjs'; // Install: npm install bcryptjs
 
 interface UserData {
   uid: string;
@@ -40,65 +41,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
+
   const login = async (email: string, password: string) => {
-    // Handle demo credentials
-    if (email === 'admin@example.com' && password === 'admin123') {
-      // Create a mock user for admin
-      const mockAdminUser = {
-        uid: 'admin-demo',
-        email: 'admin@example.com'
-      };
-      
-      const adminData: UserData = {
-        uid: 'admin-demo',
-        email: 'admin@example.com',
-        username: 'System Administrator',
-        role: 'admin',
-        trust_score: 100,
-        status: 'active',
-        createdAt: new Date()
-      };
-      
-      setCurrentUser(mockAdminUser);
-      setUserData(adminData);
-      return;
-    }
-    
-    if (email === 'user@example.com' && password === 'user123') {
-      // Create a mock user for regular user
-      const mockUser = {
-        uid: 'user-demo',
-        email: 'user@example.com'
-      };
-      
-      const userData: UserData = {
-        uid: 'user-demo',
-        email: 'user@example.com',
-        username: 'Demo User',
-        role: 'user',
-        trust_score: 95,
-        status: 'active',
-        createdAt: new Date()
-      };
-      
-      setCurrentUser(mockUser);
-      setUserData(userData);
-      return;
+    // Fetch the user by email
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error) {
+      throw new Error('Invalid email or password');
     }
 
-    // For real Supabase authentication
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    
-    if (error) throw error;
-    
-    if (data.user) {
-      await fetchUserData(data.user.id);
-      setCurrentUser(data.user);
+    if (!data) {
+      throw new Error('Invalid email or password');
     }
+
+    // Validate the password hash
+    const isPasswordValid = await bcrypt.compare(password, data.password_hash);
+
+    if (!isPasswordValid) {
+      throw new Error('Invalid email or password');
+    }
+
+    // Set user state
+    const userData: UserData = {
+      uid: data.id,
+      email: data.email,
+      username: data.username,
+      role: (data.role as 'admin' | 'user') || 'user',
+      trust_score: data.trust_score,
+      status: data.status,
+      createdAt: new Date(data.created_at),
+    };
+
+    setCurrentUser({ id: data.id });
+    setUserData(userData);
   };
+
 
   const register = async (
     email: string, 

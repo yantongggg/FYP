@@ -205,6 +205,90 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/check-user', methods=['POST'])
+def check_user():
+    """
+    Check if a user already exists by username or email
+    Used before registration to prevent duplicates
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        email = data.get('email', '').strip()
+        
+        if not username and not email:
+            return jsonify({
+                'success': False,
+                'error': 'Username or email is required'
+            }), 400
+        
+        logger.info(f"🔍 Checking if user exists: username='{username}', email='{email}'")
+        
+        if not supabase_manager.client:
+            # Mock mode - simulate user check
+            return jsonify({
+                'success': True,
+                'exists': False,
+                'message': 'Mock mode - user does not exist'
+            })
+        
+        # Build query conditions
+        query_conditions = []
+        if username:
+            query_conditions.append(f"username.eq.{username}")
+        if email:
+            query_conditions.append(f"email.eq.{email}")
+        
+        # Query database for existing user
+        user_result = supabase_manager.client.table("users") \
+            .select("id, username, email, status, is_biometric_enrolled, created_at") \
+            .or_("|".join(query_conditions)) \
+            .execute()
+        
+        if user_result.data and len(user_result.data) > 0:
+            # User exists
+            existing_user = user_result.data[0]
+            
+            # Determine what matched
+            matched_fields = []
+            if existing_user['username'] == username:
+                matched_fields.append('username')
+            if existing_user['email'] == email:
+                matched_fields.append('email')
+            
+            logger.info(f"✅ User found: {existing_user['id']} (matched: {', '.join(matched_fields)})")
+            
+            return jsonify({
+                'success': True,
+                'exists': True,
+                'user_info': {
+                    'id': existing_user['id'],
+                    'username': existing_user['username'],
+                    'email': existing_user['email'],
+                    'status': existing_user['status'],
+                    'is_biometric_enrolled': existing_user['is_biometric_enrolled'],
+                    'created_at': existing_user['created_at']
+                },
+                'matched_fields': matched_fields,
+                'message': f"User exists (matched: {', '.join(matched_fields)})"
+            })
+        else:
+            # User does not exist
+            logger.info(f"✅ No existing user found for username='{username}', email='{email}'")
+            
+            return jsonify({
+                'success': True,
+                'exists': False,
+                'message': 'User does not exist - registration can proceed'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error checking user existence: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to check user existence'
+        }), 500
+
 @app.route('/api/register', methods=['POST'])
 def register():
     """
@@ -243,12 +327,17 @@ def register():
 
         # Step 2: Store biometric data
         biometric_result = asyncio.run(
-            supabase_manager.store_biometric_data(user_id, {
-                'face_data': data['faceData'],
-                'liveness_data': data['livenessData'],
-                'face_url': data.get('faceUrl', '')  
-            })
+            supabase_manager.store_biometric_data(
+                user_id, 
+                {
+                    "face_data": data['faceData'],
+                    "liveness_data": data['livenessData'],
+                    "face_url": data.get('faceUrl', '')
+                },
+                request.headers.get("User-Agent")
+            )
         )
+
 
         if not biometric_result['success']:
             return jsonify(biometric_result), 400

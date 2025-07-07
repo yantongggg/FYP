@@ -24,8 +24,6 @@ import {
 import BiometricCapture from '../components/BiometricCapture';
 import { supabase } from '../lib/supabase';
 
-
-
 interface FormData {
   username: string;
   email: string;
@@ -692,99 +690,59 @@ if (!livenessData) {
     setLoading(true);
     try {
       console.log('🚀 Starting registration process...');
+
+          // Check if user exists first
+      const checkResponse = await fetch('http://localhost:5000/api/check-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          username: formData.username, 
+          email: formData.email 
+        })
+      });
+
+      const checkResult = await checkResponse.json();
       
+      if (checkResult.exists) {
+        // User exists - ask what to do
+        const proceed = window.confirm(
+          `User ${formData.username} already exists. Do you want to update their profile instead?`
+        );
+        
+        if (!proceed) {
+          setLoading(false);
+          return;
+        }
+      }  
+
       // Prepare complete registration data - FIXED structure
       const registrationData = {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        faceData: biometricData.faceData || '',
-        faceUrl: biometricData.faceUrl || '',
-        livenessData: biometricData.livenessData ? {
-          success: biometricData.livenessData.success || true,
-          face_detected: biometricData.livenessData.face_detected || true,
-          blink_count: biometricData.livenessData.blink_count || 0,
-          mouth_open_count: biometricData.livenessData.mouth_open_count || 0,
-          head_movement_count: biometricData.livenessData.head_movement_count || 0,
-          face_real_score: biometricData.livenessData.face_real_score || biometricData.livenessData.enhanced_face_score || 0.9,
-          enhanced_face_score: biometricData.livenessData.enhanced_face_score || biometricData.livenessData.face_real_score || 0.9,
-          liveness_validation: biometricData.livenessData.liveness_validation || {
-            overall_liveness_passed: true,
-            step_requirements: {
-              blinks_met: true,
-              mouth_met: true,
-              head_met: true,
-              score_met: true
-            }
-          }
-        } : {
-          success: true,
-          face_detected: true,
-          blink_count: 3,
-          mouth_open_count: 2,
-          head_movement_count: 2,
-          face_real_score: 0.9,
-          enhanced_face_score: 0.9,
-          liveness_validation: {
-            overall_liveness_passed: true,
-            step_requirements: {
-              blinks_met: true,
-              mouth_met: true,
-              head_met: true,
-              score_met: true
-            }
-          }
-        },
+        faceData: biometricData.faceData,
+        faceUrl: biometricData.faceUrl || '', // Include face URL
+        livenessData: biometricData.livenessData,
         behavioralData: {
-          keystrokes: behavioralData.keystrokes || [],
-          mouseMovements: behavioralData.mouseMovements || [],
-          typedText: typedText || "The quick brown fox jumps over the lazy dog."
+          ...behavioralData,
+          typedText: typedText  // Include the typed text
         },
         ekycFiles: {
-          frontBase64: ekycData.frontPreview ? 
-            (ekycData.frontPreview.includes(',') ? 
-              ekycData.frontPreview.split(',')[1] : 
-              ekycData.frontPreview) : '',
-          backBase64: ekycData.backPreview ? 
-            (ekycData.backPreview.includes(',') ? 
-              ekycData.backPreview.split(',')[1] : 
-              ekycData.backPreview) : ''
+          frontBase64: ekycData.frontPreview.split(',')[1] || ekycData.frontPreview, // Remove data: prefix if present
+          backBase64: ekycData.backPreview.split(',')[1] || ekycData.backPreview,   // Remove data: prefix if present
         }
       };
 
-      // Validate that we have essential data before sending
-      if (!registrationData.ekycFiles.frontBase64 || !registrationData.ekycFiles.backBase64) {
-        setErrors({ submit: 'IC images are missing. Please re-upload both front and back IC.' });
-        setCurrentStep(4); // Go back to eKYC step
-        setLoading(false);
-        return;
-      }
-
-      if (!registrationData.faceData && !registrationData.faceUrl) {
-        setErrors({ submit: 'Face capture is missing. Please complete biometric capture.' });
-        setCurrentStep(2); // Go back to biometric step
-        setLoading(false);
-        return;
-      }
-
       console.log('📤 Sending registration data:', {
-        username: registrationData.username,
-        email: registrationData.email,
+        ...registrationData,
         faceData: registrationData.faceData ? '[FACE_DATA_PRESENT]' : '[NO_FACE_DATA]',
-        faceUrl: registrationData.faceUrl ? '[FACE_URL_PRESENT]' : '[NO_FACE_URL]',
-        livenessData: registrationData.livenessData ? '[LIVENESS_DATA_PRESENT]' : '[NO_LIVENESS_DATA]',
-        behavioralData: {
-          keystrokesCount: registrationData.behavioralData.keystrokes.length,
-          mouseMovementsCount: registrationData.behavioralData.mouseMovements.length,
-          typedText: registrationData.behavioralData.typedText
-        },
         ekycFiles: {
-          frontBase64: registrationData.ekycFiles.frontBase64 ? `[${registrationData.ekycFiles.frontBase64.length} chars]` : '[NO_FRONT_IC]',
-          backBase64: registrationData.ekycFiles.backBase64 ? `[${registrationData.ekycFiles.backBase64.length} chars]` : '[NO_BACK_IC]'
+          frontBase64: registrationData.ekycFiles.frontBase64 ? '[FRONT_IC_PRESENT]' : '[NO_FRONT_IC]',
+          backBase64: registrationData.ekycFiles.backBase64 ? '[BACK_IC_PRESENT]' : '[NO_BACK_IC]'
         }
       });
 
-      // 🚀 MISSING PART: Actually send the data to backend
+      // Send to backend
       const response = await fetch('http://localhost:5000/api/register', {
         method: 'POST',
         headers: {
@@ -794,38 +752,41 @@ if (!livenessData) {
       });
 
       const result = await response.json();
-      console.log('📥 Registration response:', result);
 
       if (response.ok && result.success) {
-        // ✅ SUCCESS: Set success state and show success message
+        console.log('✅ Registration successful:', result);
+        
+        // Store verification results
+        if (result.verification) {
+          setVerificationResults(result.verification);
+        }
+        
         setSuccess(true);
-        setVerificationResults(result.verification || null);
         
-        console.log('✅ Registration successful for user:', result.user_id);
-        
-        // Redirect to login after 3 seconds
+        // Redirect to login after delay
         setTimeout(() => {
-          navigate('/login', { 
-            state: { 
-              message: 'Registration successful! Please login with your credentials.',
-              email: formData.email 
-            }
-          });
+          navigate('/login');
         }, 3000);
-        
       } else {
-        // ❌ FAILURE: Show error message
-        setErrors({ 
-          submit: result.error || 'Registration failed. Please try again.' 
-        });
         console.error('❌ Registration failed:', result);
+        
+        // Show specific validation errors
+        if (result.validation_errors && result.validation_errors.length > 0) {
+          const errorMessage = result.validation_errors.join('. ');
+          setErrors({ submit: errorMessage });
+        } else {
+          setErrors({ submit: result.error || 'Registration failed' });
+        }
+        
+        // If it's an eKYC validation error, go back to step 4
+        if (result.error && (result.error.includes('IC') || result.error.includes('MyKad'))) {
+          setCurrentStep(4);
+        }
       }
 
-    } catch (error) {
-      console.error('🚨 Registration error:', error);
-      setErrors({ 
-        submit: 'Network error. Please check your connection and try again.' 
-      });
+    } catch (error: any) {
+      console.error('❌ Registration error:', error);
+      setErrors({ submit: error.message || 'Network error occurred' });
     } finally {
       setLoading(false);
     }
@@ -833,69 +794,55 @@ if (!livenessData) {
 
   // Success screen
   if (success) {
-  return (
-    <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="glass-modal rounded-lg p-8 text-center max-w-md"
-      >
-        <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4 neon-glow" />
-        <h2 className="text-2xl font-bold text-green-400 mb-2 glitch-text" style={{ fontFamily: 'Orbitron' }}>
-          REGISTRATION SUCCESSFUL!
-        </h2>
-        <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
-          Complete biometric profile created with eKYC verification
-        </p>
-        
-        {/* Show verification results if available */}
-        {verificationResults && (
-          <div className="mt-6 glass-card rounded-lg p-4">
-            <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-300">Biometric:</span>
-                <span className="text-green-400">✅ Enrolled</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-300">eKYC Status:</span>
-                <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
-                  {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-300">Account Status:</span>
-                <span className="text-green-400">✅ Active</span>
+    return (
+      <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-modal rounded-lg p-8 text-center max-w-md"
+        >
+          <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4 neon-glow" />
+          <h2 className="text-2xl font-bold text-green-400 mb-2 glitch-text" style={{ fontFamily: 'Orbitron' }}>
+            REGISTRATION SUCCESSFUL!
+          </h2>
+          <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
+            Complete biometric profile created with eKYC verification
+          </p>
+          {/* Show verification results if available */}
+          {verificationResults && (
+            <div className="mt-6 glass-card rounded-lg p-4">
+              <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Document Scan:</span>
+                  <span className={verificationResults.docscan_result?.status === 'ok' ? 'text-green-400' : 'text-red-400'}>
+                    {verificationResults.docscan_result?.status === 'ok' ? '✅ Valid ID' : '❌ Invalid'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Face Match:</span>
+                  <span className={verificationResults.face_match_result?.same_face ? 'text-green-400' : 'text-yellow-400'}>
+                    {verificationResults.face_match_result?.same_face 
+                      ? `✅ Matched (${(verificationResults.face_match_result.confidence * 100).toFixed(0)}%)`
+                      : '⚠️ No Match'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Overall Status:</span>
+                  <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
+                    {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
+                  </span>
+                </div>
               </div>
             </div>
+          )}
+          <div className="text-green-400 text-sm" style={{ fontFamily: 'IBM Plex Mono' }}>
+            Redirecting to login terminal...
           </div>
-        )}
-        
-        <div className="mt-6">
-          <div className="text-green-400 text-sm mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-            Redirecting to login terminal in 3 seconds...
-          </div>
-          <div className="flex justify-center">
-            <Loader2 className="h-6 w-6 text-cyan-400 animate-spin" />
-          </div>
-        </div>
-        
-        {/* Manual redirect button */}
-        <button
-          onClick={() => navigate('/login', { 
-            state: { 
-              message: 'Registration successful! Please login with your credentials.',
-              email: formData.email 
-            }
-          })}
-          className="mt-4 terminal-button px-4 py-2 rounded text-sm"
-        >
-          GO TO LOGIN NOW
-        </button>
-      </motion.div>
-    </div>
-  );
-}
+        </motion.div>
+      </div>
+    );
+  }
 
   const steps = [
     { number: 1, title: 'Credentials', icon: User, description: 'Basic account information' },
@@ -1626,6 +1573,5 @@ if (!livenessData) {
     </div>
   );
 };
-
 
 export default Register;
