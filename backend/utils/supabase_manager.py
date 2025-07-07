@@ -610,6 +610,43 @@ class SupabaseManager:
         except Exception as e:
             logger.error(f"Upload error: {str(e)}")
             return ""
+        
+    def upload_ekyc_document(self, user_id: str, binary_data: bytes, document_type: str, timestamp: int = None) -> str:
+        """
+        Uploads eKYC document to Supabase Storage and returns the public URL.
+        """
+        try:
+            if timestamp is None:
+                timestamp = int(time.time())
+                
+            filename = f"{user_id}/{document_type}_{timestamp}.jpg"
+
+            url = f"{self.url}/storage/v1/object/ekycdoc/{filename}"
+
+            service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            if not service_role_key:
+                raise Exception("SUPABASE_SERVICE_ROLE_KEY not set in environment.")
+
+            headers = {
+                "Authorization": f"Bearer {service_role_key}",
+                "Content-Type": "image/jpeg",
+                "x-upsert": "true"
+            }
+
+            response = requests.post(url, data=binary_data, headers=headers)
+            logger.info(f"eKYC upload status: {response.status_code}")
+
+            if response.status_code in [200, 201]:
+                public_url = f"{self.url}/storage/v1/object/public/ekycdoc/{filename}"
+                logger.info(f"✅ eKYC document uploaded: {public_url}")
+                return public_url
+            else:
+                raise Exception(f"eKYC upload failed: {response.status_code} - {response.text}")
+
+        except Exception as e:
+            logger.error(f"eKYC upload error: {str(e)}")
+            return ""
+    
     # ========== HELPER METHODS ==========
     
     # Replace the upload_face_image method in SupabaseManager class:
@@ -1142,7 +1179,7 @@ class SupabaseManager:
 
     async def _store_ic_images(self, user_id: str, front_base64: str, back_base64: str) -> Dict:
         """
-        Store IC images in Supabase storage
+        Store IC images in Supabase storage using the ekycdoc bucket
         Returns dict with storage URLs
         """
         try:
@@ -1152,21 +1189,35 @@ class SupabaseManager:
                 logger.warning("No Supabase client - skipping image storage")
                 return storage_results
             
-            # Upload front image
+            timestamp = int(time.time())
+            
+            # Convert base64 to binary data
             try:
-                front_result = self.upload_face_image(user_id, f"data:image/jpeg;base64,{front_base64}")
-                if front_result.get('success'):
-                    storage_results['front_url'] = front_result['public_url']
-                    logger.info(f"✅ IC front image uploaded: {storage_results['front_url']}")
+                # Remove data: prefix if present
+                front_clean = front_base64.split(',')[1] if ',' in front_base64 else front_base64
+                back_clean = back_base64.split(',')[1] if ',' in back_base64 else back_base64
+                
+                front_binary = base64.b64decode(front_clean)
+                back_binary = base64.b64decode(back_clean)
+            except Exception as e:
+                logger.error(f"Error decoding base64 images: {e}")
+                return storage_results
+            
+            # Upload front image using new eKYC method
+            try:
+                front_url = self.upload_ekyc_document(user_id, front_binary, "ic_front", timestamp)
+                if front_url:
+                    storage_results['front_url'] = front_url
+                    logger.info(f"✅ IC front image uploaded: {front_url}")
             except Exception as e:
                 logger.error(f"Failed to upload front IC: {e}")
             
-            # Upload back image
+            # Upload back image using new eKYC method
             try:
-                back_result = self.upload_face_image(user_id, f"data:image/jpeg;base64,{back_base64}")
-                if back_result.get('success'):
-                    storage_results['back_url'] = back_result['public_url']
-                    logger.info(f"✅ IC back image uploaded: {storage_results['back_url']}")
+                back_url = self.upload_ekyc_document(user_id, back_binary, "ic_back", timestamp)
+                if back_url:
+                    storage_results['back_url'] = back_url
+                    logger.info(f"✅ IC back image uploaded: {back_url}")
             except Exception as e:
                 logger.error(f"Failed to upload back IC: {e}")
             
