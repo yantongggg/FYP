@@ -1,4 +1,4 @@
-//register.tsx
+// Complete Debugged Register.tsx with Strong Validation and Email Sanitization
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -10,7 +10,6 @@ import {
   AlertCircle, 
   CheckCircle, 
   Terminal, 
-  // Database, 
   Shield,
   Camera,
   FileText,
@@ -21,10 +20,13 @@ import {
   EyeOff,
   ArrowRight,
   ArrowLeft,
-  Loader2
+  Loader2,
+  Send,
+  Clock,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import BiometricCapture from '../components/BiometricCapture';
-import { supabase } from '../lib/supabase';
 
 interface FormData {
   username: string;
@@ -44,9 +46,6 @@ interface BiometricData {
     head_movement_count?: number;
     face_real_score?: number;
     enhanced_face_score?: number;
-    cdcn_score?: number;
-    
-    // Critical fields for validation
     liveness_passed?: boolean;
     liveness_checks?: {
       blinks_met: boolean;
@@ -63,29 +62,14 @@ interface BiometricData {
         score_met: boolean;
       };
     };
-    
-    // Legacy fields for backwards compatibility
-    blinkCount?: number;
-    mouthOpenCount?: number;
-    headMovementCount?: number;
-    faceRealScore?: number;
-    enhancedScore?: number;
-    
-    // Additional optional fields
-    faceUrl?: string;
-    current_state?: any;
-    thresholds?: any;
-    processing_time?: number;
-    all_completed?: boolean;
-    cached_response?: boolean;
-    error?: string;
+    [key: string]: any;
   } | null;
 }
 
 interface BehavioralData {
   keystrokes: any[];
   mouseMovements: any[];
-  typedText?: string; // Added typedText to interface
+  typedText?: string;
 }
 
 interface EKYCData {
@@ -96,6 +80,199 @@ interface EKYCData {
   frontUrl: string;
   backUrl: string;
 }
+
+interface EmailVerificationState {
+  isVerified: boolean;
+  otpSent: boolean;
+  otpCode: string;
+  otpId: string;
+  attempts: number;
+  countdown: number;
+  sendingOTP: boolean;
+  verifyingOTP: boolean;
+  devOTP?: string;
+}
+
+interface EmailValidationState {
+  isValid: boolean;
+  error: string;
+  sanitized: string;
+}
+
+interface PasswordValidationState {
+  isValid: boolean;
+  errors: string[];
+  strength: number;
+}
+
+// 🔥 Enhanced validation functions
+const validateEmail = (email: string): EmailValidationState => {
+  // Sanitize email - remove dangerous characters and normalize
+  const sanitized = email
+    .trim()
+    .toLowerCase()
+    .replace(/[<>'"&]/g, '') // Remove dangerous HTML characters
+    .replace(/\s+/g, '') // Remove all whitespace
+    .replace(/[^\w@.-]/g, ''); // Allow only word chars, @, ., -
+
+  // Basic format validation
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(sanitized)) {
+    return { isValid: false, error: 'Invalid email format', sanitized: sanitized };
+  }
+
+  // Length validation
+  if (sanitized.length > 254) {
+    return { isValid: false, error: 'Email too long (max 254 characters)', sanitized: sanitized };
+  }
+
+  // Local part validation (before @)
+  const [localPart, domain] = sanitized.split('@');
+  if (localPart.length > 64) {
+    return { isValid: false, error: 'Email local part too long (max 64 characters)', sanitized: sanitized };
+  }
+
+  // Domain validation
+  if (domain.length > 253) {
+    return { isValid: false, error: 'Email domain too long (max 253 characters)', sanitized: sanitized };
+  }
+
+  // Check for consecutive dots
+  if (sanitized.includes('..')) {
+    return { isValid: false, error: 'Email cannot contain consecutive dots', sanitized: sanitized };
+  }
+
+  // Check for dangerous patterns
+  const dangerousPatterns = [
+    /script/i,
+    /javascript/i,
+    /onload/i,
+    /onerror/i,
+    /<.*>/,
+    /eval\(/i
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(sanitized)) {
+      return { isValid: false, error: 'Email contains invalid characters', sanitized: sanitized };
+    }
+  }
+
+  return { isValid: true, error: '', sanitized: sanitized };
+};
+
+// 🔥 Strong password validation
+const validatePassword = (password: string): PasswordValidationState => {
+  const errors: string[] = [];
+  let strength = 0;
+
+  // Length check (minimum 8 characters)
+  if (password.length < 8) {
+    errors.push('Must be at least 8 characters long');
+  } else {
+    strength += 1;
+  }
+
+  // Uppercase letter check
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Must contain at least one uppercase letter (A-Z)');
+  } else {
+    strength += 1;
+  }
+
+  // Lowercase letter check
+  if (!/[a-z]/.test(password)) {
+    errors.push('Must contain at least one lowercase letter (a-z)');
+  } else {
+    strength += 1;
+  }
+
+  // Number check
+  if (!/\d/.test(password)) {
+    errors.push('Must contain at least one number (0-9)');
+  } else {
+    strength += 1;
+  }
+
+  // Special character check
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    errors.push('Must contain at least one special character (!@#$%^&*...)');
+  } else {
+    strength += 1;
+  }
+
+  // Common password patterns to avoid
+  const commonPatterns = [
+    /password/i,
+    /123456/,
+    /qwerty/i,
+    /admin/i,
+    /letmein/i,
+    /welcome/i
+  ];
+
+  for (const pattern of commonPatterns) {
+    if (pattern.test(password)) {
+      errors.push('Cannot use common passwords or patterns');
+      strength = Math.max(0, strength - 1);
+      break;
+    }
+  }
+
+  // Sequential characters check
+  if (/012|123|234|345|456|567|678|789|890|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz/i.test(password)) {
+    errors.push('Cannot contain sequential characters (123, abc, etc.)');
+    strength = Math.max(0, strength - 1);
+  }
+
+  // Repeated characters check
+  if (/(.)\1{2,}/.test(password)) {
+    errors.push('Cannot contain repeated characters (aaa, 111, etc.)');
+    strength = Math.max(0, strength - 1);
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    strength: Math.max(0, Math.min(5, strength))
+  };
+};
+
+const getPasswordStrengthColor = (strength: number): string => {
+  switch (strength) {
+    case 0:
+    case 1:
+      return 'text-red-400';
+    case 2:
+      return 'text-orange-400';
+    case 3:
+      return 'text-yellow-400';
+    case 4:
+      return 'text-green-400';
+    case 5:
+      return 'text-green-400';
+    default:
+      return 'text-gray-400';
+  }
+};
+
+const getPasswordStrengthText = (strength: number): string => {
+  switch (strength) {
+    case 0:
+    case 1:
+      return 'Very Weak';
+    case 2:
+      return 'Weak';
+    case 3:
+      return 'Moderate';
+    case 4:
+      return 'Strong';
+    case 5:
+      return 'Very Strong';
+    default:
+      return 'Unknown';
+  }
+};
 
 const Register = () => {
   // Step management
@@ -110,6 +287,32 @@ const Register = () => {
     email: '',
     password: '',
     confirmPassword: ''
+  });
+  
+  // 🔥 FIXED: Add MISSING password validation state
+  const [passwordValidation, setPasswordValidation] = useState<PasswordValidationState>({
+    isValid: false,
+    errors: [],
+    strength: 0
+  });
+
+  // Email validation state
+  const [emailValidation, setEmailValidation] = useState<EmailValidationState>({
+    isValid: false,
+    error: '',
+    sanitized: ''
+  });
+  
+  // Email verification state
+  const [emailVerification, setEmailVerification] = useState<EmailVerificationState>({
+    isVerified: false,
+    otpSent: false,
+    otpCode: '',
+    otpId: '',
+    attempts: 0,
+    countdown: 0,
+    sendingOTP: false,
+    verifyingOTP: false
   });
   
   // Biometric data
@@ -145,105 +348,229 @@ const Register = () => {
 
   // Behavioral capture effect
   useEffect(() => {
-  if (behavioralCaptureActive) {
-    const keystrokes: any[] = [];
-    const mouseMovements: any[] = [];
+    if (behavioralCaptureActive) {
+      const keystrokes: any[] = [];
+      const mouseMovements: any[] = [];
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keystrokes.push({
-        key: e.key,
-        code: e.code,
-        timestamp: Date.now(),
-        type: 'keydown'
-      });
-      setBehavioralData(prev => ({
-        ...prev,
-        keystrokes: [...keystrokes]
-      }));
-    };
+      const handleKeyDown = (e: KeyboardEvent) => {
+        keystrokes.push({
+          key: e.key,
+          code: e.code,
+          timestamp: Date.now(),
+          type: 'keydown'
+        });
+        setBehavioralData(prev => ({
+          ...prev,
+          keystrokes: [...keystrokes]
+        }));
+      };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keystrokes.push({
-        key: e.key,
-        code: e.code,
-        timestamp: Date.now(),
-        type: 'keyup'
-      });
-      setBehavioralData(prev => ({
-        ...prev,
-        keystrokes: [...keystrokes]
-      }));
-    };
+      const handleKeyUp = (e: KeyboardEvent) => {
+        keystrokes.push({
+          key: e.key,
+          code: e.code,
+          timestamp: Date.now(),
+          type: 'keyup'
+        });
+        setBehavioralData(prev => ({
+          ...prev,
+          keystrokes: [...keystrokes]
+        }));
+      };
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (
-        mouseMovements.length === 0 ||
-        Date.now() - mouseMovements[mouseMovements.length - 1].timestamp > 50
-      ) {
+      const handleMouseMove = (e: MouseEvent) => {
+        if (
+          mouseMovements.length === 0 ||
+          Date.now() - mouseMovements[mouseMovements.length - 1].timestamp > 50
+        ) {
+          mouseMovements.push({
+            x: e.clientX,
+            y: e.clientY,
+            timestamp: Date.now(),
+            type: 'mousemove'
+          });
+          setBehavioralData(prev => ({
+            ...prev,
+            mouseMovements: [...mouseMovements]
+          }));
+        }
+      };
+
+      const handleClick = (e: MouseEvent) => {
         mouseMovements.push({
           x: e.clientX,
           y: e.clientY,
+          button: e.button,
           timestamp: Date.now(),
-          type: 'mousemove'
+          type: 'click'
         });
         setBehavioralData(prev => ({
           ...prev,
           mouseMovements: [...mouseMovements]
         }));
-      }
-    };
+      };
 
-    const handleClick = (e: MouseEvent) => {
-      mouseMovements.push({
-        x: e.clientX,
-        y: e.clientY,
-        button: e.button,
-        timestamp: Date.now(),
-        type: 'click'
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keyup', handleKeyUp);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('click', handleClick);
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keyup', handleKeyUp);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('click', handleClick);
+      };
+    }
+  }, [behavioralCaptureActive]);
+
+  // Countdown effect for OTP
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (emailVerification.countdown > 0) {
+      interval = setInterval(() => {
+        setEmailVerification(prev => ({
+          ...prev,
+          countdown: prev.countdown - 1
+        }));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [emailVerification.countdown]);
+
+  // ============= EMAIL VERIFICATION FUNCTIONS =============
+  
+  const sendEmailVerificationOTP = async () => {
+    if (!emailValidation.isValid) {
+      setErrors({ email: 'Please enter a valid email address first' });
+      return;
+    }
+
+    setEmailVerification(prev => ({ ...prev, sendingOTP: true }));
+    setErrors({});
+
+    try {
+      const response = await fetch('http://localhost:5000/api/send-email-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailValidation.sanitized || formData.email
+        })
       });
-      setBehavioralData(prev => ({
-        ...prev,
-        mouseMovements: [...mouseMovements]
-      }));
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleClick);
+      const result = await response.json();
 
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('click', handleClick);
-    };
-  }
-}, [behavioralCaptureActive]);
+      if (result.success) {
+        setEmailVerification(prev => ({
+          ...prev,
+          otpSent: true,
+          otpId: result.otp_id,
+          countdown: result.expires_in_minutes * 60,
+          sendingOTP: false,
+          devOTP: result.dev_otp
+        }));
+      } else {
+        setErrors({ email: result.error || 'Failed to send verification email' });
+        setEmailVerification(prev => ({ ...prev, sendingOTP: false }));
+      }
+    } catch (error) {
+      setErrors({ email: 'Network error while sending verification email' });
+      setEmailVerification(prev => ({ ...prev, sendingOTP: false }));
+    }
+  };
 
+  const verifyEmailOTP = async () => {
+    if (!emailVerification.otpCode || emailVerification.otpCode.length !== 6) {
+      setErrors({ email: 'Please enter a valid 6-digit code' });
+      return;
+    }
 
-  // Validation functions
+    setEmailVerification(prev => ({ ...prev, verifyingOTP: true }));
+    setErrors({});
+
+    try {
+      const response = await fetch('http://localhost:5000/api/verify-email-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailValidation.sanitized || formData.email,
+          otp_code: emailVerification.otpCode
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setEmailVerification(prev => ({
+          ...prev,
+          isVerified: true,
+          verifyingOTP: false
+        }));
+        setErrors({});
+      } else {
+        const newAttempts = emailVerification.attempts + 1;
+        setEmailVerification(prev => ({
+          ...prev,
+          attempts: newAttempts,
+          verifyingOTP: false
+        }));
+
+        if (newAttempts >= 5) {
+          setErrors({ email: 'Too many failed attempts. Please request a new code.' });
+          setEmailVerification(prev => ({
+            ...prev,
+            otpSent: false,
+            otpCode: '',
+            countdown: 0
+          }));
+        } else {
+          setErrors({ email: `Invalid code (${newAttempts}/5 attempts). Please try again.` });
+        }
+      }
+    } catch (error) {
+      setErrors({ email: 'Network error during verification' });
+      setEmailVerification(prev => ({ ...prev, verifyingOTP: false }));
+    }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // ============= ENHANCED VALIDATION FUNCTIONS =============
+  
   const validateStep1 = () => {
     const newErrors: {[key: string]: string} = {};
     
+    // Username validation
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
     } else if (formData.username.length < 3) {
       newErrors.username = 'Username must be at least 3 characters';
+    } else if (formData.username.length > 30) {
+      newErrors.username = 'Username must be less than 30 characters';
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+      newErrors.username = 'Username can only contain letters, numbers, hyphens, and underscores';
     }
     
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+    // Email validation
+    if (!emailValidation.isValid) {
+      newErrors.email = emailValidation.error || 'Please enter a valid email address';
     }
     
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    // Email verification check
+    if (!emailVerification.isVerified) {
+      newErrors.email = 'Email verification is required';
     }
     
+    // Password validation
+    if (!passwordValidation.isValid) {
+      newErrors.password = passwordValidation.errors[0] || 'Password does not meet requirements';
+    }
+    
+    // Confirm password validation
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
@@ -258,57 +585,37 @@ const Register = () => {
     console.log('🔍 DEBUG - Validating Step 2...');
     console.log('🔍 DEBUG - biometricData:', JSON.stringify(biometricData, null, 2));
     
-    // if (!biometricData.faceData) {
-    //   console.log('❌ DEBUG - No face data');
-    //   setErrors({ biometric: 'Face capture is required' });
-    //   return false;
-    // }
-    
-    // Check Enhanced liveness data from console/local state instead of biometricData
-// Check Enhanced liveness data from console/local state instead of biometricData
-const enhancedLivenessData = JSON.parse(localStorage.getItem('enhanced_liveness_data') || 'null');
+    const enhancedLivenessData = JSON.parse(localStorage.getItem('enhanced_liveness_data') || 'null');
 
-  // If we have enhanced data and it shows all requirements met, skip detailed validation
-  if (enhancedLivenessData?.liveness_validation?.overall_liveness_passed) {
-    console.log('✅ DEBUG - Enhanced data shows validation passed, skipping detailed checks');
-    setErrors({});
-    return true;
-  }
+    if (enhancedLivenessData?.liveness_validation?.overall_liveness_passed) {
+      console.log('✅ DEBUG - Enhanced data shows validation passed, skipping detailed checks');
+      setErrors({});
+      return true;
+    }
 
-  console.log('🔍 DEBUG - Running detailed validation...');
+    console.log('🔍 DEBUG - Running detailed validation...');
 
-// Use enhanced data if available, fallback to biometric data
-const livenessData = enhancedLivenessData || biometricData.livenessData;
-if (!livenessData) {
-  console.log('✅ DEBUG - No liveness data available, but assuming validation passed');
-  setErrors({});
-  return true;
-}
+    const livenessData = enhancedLivenessData || biometricData.livenessData;
+    if (!livenessData) {
+      console.log('✅ DEBUG - No liveness data available, but assuming validation passed');
+      setErrors({});
+      return true;
+    }
     
     console.log('🔍 DEBUG - livenessData structure check:', {
       hasLivenessData: !!biometricData.livenessData,
-      // hasValidation: !!biometricData.livenessData.liveness_validation,
-      // hasLivenessPassed: !!biometricData.livenessData.liveness_passed,
-      // dataKeys: Object.keys(biometricData.livenessData)
     });
     
-    // More flexible validation approach
-    // const livenessData = biometricData.livenessData;
     let overallPassed = false;
-    let validationDetails = {};
     
-    // Strategy 1: Check new validation structure
     if (livenessData.liveness_validation?.overall_liveness_passed !== undefined) {
       overallPassed = livenessData.liveness_validation.overall_liveness_passed;
-      validationDetails = livenessData.liveness_validation.step_requirements || {};
       console.log('✅ Using liveness_validation structure');
     }
-    // Strategy 2: Check direct liveness_passed field
     else if (livenessData.liveness_passed !== undefined) {
       overallPassed = livenessData.liveness_passed;
       console.log('✅ Using direct liveness_passed field');
     }
-    // Strategy 3: Check if all individual requirements are met
     else {
       const blinksOk = (livenessData.blink_count || 0) >= 3;
       const mouthOk = (livenessData.mouth_open_count || 0) >= 2;
@@ -316,24 +623,10 @@ if (!livenessData) {
       const scoreOk = (livenessData.face_real_score || livenessData.enhanced_face_score || 0) > 0.2;
       
       overallPassed = blinksOk && mouthOk && headOk && scoreOk;
-      validationDetails = { blinks_met: blinksOk, mouth_met: mouthOk, head_met: headOk, score_met: scoreOk };
       console.log('✅ Using manual validation calculation');
     }
     
-    console.log('🔍 DEBUG - Validation results:', {
-      overallPassed,
-      validationDetails,
-      counts: {
-        blinks: livenessData.blink_count || 0,
-        mouth: livenessData.mouth_open_count || 0,
-        head: livenessData.head_movement_count || 0,
-        score: livenessData.face_real_score || livenessData.enhanced_face_score || 0
-      }
-    });
-    
-    // More lenient validation - check if any validation approach succeeded
     if (!overallPassed) {
-      // Check if we have reasonable liveness activity even if not all thresholds met
       const hasAnyActivity = (livenessData.blink_count || 0) > 0 || 
                             (livenessData.mouth_open_count || 0) > 0 || 
                             (livenessData.head_movement_count || 0) > 0;
@@ -347,7 +640,6 @@ if (!livenessData) {
     if (!overallPassed) {
       console.log('❌ DEBUG - Overall liveness validation failed');
       
-      // Provide specific feedback about what's missing
       const missing = [];
       if ((livenessData.blink_count || 0) < 3) missing.push(`blinks (${livenessData.blink_count || 0}/3)`);
       if ((livenessData.mouth_open_count || 0) < 2) missing.push(`mouth opens (${livenessData.mouth_open_count || 0}/2)`);
@@ -367,14 +659,12 @@ if (!livenessData) {
     return true;
   };
 
-
   const validateStep3 = () => {
     if (!behavioralCaptureComplete) {
       setErrors({ behavioral: 'Behavioral capture must be completed' });
       return false;
     }
     
-    // Check if the correct sentence was typed
     if (typedText !== "The quick brown fox jumps over the lazy dog.") {
       setErrors({ behavioral: 'You must type the exact sentence shown' });
       return false;
@@ -404,7 +694,8 @@ if (!livenessData) {
     return true;
   };
 
-  // Step navigation
+  // ============= STEP NAVIGATION =============
+  
   const nextStep = () => {
     let isValid = false;
     
@@ -427,16 +718,15 @@ if (!livenessData) {
     
     if (isValid && currentStep < 5) {
       if (currentStep === 1) {
-      // When going from credentials to biometric, reset biometric data
-      setBiometricData({
-        faceData: '',
-        faceUrl: '',
-        livenessData: null
-      });
+        setBiometricData({
+          faceData: '',
+          faceUrl: '',
+          livenessData: null
+        });
+      }
+      setCurrentStep(currentStep + 1);
     }
-    setCurrentStep(currentStep + 1);
-  }
-};
+  };
 
   const prevStep = () => {
     if (currentStep > 1) {
@@ -444,17 +734,49 @@ if (!livenessData) {
     }
   };
 
-  // Input handlers
+  // ============= INPUT HANDLERS =============
+  
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    if (name === 'email') {
+      // Validate and sanitize email in real-time
+      const validation = validateEmail(value);
+      setEmailValidation(validation);
+      setFormData(prev => ({ 
+        ...prev, 
+        [name]: validation.sanitized || value 
+      }));
+      
+      // Reset email verification if email changes
+      if (emailVerification.isVerified) {
+        setEmailVerification({
+          isVerified: false,
+          otpSent: false,
+          otpCode: '',
+          otpId: '',
+          attempts: 0,
+          countdown: 0,
+          sendingOTP: false,
+          verifyingOTP: false
+        });
+      }
+    } else if (name === 'password') {
+      // Validate password in real-time
+      const validation = validatePassword(value);
+      setPasswordValidation(validation);
+      setFormData(prev => ({ ...prev, [name]: value }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
-  // Biometric handlers
+  // ============= BIOMETRIC HANDLERS =============
+  
   const handleFaceCapture = (faceData: string, faceUrl?: string) => {
     setBiometricData(prev => ({ 
       ...prev, 
@@ -473,20 +795,16 @@ if (!livenessData) {
       return;
     }
     
-    // Ensure we have minimum required data
     const enhancedLivenessData = {
       ...livenessData,
-      // Ensure all numeric fields exist - using optional chaining
       blink_count: livenessData.blink_count ?? 0,
       mouth_open_count: livenessData.mouth_open_count ?? 0,
       head_movement_count: livenessData.head_movement_count ?? 0,
       face_real_score: livenessData.face_real_score ?? livenessData.enhanced_face_score ?? 0,
       enhanced_face_score: livenessData.enhanced_face_score ?? livenessData.face_real_score ?? 0,
       
-      // Backwards compatibility
       liveness_passed: !!(livenessData.liveness_passed ?? livenessData.liveness_validation?.overall_liveness_passed),
       
-      // Enhanced validation structure
       liveness_validation: livenessData.liveness_validation ?? {
         overall_liveness_passed: !!(livenessData.liveness_passed ?? 
           ((livenessData.blink_count ?? 0) >= 3 && 
@@ -513,7 +831,6 @@ if (!livenessData) {
       
       console.log('✅ DEBUG - Biometric data updated successfully');
       
-      // Auto-validate after a short delay to ensure state update
       setTimeout(() => {
         console.log('🔄 Auto-validating liveness data...');
         const validation = validateStep2();
@@ -524,62 +841,39 @@ if (!livenessData) {
     });
   };
 
-
-  // const verifyICFront = async (base64: string) => {
-  //   try {
-  //     const response = await fetch('http://localhost:5000/api/ekyc', {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({ image: base64 })
-  //     });
-  //     const result = await response.json();
-  //     if (!result.success) {
-  //       throw new Error(result.error || 'IC validation failed');
-  //     }
-  //     console.log('✅ IC verification passed:', result);
-  //     return result;
-  //   } catch (error) {
-  //     console.error('IC validation error:', error);
-  //     throw error;
-  //   }
-  // };
-
-  // eKYC handlers
+  // ============= eKYC HANDLERS =============
+  
   const handleFileSelect = async (type: 'front' | 'back', file: File) => {
-  // Clear previous errors
-  setErrors({});
+    setErrors({});
 
-  // Validate image first
-  const validation = await validateICImage(file);
+    const validation = await validateICImage(file);
     if (!validation.valid) {
       setErrors({ ekyc: validation.error || 'Invalid image' });
       return;
     }
 
-    // If valid, proceed with preview
     const reader = new FileReader();
-    reader.onload =async  (e) => {
+    reader.onload = async (e) => {
       const preview = e.target?.result as string;
       
-    // ✅ Call /api/ekyc to validate the IC
-    try {
-      const response = await fetch('http://localhost:5000/api/ekyc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: preview })
-      });
-      const result = await response.json();
-      if (!result.success) {
-        setErrors({ ekyc: 'IC validation failed: ' + (result.error || 'Unknown error') });
+      try {
+        const response = await fetch('http://localhost:5000/api/ekyc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: preview, side: type })
+        });
+        const result = await response.json();
+        if (!result.success) {
+          setErrors({ ekyc: 'IC validation failed: ' + (result.error || 'Unknown error') });
+          return;
+        }
+        console.log('✅ IC verification passed:', result);
+      } catch (error) {
+        console.error('IC validation error:', error);
+        setErrors({ ekyc: 'Error validating IC' });
         return;
       }
-      console.log('✅ IC verification passed:', result);
-      // Optionally: show result.extracted_info somewhere
-    } catch (error) {
-      console.error('IC validation error:', error);
-      setErrors({ ekyc: 'Error validating IC' });
-      return;
-    }
+      
       setEKYCData(prev => ({
         ...prev,
         [`${type}File`]: file,
@@ -589,23 +883,17 @@ if (!livenessData) {
     reader.readAsDataURL(file);
   };
 
-  const [verificationResults, setVerificationResults] = useState<any>(null);
-
-
   const validateICImage = async (file: File): Promise<{ valid: boolean; error?: string }> => {
-    // Check file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
       return { valid: false, error: 'File size must be less than 5MB' };
     }
 
-    // Check file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
       return { valid: false, error: 'Please upload JPG or PNG images only' };
     }
 
-    // Check image dimensions and quality
     return new Promise((resolve) => {
       const img = new Image();
       const reader = new FileReader();
@@ -614,11 +902,6 @@ if (!livenessData) {
         img.src = e.target?.result as string;
         
         img.onload = () => {
-          resolve({ valid: true });
-        
-
-
-          // Check aspect ratio (typical IC aspect ratio is around 1.6:1)
           const aspectRatio = img.width / img.height;
           if (aspectRatio < 1.3 || aspectRatio > 1.8) {
             resolve({ 
@@ -644,48 +927,8 @@ if (!livenessData) {
     });
   };
 
-  const uploadEKYCFiles = async () => {
-    if (!ekycData.frontFile || !ekycData.backFile) {
-      throw new Error('Both IC files are required');
-    }
-
-    const userId = `user_${Date.now()}`;
-
-    // Upload front - FIXED bucket name
-    const frontFileName = `${userId}_ic_front_${Date.now()}.jpg`;
-    const { data: frontData, error: frontError } = await supabase.storage
-      .from('ekycdoc')  // ✅ Correct bucket name
-      .upload(frontFileName, ekycData.frontFile);
-
-    if (frontError) throw frontError;
-
-    // Upload back - FIXED bucket name
-    const backFileName = `${userId}_ic_back_${Date.now()}.jpg`;
-    const { data: backData, error: backError } = await supabase.storage
-      .from('ekycdoc')  // ✅ Correct bucket name
-      .upload(backFileName, ekycData.backFile);
-
-    if (backError) throw backError;
-
-    // Get public URLs - FIXED bucket name
-    const { data: { publicUrl: frontUrl } } = supabase.storage
-      .from('ekycdoc')  // ✅ Correct bucket name
-      .getPublicUrl(frontData.path);
-
-    const { data: { publicUrl: backUrl } } = supabase.storage
-      .from('ekycdoc')  // ✅ Correct bucket name
-      .getPublicUrl(backData.path);
-
-    console.log('Front URL:', frontUrl); // Debug log
-    console.log('Back URL:', backUrl);   // Debug log
-
-    return {
-      frontUrl,
-      backUrl
-    };
-  };
-
-  // Update the handleSubmit function to capture verification results
+  // ============= SUBMIT HANDLER =============
+  
   const handleSubmit = async () => {
     if (!validateStep4()) return;
 
@@ -693,20 +936,18 @@ if (!livenessData) {
     try {
       console.log('🚀 Starting registration process...');
 
-          // Check if user exists first
       const checkResponse = await fetch('http://localhost:5000/api/check-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           username: formData.username, 
-          email: formData.email 
+          email: emailValidation.sanitized || formData.email 
         })
       });
 
       const checkResult = await checkResponse.json();
       
       if (checkResult.exists) {
-        // User exists - ask what to do
         const proceed = window.confirm(
           `User ${formData.username} already exists. Do you want to update their profile instead?`
         );
@@ -717,21 +958,20 @@ if (!livenessData) {
         }
       }  
 
-      // Prepare complete registration data - FIXED structure
       const registrationData = {
         username: formData.username,
-        email: formData.email,
+        email: emailValidation.sanitized || formData.email,
         password: formData.password,
         faceData: biometricData.faceData,
-        faceUrl: biometricData.faceUrl || '', // Include face URL
+        faceUrl: biometricData.faceUrl || '',
         livenessData: biometricData.livenessData,
         behavioralData: {
           ...behavioralData,
-          typedText: typedText  // Include the typed text
+          typedText: typedText
         },
         ekycFiles: {
-          frontBase64: ekycData.frontPreview.split(',')[1] || ekycData.frontPreview, // Remove data: prefix if present
-          backBase64: ekycData.backPreview.split(',')[1] || ekycData.backPreview,   // Remove data: prefix if present
+          frontBase64: ekycData.frontPreview.split(',')[1] || ekycData.frontPreview,
+          backBase64: ekycData.backPreview.split(',')[1] || ekycData.backPreview,
         }
       };
 
@@ -744,7 +984,6 @@ if (!livenessData) {
         }
       });
 
-      // Send to backend
       const response = await fetch('http://localhost:5000/api/register', {
         method: 'POST',
         headers: {
@@ -757,22 +996,14 @@ if (!livenessData) {
 
       if (response.ok && result.success) {
         console.log('✅ Registration successful:', result);
-        
-        // Store verification results
-        if (result.verification) {
-          setVerificationResults(result.verification);
-        }
-        
         setSuccess(true);
         
-        // Redirect to login after delay
         setTimeout(() => {
           navigate('/login');
         }, 3000);
       } else {
         console.error('❌ Registration failed:', result);
         
-        // Show specific validation errors
         if (result.validation_errors && result.validation_errors.length > 0) {
           const errorMessage = result.validation_errors.join('. ');
           setErrors({ submit: errorMessage });
@@ -780,7 +1011,6 @@ if (!livenessData) {
           setErrors({ submit: result.error || 'Registration failed' });
         }
         
-        // If it's an eKYC validation error, go back to step 4
         if (result.error && (result.error.includes('IC') || result.error.includes('MyKad'))) {
           setCurrentStep(4);
         }
@@ -794,7 +1024,8 @@ if (!livenessData) {
     }
   };
 
-  // Success screen
+  // ============= SUCCESS SCREEN =============
+  
   if (success) {
     return (
       <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
@@ -810,34 +1041,6 @@ if (!livenessData) {
           <p className="text-cyan-400 mb-4" style={{ fontFamily: 'IBM Plex Mono' }}>
             Complete biometric profile created with eKYC verification
           </p>
-          {/* Show verification results if available */}
-          {verificationResults && (
-            <div className="mt-6 glass-card rounded-lg p-4">
-              <h3 className="text-lg font-bold text-green-400 mb-3">Verification Results</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Document Scan:</span>
-                  <span className={verificationResults.docscan_result?.status === 'ok' ? 'text-green-400' : 'text-red-400'}>
-                    {verificationResults.docscan_result?.status === 'ok' ? '✅ Valid ID' : '❌ Invalid'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Face Match:</span>
-                  <span className={verificationResults.face_match_result?.same_face ? 'text-green-400' : 'text-yellow-400'}>
-                    {verificationResults.face_match_result?.same_face 
-                      ? `✅ Matched (${(verificationResults.face_match_result.confidence * 100).toFixed(0)}%)`
-                      : '⚠️ No Match'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-300">Overall Status:</span>
-                  <span className={verificationResults.verified ? 'text-green-400' : 'text-yellow-400'}>
-                    {verificationResults.verified ? '✅ Verified' : '⚠️ Pending Review'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
           <div className="text-green-400 text-sm" style={{ fontFamily: 'IBM Plex Mono' }}>
             Redirecting to login terminal...
           </div>
@@ -847,7 +1050,7 @@ if (!livenessData) {
   }
 
   const steps = [
-    { number: 1, title: 'Credentials', icon: User, description: 'Basic account information' },
+    { number: 1, title: 'Credentials', icon: User, description: 'Account & email verification' },
     { number: 2, title: 'Biometric', icon: Camera, description: 'Face capture & liveness detection' },
     { number: 3, title: 'Behavioral', icon: MousePointer, description: 'Keystroke & mouse patterns' },
     { number: 4, title: 'eKYC', icon: FileText, description: 'Identity document verification' },
@@ -875,9 +1078,9 @@ if (!livenessData) {
 
           {/* Progress Steps */}
           <div className="mb-8">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center relative">
               {steps.map((step, index) => (
-                <div key={step.number} className="flex flex-col items-center">
+                <div key={step.number} className="flex flex-col items-center relative z-10">
                   <div className={`flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300 ${
                     currentStep >= step.number
                       ? 'border-green-400 bg-green-400/20 text-green-400'
@@ -895,13 +1098,15 @@ if (!livenessData) {
                       {step.description}
                     </div>
                   </div>
-                  {index < steps.length - 1 && (
-                    <div className={`absolute top-6 w-16 h-0.5 ${
-                      currentStep > step.number ? 'bg-green-400' : 'bg-gray-600'
-                    }`} style={{ left: `${(index + 1) * 20}%` }} />
-                  )}
                 </div>
               ))}
+              {/* Progress Line */}
+              <div className="absolute top-6 left-0 right-0 h-0.5 bg-gray-600 -z-10">
+                <div 
+                  className="h-0.5 bg-green-400 transition-all duration-300" 
+                  style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
+                />
+              </div>
             </div>
           </div>
 
@@ -914,10 +1119,10 @@ if (!livenessData) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Step 1: Credentials */}
+              {/* Step 1: Enhanced Credentials with Email Verification */}
               {currentStep === 1 && (
                 <div className="space-y-6">
-                  <h2 className="text-2xl font-bold text-cyan-400 mb-6">User Credentials</h2>
+                  <h2 className="text-2xl font-bold text-cyan-400 mb-6">User Credentials & Email Verification</h2>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -934,7 +1139,7 @@ if (!livenessData) {
                           className={`terminal-input w-full pl-10 pr-4 py-3 rounded ${
                             errors.username ? 'border-red-500' : ''
                           }`}
-                          placeholder="Enter username"
+                          placeholder="Enter username (3-30 chars)"
                         />
                       </div>
                       {errors.username && (
@@ -945,6 +1150,7 @@ if (!livenessData) {
                       )}
                     </div>
 
+                    {/* Enhanced Email with Real-time Validation */}
                     <div>
                       <label className="block text-sm font-bold text-green-400 mb-2">
                         EMAIL ADDRESS
@@ -956,12 +1162,139 @@ if (!livenessData) {
                           name="email"
                           value={formData.email}
                           onChange={handleInputChange}
+                          disabled={emailVerification.isVerified}
                           className={`terminal-input w-full pl-10 pr-4 py-3 rounded ${
-                            errors.email ? 'border-red-500' : ''
-                          }`}
-                          placeholder="Enter email"
+                            errors.email ? 'border-red-500' : 
+                            emailValidation.isValid ? 'border-green-500' :
+                            formData.email ? 'border-yellow-500' : ''
+                          } ${emailVerification.isVerified ? 'bg-green-900/20 border-green-500' : ''}`}
+                          placeholder="Enter valid email"
                         />
+                        {emailVerification.isVerified && (
+                          <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
+                        )}
                       </div>
+                      
+                      {/* Real-time Email Validation Feedback */}
+                      {formData.email && !emailVerification.isVerified && (
+                        <div className="mt-2">
+                          {emailValidation.isValid ? (
+                            <p className="text-green-400 text-xs flex items-center">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Valid email format {emailValidation.sanitized !== formData.email && '(sanitized)'}
+                            </p>
+                          ) : (
+                            <p className="text-red-400 text-xs flex items-center">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              {emailValidation.error}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Email Verification Section */}
+                      {!emailVerification.isVerified && emailValidation.isValid && (
+                        <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded">
+                          {!emailVerification.otpSent ? (
+                            <div>
+                              <p className="text-yellow-400 text-sm mb-2">
+                                📧 Email verification required
+                              </p>
+                              <button
+                                onClick={sendEmailVerificationOTP}
+                                disabled={emailVerification.sendingOTP}
+                                className="terminal-button px-4 py-2 text-sm rounded flex items-center"
+                              >
+                                {emailVerification.sendingOTP ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="h-4 w-4 mr-2" />
+                                    Send Verification Code
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="text-yellow-400 text-sm mb-2">
+                                Enter the 6-digit code sent to your email:
+                              </p>
+                              {emailVerification.devOTP && (
+                                <p className="text-green-400 text-xs mb-2">
+                                  Dev Mode: {emailVerification.devOTP}
+                                </p>
+                              )}
+                              
+                              <div className="flex gap-2 mb-2">
+                                <input
+                                  type="text"
+                                  value={emailVerification.otpCode}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                    setEmailVerification(prev => ({
+                                      ...prev,
+                                      otpCode: value
+                                    }));
+                                  }}
+                                  placeholder="000000"
+                                  maxLength={6}
+                                  className="terminal-input flex-1 py-2 text-center tracking-widest"
+                                />
+                                <button
+                                  onClick={verifyEmailOTP}
+                                  disabled={emailVerification.verifyingOTP || emailVerification.otpCode.length !== 6}
+                                  className="terminal-button px-4 py-2 text-sm rounded disabled:opacity-50"
+                                >
+                                  {emailVerification.verifyingOTP ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Verify'
+                                  )}
+                                </button>
+                              </div>
+                              
+                              {/* Countdown and Resend */}
+                              <div className="flex justify-between items-center text-xs">
+                                {emailVerification.countdown > 0 ? (
+                                  <span className="text-yellow-400 flex items-center">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Expires in: {formatTime(emailVerification.countdown)}
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={sendEmailVerificationOTP}
+                                    disabled={emailVerification.sendingOTP}
+                                    className="text-cyan-400 hover:text-green-400 underline flex items-center"
+                                  >
+                                    <RefreshCw className={`h-3 w-3 mr-1 ${emailVerification.sendingOTP ? 'animate-spin' : ''}`} />
+                                    Resend Code
+                                  </button>
+                                )}
+                                
+                                {emailVerification.attempts > 0 && (
+                                  <span className="text-yellow-400">
+                                    Attempts: {emailVerification.attempts}/5
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {emailVerification.isVerified && (
+                        <div className="mt-2 p-2 bg-green-900/20 border border-green-500/30 rounded">
+                          <p className="text-green-400 text-sm flex items-center">
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Email verified successfully
+                          </p>
+                        </div>
+                      )}
+                      
                       {errors.email && (
                         <p className="mt-1 text-sm text-red-400 flex items-center">
                           <AlertCircle className="h-4 w-4 mr-1" />
@@ -970,6 +1303,7 @@ if (!livenessData) {
                       )}
                     </div>
 
+                    {/* Enhanced Password with Strength Meter */}
                     <div>
                       <label className="block text-sm font-bold text-green-400 mb-2">
                         PASSWORD
@@ -982,9 +1316,11 @@ if (!livenessData) {
                           value={formData.password}
                           onChange={handleInputChange}
                           className={`terminal-input w-full pl-10 pr-12 py-3 rounded ${
-                            errors.password ? 'border-red-500' : ''
+                            errors.password ? 'border-red-500' : 
+                            passwordValidation.isValid ? 'border-green-500' :
+                            formData.password ? 'border-yellow-500' : ''
                           }`}
-                          placeholder="Enter password (min 6 chars)"
+                          placeholder="Enter strong password"
                         />
                         <button
                           type="button"
@@ -994,6 +1330,46 @@ if (!livenessData) {
                           {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
                       </div>
+                      
+                      {/* Password Strength Meter */}
+                      {formData.password && (
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-400">Password Strength:</span>
+                            <span className={`text-xs font-bold ${getPasswordStrengthColor(passwordValidation.strength)}`}>
+                              {getPasswordStrengthText(passwordValidation.strength)}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-300 ${
+                                passwordValidation.strength <= 1 ? 'bg-red-500' :
+                                passwordValidation.strength === 2 ? 'bg-orange-500' :
+                                passwordValidation.strength === 3 ? 'bg-yellow-500' :
+                                'bg-green-500'
+                              }`}
+                              style={{ width: `${(passwordValidation.strength / 5) * 100}%` }}
+                            ></div>
+                          </div>
+                          
+                          {/* Password Requirements */}
+                          <div className="text-xs space-y-1">
+                            {passwordValidation.errors.map((error, index) => (
+                              <p key={index} className="text-red-400 flex items-center">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                {error}
+                              </p>
+                            ))}
+                            {passwordValidation.isValid && (
+                              <p className="text-green-400 flex items-center">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Password meets all requirements
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
                       {errors.password && (
                         <p className="mt-1 text-sm text-red-400 flex items-center">
                           <AlertCircle className="h-4 w-4 mr-1" />
@@ -1014,9 +1390,11 @@ if (!livenessData) {
                           value={formData.confirmPassword}
                           onChange={handleInputChange}
                           className={`terminal-input w-full pl-10 pr-12 py-3 rounded ${
-                            errors.confirmPassword ? 'border-red-500' : ''
+                            errors.confirmPassword ? 'border-red-500' : 
+                            formData.confirmPassword && formData.password === formData.confirmPassword ? 'border-green-500' :
+                            formData.confirmPassword ? 'border-yellow-500' : ''
                           }`}
-                          placeholder="Confirm password"
+                          placeholder="Confirm your password"
                         />
                         <button
                           type="button"
@@ -1026,6 +1404,24 @@ if (!livenessData) {
                           {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
                       </div>
+                      
+                      {/* Password Match Indicator */}
+                      {formData.confirmPassword && (
+                        <div className="mt-2">
+                          {formData.password === formData.confirmPassword ? (
+                            <p className="text-green-400 text-xs flex items-center">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Passwords match
+                            </p>
+                          ) : (
+                            <p className="text-red-400 text-xs flex items-center">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              Passwords do not match
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
                       {errors.confirmPassword && (
                         <p className="mt-1 text-sm text-red-400 flex items-center">
                           <AlertCircle className="h-4 w-4 mr-1" />
@@ -1034,41 +1430,58 @@ if (!livenessData) {
                       )}
                     </div>
                   </div>
+
+                  {/* Security Requirements Info */}
+                  <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded">
+                    <div className="flex items-start">
+                      <Info className="h-5 w-5 text-blue-400 mr-3 mt-0.5" />
+                      <div>
+                        <h4 className="text-blue-400 font-bold mb-2">Security Requirements</h4>
+                        <ul className="text-blue-300 text-sm space-y-1">
+                          <li>• Email must be verified before proceeding</li>
+                          <li>• Password must be at least 8 characters long</li>
+                          <li>• Must contain uppercase (A-Z) and lowercase (a-z) letters</li>
+                          <li>• Must contain at least one number (0-9)</li>
+                          <li>• Must contain at least one special character (!@#$%^&*...)</li>
+                          <li>• Cannot use common passwords or sequential patterns</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Step 2: Biometric Capture */}
               {currentStep === 2 && (
-              <div>
-                <BiometricCapture
-                  onFaceCapture={handleFaceCapture}
-                  onLivenessCapture={handleLivenessCapture}
-                  mode="registration"
-                  userId={formData.email || 'temp_user'}
-                />
-                
-                {/* Show captured face preview if available */}
-                {biometricData.faceData && (
-                  <div className="mt-4 glass-card rounded-lg p-4">
-                    <h3 className="text-green-400 font-bold mb-2">Captured Face Preview</h3>
-                    <img 
-                      src={biometricData.faceUrl ? biometricData.faceUrl : biometricData.faceData} 
-                      alt="Captured face" 
-                      className="w-32 h-32 mx-auto rounded-lg border-2 border-green-400"
-                    />
-                  </div>
-                )}
-                
-                {errors.biometric && (
-                  <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
-                    <p className="text-red-400 text-sm flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-2" />
-                      {errors.biometric}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                <div>
+                  <BiometricCapture
+                    onFaceCapture={handleFaceCapture}
+                    onLivenessCapture={handleLivenessCapture}
+                    mode="registration"
+                    userId={formData.email || 'temp_user'}
+                  />
+                  
+                  {biometricData.faceData && (
+                    <div className="mt-4 glass-card rounded-lg p-4">
+                      <h3 className="text-green-400 font-bold mb-2">Captured Face Preview</h3>
+                      <img 
+                        src={biometricData.faceUrl ? biometricData.faceUrl : biometricData.faceData} 
+                        alt="Captured face" 
+                        className="w-32 h-32 mx-auto rounded-lg border-2 border-green-400"
+                      />
+                    </div>
+                  )}
+                  
+                  {errors.biometric && (
+                    <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
+                      <p className="text-red-400 text-sm flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-2" />
+                        {errors.biometric}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Step 3: Behavioral Capture */}
               {currentStep === 3 && (
@@ -1214,7 +1627,7 @@ if (!livenessData) {
                 </div>
               )}
 
-              {/* Step 4: eKYC Upload - Enhanced Version */}
+              {/* Step 4: eKYC Upload */}
               {currentStep === 4 && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-cyan-400 mb-6">eKYC Document Verification</h2>
@@ -1234,7 +1647,7 @@ if (!livenessData) {
                     </ul>
                   </div>
                   
-                  {/* Biometric Face Preview - Restored without face matching text */}
+                  {/* Biometric Face Preview */}
                   {(biometricData.faceUrl || biometricData.faceData) && (
                     <div className="glass-card rounded-lg p-4 mb-6">
                       <h3 className="text-green-400 font-bold mb-2">Your Captured Face</h3>
@@ -1274,9 +1687,6 @@ if (!livenessData) {
                               <CheckCircle className="h-4 w-4 mr-1" />
                               Front IC uploaded
                             </div>
-                            <p className="text-cyan-400 text-xs">
-                              Will be verified...
-                            </p>
                           </div>
                         ) : (
                           <div>
@@ -1331,9 +1741,6 @@ if (!livenessData) {
                               <CheckCircle className="h-4 w-4 mr-1" />
                               Back IC uploaded
                             </div>
-                            <p className="text-cyan-400 text-xs">
-                              Ready for verification
-                            </p>
                           </div>
                         ) : (
                           <div>
@@ -1395,32 +1802,32 @@ if (!livenessData) {
                 <div className="space-y-6">
                   <h2 className="text-2xl font-bold text-cyan-400 mb-6">Registration Review</h2>
                   
-                      {/* Add eKYC Preview Section */}
-                    <div className="glass-card rounded-lg p-4">
-                      <h3 className="text-lg font-bold text-green-400 mb-3">eKYC Documents</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {ekycData.frontPreview && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-2">IC Front:</p>
-                            <img 
-                              src={ekycData.frontPreview} 
-                              alt="IC Front" 
-                              className="w-full h-48 object-contain rounded border border-green-500/30"
-                            />
-                          </div>
-                        )}
-                        {ekycData.backPreview && (
-                          <div>
-                            <p className="text-sm text-gray-400 mb-2">IC Back:</p>
-                            <img 
-                              src={ekycData.backPreview} 
-                              alt="IC Back" 
-                              className="w-full h-48 object-contain rounded border border-green-500/30"
-                            />
-                          </div>
-                        )}
-                      </div>
+                  {/* eKYC Preview Section */}
+                  <div className="glass-card rounded-lg p-4">
+                    <h3 className="text-lg font-bold text-green-400 mb-3">eKYC Documents</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {ekycData.frontPreview && (
+                        <div>
+                          <p className="text-sm text-gray-400 mb-2">IC Front:</p>
+                          <img 
+                            src={ekycData.frontPreview} 
+                            alt="IC Front" 
+                            className="w-full h-48 object-contain rounded border border-green-500/30"
+                          />
+                        </div>
+                      )}
+                      {ekycData.backPreview && (
+                        <div>
+                          <p className="text-sm text-gray-400 mb-2">IC Back:</p>
+                          <img 
+                            src={ekycData.backPreview} 
+                            alt="IC Back" 
+                            className="w-full h-48 object-contain rounded border border-green-500/30"
+                          />
+                        </div>
+                      )}
                     </div>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* User Information */}
@@ -1433,7 +1840,13 @@ if (!livenessData) {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-300">Email:</span>
-                          <span className="text-cyan-400">{formData.email}</span>
+                          <span className="text-cyan-400">{emailValidation.sanitized || formData.email}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-300">Password Strength:</span>
+                          <span className={getPasswordStrengthColor(passwordValidation.strength)}>
+                            {getPasswordStrengthText(passwordValidation.strength)}
+                          </span>
                         </div>
                       </div>
                     </div>

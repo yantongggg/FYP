@@ -83,7 +83,7 @@ def initialize_models():
 
         # Load weights with better error handling
         checkpoint = torch.load(model_path, map_location="cpu")
-        logger.info(f"🔍 Checkpoint keys: {list(checkpoint.keys()) if isinstance(checkpoint, dict) else 'Direct state_dict'}")
+        # logger.info(f"🔍 Checkpoint keys: {list(checkpoint.keys()) if isinstance(checkpoint, dict) else 'Direct state_dict'}")
         
         # Handle different checkpoint formats
         if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:

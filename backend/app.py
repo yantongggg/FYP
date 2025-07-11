@@ -1,4 +1,4 @@
-# backend/app.py
+# backend/app.py - FIXED VERSION
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -33,12 +33,10 @@ from ml_models.liveness_detector import LivenessDetector, initialize_models
 from utils.supabase_manager import SupabaseManager
 from ml_models.face_verification import FaceVerificationModel
 from flask_cors import CORS, cross_origin
-
+from ml_models.face_verification import FaceVerificationModel
+face_verifier = FaceVerificationModel()
 
 supabase_manager = SupabaseManager()
-
-
-
 
 # Enhanced logging
 logging.basicConfig(
@@ -47,10 +45,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import optimized detector - Remove the incorrect import
+# Import optimized detector
 sys.path.append(os.path.join(os.path.dirname(__file__), 'ml_models'))
 
-# Initialize MyKadOCR (add this after other initializations) - Mock if not available
+# Initialize OCR and Face Verifier
 try:
     from utils.ocr_utils import MyKadOCR
     mykad_ocr = MyKadOCR()
@@ -72,39 +70,29 @@ except Exception as e:
     logger.error(f"⚠️ Could not initialize face verification model: {e}")
     face_verifier = None
 
-# Flask App
+# Flask App with CORS
 app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
         "origins": [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000", 
-            "http://localhost:3001",
-            "http://127.0.0.1:3001",
-            "http://localhost:5173",  # Vite dev server
-            "http://127.0.0.1:5173"
+            "http://localhost:3000", "http://127.0.0.1:3000", 
+            "http://localhost:3001", "http://127.0.0.1:3001",
+            "http://localhost:5173", "http://127.0.0.1:5173"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": [
-            "Content-Type", 
-            "Authorization", 
-            "Access-Control-Allow-Credentials",
-            "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Headers",
-            "Access-Control-Allow-Methods",
-            "X-Requested-With"
+            "Content-Type", "Authorization", "Access-Control-Allow-Credentials",
+            "Access-Control-Allow-Origin", "Access-Control-Allow-Headers",
+            "Access-Control-Allow-Methods", "X-Requested-With"
         ],
-        "supports_credentials": False,  # Set to False to avoid credentials issues
+        "supports_credentials": False,
         "expose_headers": ["Content-Type", "Authorization"],
-        "max_age": 86400  # 24 hours
+        "max_age": 86400
     }
 })
 
-
 def convert_numpy_types(obj):
-    """
-    Recursively convert NumPy data types in a dict to native Python types
-    """
+    """Recursively convert NumPy data types in a dict to native Python types"""
     if isinstance(obj, dict):
         return {k: convert_numpy_types(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -118,96 +106,18 @@ def convert_numpy_types(obj):
     else:
         return obj
 
-
 # Thread pool for async processing
 executor = ThreadPoolExecutor(max_workers=4)
 
-# ===== CONFIGURATION =====
+# Configuration
 BEHAVIORAL_THRESHOLDS = {
-    'auto_lock': 0.3,      # Below this = auto-lock account
-    'anomaly': 0.6,        # Below this = log anomaly
-    'trust_delta_good': 1,  # Trust score increase for good behavior
-    'trust_delta_bad': -10  # Trust score decrease for anomalies
+    'auto_lock': 0.3,
+    'anomaly': 0.6,
+    'trust_delta_good': 1,
+    'trust_delta_bad': -10
 }
 
-
-
-# ============= API Helper Functions =============
-
-
-def initialize_detector():
-    """Initialize the liveness detector models"""
-    initialize_models()
-    if 'DETECTOR' in globals():
-        DETECTOR.reset_counters()
-
-def process_base64_image(base64_str):
-    """Convert base64 string to OpenCV image"""
-    if base64_str.startswith("data:image"):
-        base64_str = base64_str.split(",")[1]
-    img_data = base64.b64decode(base64_str)
-    nparr = np.frombuffer(img_data, np.uint8)
-    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-def process_liveness_request(frame_data: str, reset_counters: bool = False):
-    """Process liveness detection request (legacy function)"""
-    if reset_counters and 'DETECTOR' in globals():
-        DETECTOR.reset_counters()
-    frame = process_base64_image(frame_data)
-    return DETECTOR.process_frame(frame)
-
-def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
-    """Process frame for liveness detection with user-specific tracking"""
-    try:
-        if user_id is None:
-            user_id = "default_user"
-
-        if reset_counters and 'DETECTOR' in globals():
-            DETECTOR.reset_user_counters(user_id)
-
-        frame = process_base64_image(face_image_b64)
-        result = DETECTOR.process_frame_for_user(frame, user_id)
-
-        # Build liveness_validation field to match frontend expectations
-        step_requirements = {
-            'blinks_met': result['blink_count'] >= 3,
-            'mouth_met': result['mouth_open_count'] >= 2,
-            'head_met': result['head_movement_count'] >= 2,
-            'score_met': result['face_real_score'] >= 0.2
-        }
-        all_met = all(step_requirements.values())
-
-        result['liveness_validation'] = {
-            'overall_liveness_passed': all_met,
-            'step_requirements': step_requirements
-        }
-
-        return result
-
-    except Exception as e:
-        logger.error(f"process_frame_api error: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "face_detected": False,
-            "blink_count": 0,
-            "mouth_open_count": 0,
-            "head_movement_count": 0,
-            "face_real_score": 0.0,
-            "liveness_validation": {
-                "overall_liveness_passed": False,
-                "step_requirements": {
-                    "blinks_met": False,
-                    "mouth_met": False,
-                    "head_met": False,
-                    "score_met": False
-                }
-            }
-        }
-
-
-
-# ===== ENHANCED SESSION MANAGEMENT =====
+# Session management
 @dataclass
 class EnhancedLivenessSession:
     user_id: str
@@ -222,53 +132,38 @@ class EnhancedLivenessSession:
     completion_time: float = 0.0
     last_face_score: float = 0.0
     last_enhanced_score: float = 0.0
-    registration_data: dict = None  # Store registration data temporarily
+    registration_data: dict = None
 
 USER_SESSIONS = {}
 session_lock = threading.Lock()
 
-# ===== API ENDPOINTS =====
-
-# ============= MANUAL CORS HEADERS =============
+# ============= CORS HEADERS =============
 @app.after_request
 def after_request(response):
-    # Get the origin from the request
     origin = request.headers.get('Origin')
-    
-    # List of allowed origins
     allowed_origins = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:3001', 
-        'http://127.0.0.1:3001',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173'
+        'http://localhost:3000', 'http://127.0.0.1:3000',
+        'http://localhost:3001', 'http://127.0.0.1:3001',
+        'http://localhost:5173', 'http://127.0.0.1:5173'
     ]
     
-    # If origin is in allowed list, add CORS headers
     if origin in allowed_origins:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
         response.headers['Access-Control-Max-Age'] = '86400'
-        # Do NOT set Access-Control-Allow-Credentials to avoid issues
     
     return response
 
-# ============= PREFLIGHT HANDLER =============
 @app.before_request  
 def handle_preflight():
     if request.method == "OPTIONS":
         response = make_response()
         origin = request.headers.get('Origin')
-        
         allowed_origins = [
-            'http://localhost:3000',
-            'http://127.0.0.1:3000',
-            'http://localhost:3001', 
-            'http://127.0.0.1:3001',
-            'http://localhost:5173',
-            'http://127.0.0.1:5173'
+            'http://localhost:3000', 'http://127.0.0.1:3000',
+            'http://localhost:3001', 'http://127.0.0.1:3001',
+            'http://localhost:5173', 'http://127.0.0.1:5173'
         ]
         
         if origin in allowed_origins:
@@ -278,6 +173,17 @@ def handle_preflight():
             response.headers.add('Access-Control-Max-Age', '86400')
         
         return response
+
+# ============= ASYNC HELPER FUNCTIONS =============
+def run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
+
+# ============= API ENDPOINTS =============
 
 @app.route('/api/health', methods=['GET', 'OPTIONS'])
 @cross_origin()
@@ -294,10 +200,7 @@ def health_check():
 
 @app.route('/api/check-user', methods=['POST'])
 def check_user():
-    """
-    Check if a user already exists by username or email
-    Used before registration to prevent duplicates
-    """
+    """Check if a user already exists by username or email"""
     try:
         data = request.get_json()
         username = data.get('username', '').strip()
@@ -312,7 +215,6 @@ def check_user():
         logger.info(f"🔍 Checking if user exists: username='{username}', email='{email}'")
         
         if not supabase_manager.client:
-            # Mock mode - simulate user check
             return jsonify({
                 'success': True,
                 'exists': False,
@@ -333,10 +235,8 @@ def check_user():
             .execute()
         
         if user_result.data and len(user_result.data) > 0:
-            # User exists
             existing_user = user_result.data[0]
             
-            # Determine what matched
             matched_fields = []
             if existing_user['username'] == username:
                 matched_fields.append('username')
@@ -360,9 +260,7 @@ def check_user():
                 'message': f"User exists (matched: {', '.join(matched_fields)})"
             })
         else:
-            # User does not exist
             logger.info(f"✅ No existing user found for username='{username}', email='{email}'")
-            
             return jsonify({
                 'success': True,
                 'exists': False,
@@ -378,12 +276,10 @@ def check_user():
 
 @app.route('/api/register', methods=['POST'])
 def register():
-    """
-    Complete registration endpoint - Orchestrates all 4 steps
-    """
+    """Complete registration endpoint - Orchestrates all 4 steps"""
     try:
         data = request.get_json()
-        print("DEBUG - Request JSON:", data)
+        logger.info(f"📝 Starting registration for {data.get('email', 'unknown')}")
         
         # Validate required fields
         required_fields = ['username', 'email', 'password', 'faceData', 'livenessData', 'behavioralData', 'ekycFiles']
@@ -395,10 +291,8 @@ def register():
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
             }), 400
         
-        logger.info(f"📝 Starting registration for {data['email']}")
-        
         # Step 1: Store user credentials
-        credentials_result = asyncio.run(
+        credentials_result = run_async(
             supabase_manager.store_user_credentials({
                 'username': data['username'],
                 'email': data['email'],
@@ -410,10 +304,9 @@ def register():
             return jsonify(credentials_result), 400
         
         user_id = credentials_result['user_id']
-        
 
         # Step 2: Store biometric data
-        biometric_result = asyncio.run(
+        biometric_result = run_async(
             supabase_manager.store_biometric_data(
                 user_id, 
                 {
@@ -425,12 +318,11 @@ def register():
             )
         )
 
-
         if not biometric_result['success']:
             return jsonify(biometric_result), 400
         
         # Step 3: Store behavioral pattern
-        behavioral_result = asyncio.run(
+        behavioral_result = run_async(
             supabase_manager.store_behavioral_pattern(user_id, data['behavioralData'])
         )
         
@@ -438,16 +330,13 @@ def register():
             return jsonify(behavioral_result), 400
         
         # Step 4: Store eKYC documents
-        ekyc_result = asyncio.run(
+        ekyc_result = run_async(
             supabase_manager.store_ekyc_documents(user_id, data['ekycFiles'])
         )
         
         if not ekyc_result['success']:
             return jsonify(ekyc_result), 400
         
-        # Extract verification results
-        verification_results = ekyc_result.get('verification', {})
-
         # All steps completed successfully
         logger.info(f"✅ Registration completed successfully for {user_id}")
         
@@ -461,7 +350,6 @@ def register():
                 'behavioral': True,
                 'ekyc': True
             }
-            
         })
         
     except Exception as e:
@@ -471,13 +359,342 @@ def register():
             'error': str(e)
         }), 500
 
+# ============= ENHANCED LOGIN WITH FACE VERIFICATION =============
+
+@app.route('/api/login', methods=['POST'])
+@cross_origin()
+def login_user():
+    """Enhanced login with automatic face verification and OTP fallback"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+        ip_address = request.remote_addr
+
+        if not email or not password:
+            return jsonify({'success': False, 'error': 'Missing credentials'}), 400
+
+        # Step 1: Check account lockout
+        lockout_result = run_async(supabase_manager.check_account_lockout(email))
+        if lockout_result.get('locked'):
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', False, 'account_locked', ip_address
+            ))
+            return jsonify({
+                'success': False,
+                'error': 'ACCOUNT_LOCKED',
+                'message': lockout_result.get('message'),
+                'remaining_minutes': lockout_result.get('remaining_minutes')
+            }), 423  # HTTP 423 Locked
+
+        # Step 2: Validate credentials
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+            
+        user_result = supabase_manager.client.table('users').select('*').eq('email', email).limit(1).execute()
+        if not user_result.data:
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', False, 'user_not_found', ip_address
+            ))
+            return jsonify({'success': False, 'error': 'Invalid email or password'}), 404
+
+        user = user_result.data[0]
+
+        # Validate password
+        try:
+            if not bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
+                run_async(supabase_manager.log_login_attempt(
+                    email, 'password', False, 'invalid_password', ip_address
+                ))
+                return jsonify({'success': False, 'error': 'Invalid email or password'}), 401
+        except Exception as pwd_error:
+            logger.error(f"Password verification error: {pwd_error}")
+            return jsonify({'success': False, 'error': 'Authentication error'}), 401
+
+        # Step 3: Check if biometric is enrolled
+        if user.get('is_biometric_enrolled'):
+            logger.info(f"🔐 User {user['id']} has biometric enrolled - face verification required")
+            
+            # Log successful password verification
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', True, None, ip_address
+            ))
+            
+            return jsonify({
+                'success': False,
+                'error': 'BIOMETRIC_REQUIRED',
+                'user_id': user['id'],
+                'full_name': user.get('username', ''),
+                'email': user['email'],
+                'message': 'Face verification required'
+            }), 200  # Use 200 but success=false to indicate next step needed
+
+        # Step 4: Complete login without biometric
+        run_async(supabase_manager.log_login_attempt(
+            email, 'password', True, None, ip_address
+        ))
+
+        return jsonify({
+            'success': True,
+            'user_id': user['id'],
+            'email': user['email'],
+            'username': user.get('username', ''),
+            'role': user.get('role', 'user')
+        })
+
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+# ============= OTP FALLBACK ENDPOINTS =============
+
+@app.route('/api/send-login-otp', methods=['POST'])
+@cross_origin()
+def send_login_otp():
+    """Send OTP for login fallback when face verification fails"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email')
+        
+        if not user_id or not email:
+            return jsonify({
+                'success': False,
+                'error': 'User ID and email are required'
+            }), 400
+        
+        logger.info(f"🔐 Sending login fallback OTP to {email}")
+        
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Check if user exists and is valid
+        user_result = supabase_manager.client.table("users") \
+            .select("id, email, failed_login_attempts") \
+            .eq("id", user_id) \
+            .eq("email", email) \
+            .single() \
+            .execute()
+        
+        if not user_result.data:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid user credentials'
+            }), 404
+        
+        # Check if too many failed attempts
+        failed_attempts = user_result.data.get('failed_login_attempts', 0)
+        if failed_attempts >= 3:
+            return jsonify({
+                'success': False,
+                'error': 'Too many failed login attempts. Account temporarily locked.'
+            }), 423
+        
+        # Send OTP
+        otp_result = run_async(supabase_manager.send_otp_email(
+            email, 'login_fallback', user_id
+        ))
+        
+        if otp_result['success']:
+            logger.info(f"✅ Login OTP sent to {email}")
+            return jsonify({
+                'success': True,
+                'message': f'OTP sent to {email}',
+                'otp_id': otp_result['otp_id'],
+                'expires_in_minutes': otp_result['expires_in_minutes'],
+                'dev_otp': otp_result.get('dev_otp')  # For development only
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': otp_result.get('error', 'Failed to send OTP')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Send login OTP error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to send OTP'
+        }), 500
+
+@app.route('/api/verify-login-otp', methods=['POST'])
+@cross_origin()
+def verify_login_otp():
+    """Verify OTP for login fallback"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        email = data.get('email')
+        otp_code = data.get('otp_code')
+        
+        if not user_id or not email or not otp_code:
+            return jsonify({
+                'success': False,
+                'error': 'User ID, email, and OTP code are required'
+            }), 400
+        
+        logger.info(f"🔐 Verifying login OTP for {email}")
+        
+        # Verify OTP
+        verification_result = run_async(supabase_manager.verify_otp(
+            email, otp_code, 'login_fallback'
+        ))
+        
+        if verification_result['success']:
+            # Log successful OTP login
+            run_async(supabase_manager.log_login_attempt(
+                email, 'otp', True, None, request.remote_addr
+            ))
+            
+            # Get user details for response
+            if not supabase_manager.client:
+                return jsonify({
+                    'success': False,
+                    'error': 'Database not available'
+                }), 500
+                
+            user_result = supabase_manager.client.table("users") \
+                .select("id, email, username, role") \
+                .eq("id", user_id) \
+                .single() \
+                .execute()
+            
+            if user_result.data:
+                user = user_result.data
+                logger.info(f"✅ OTP login successful for {email}")
+                
+                return jsonify({
+                    'success': True,
+                    'user_id': user['id'],
+                    'email': user['email'],
+                    'username': user['username'],
+                    'role': user.get('role', 'user'),
+                    'login_method': 'otp_fallback'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'User not found after OTP verification'
+                }), 404
+        else:
+            # Log failed OTP attempt
+            run_async(supabase_manager.log_login_attempt(
+                email, 'otp', False, verification_result.get('error'), request.remote_addr
+            ))
+            
+            return jsonify({
+                'success': False,
+                'error': verification_result.get('error', 'Invalid OTP')
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"Verify login OTP error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to verify OTP'
+        }), 500
+
+# ============= EMAIL VERIFICATION FOR REGISTRATION =============
+
+@app.route('/api/send-email-verification', methods=['POST'])
+@cross_origin()
+def send_email_verification():
+    """Send email verification OTP during registration"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        user_id = data.get('user_id')  # Optional for registration
+        
+        if not email:
+            return jsonify({
+                'success': False,
+                'error': 'Email is required'
+            }), 400
+        
+        logger.info(f"📧 Sending email verification OTP to {email}")
+        
+        # Send OTP
+        otp_result = run_async(supabase_manager.send_otp_email(
+            email, 'email_verification', user_id
+        ))
+        
+        if otp_result['success']:
+            logger.info(f"✅ Email verification OTP sent to {email}")
+            return jsonify({
+                'success': True,
+                'message': f'Verification code sent to {email}',
+                'otp_id': otp_result['otp_id'],
+                'expires_in_minutes': otp_result['expires_in_minutes'],
+                'dev_otp': otp_result.get('dev_otp')  # For development only
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': otp_result.get('error', 'Failed to send verification email')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Send email verification error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to send verification email'
+        }), 500
+
+@app.route('/api/verify-email-otp', methods=['POST'])
+@cross_origin()
+def verify_email_otp():
+    """Verify email OTP during registration"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        otp_code = data.get('otp_code')
+        
+        if not email or not otp_code:
+            return jsonify({
+                'success': False,
+                'error': 'Email and OTP code are required'
+            }), 400
+        
+        logger.info(f"📧 Verifying email OTP for {email}")
+        
+        # Verify OTP
+        verification_result = run_async(supabase_manager.verify_otp(
+            email, otp_code, 'email_verification'
+        ))
+        
+        if verification_result['success']:
+            logger.info(f"✅ Email verification successful for {email}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Email verified successfully',
+                'user_id': verification_result.get('user_id')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': verification_result.get('error', 'Invalid verification code')
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"Verify email OTP error: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to verify email'
+        }), 500
+
+# ============= EXISTING ENDPOINTS =============
+
 @app.route("/api/upload-face", methods=["POST"])
 def upload_face():
     try:
         data = request.get_json()
         user_id = data["user_id"]
 
-        # Read debug_face.jpg from disk
         if not os.path.exists("debug_face.jpg"):
             return jsonify({"success": False, "error": "debug_face.jpg not found"}), 400
 
@@ -487,10 +704,9 @@ def upload_face():
         timestamp = int(time.time())
         filename = f"{user_id}/face_{timestamp}.jpg"
 
-        # Use the same direct API upload logic
         upload_result = supabase_manager.upload_face_image_direct_api(
             user_id=user_id,
-            base64_image=None,   # Not needed since we already have binary_data
+            base64_image=None,
             binary_data=binary_data,
             filename=filename
         )
@@ -510,65 +726,82 @@ def upload_face():
         logger.error(f"/api/upload-face error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/behavioral-monitor', methods=['POST'])
 @cross_origin()
-def login_user():
+def continuous_behavioral_monitor():
+    """Continuous behavioral monitoring endpoint - adapted for existing schema"""
     try:
         data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
-
-        if not email or not password:
-            return jsonify({'success': False, 'error': 'Missing credentials'}), 400
-
-        # Get user by email
-        user_result = supabase_manager.client.table('users').select('*').eq('email', email).limit(1).execute()
-        if not user_result.data:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-
-        user = user_result.data[0]
-
-        # Validate password (assuming bcrypt)
-        if not bcrypt.checkpw(password.encode(), user['password'].encode()):
-            return jsonify({'success': False, 'error': 'Invalid password'}), 401
-
-        # If biometric is enrolled, trigger face verification step
-        if user.get('is_biometric_enrolled'):
+        user_id = data.get('user_id')
+        behavioral_data = data.get('behavioralData')
+        
+        if not user_id or not behavioral_data:
+            return jsonify({'success': False, 'error': 'Missing data'}), 400
+        
+        keystrokes = behavioral_data.get('keystrokes', [])
+        mouse_movements = behavioral_data.get('mouseMovements', [])
+        
+        if len(keystrokes) < 3:
             return jsonify({
-                'success': False,
-                'error': 'BIOMETRIC_REQUIRED',
-                'user_id': user['id'],
-                'full_name': user.get('full_name', ''),
-                'email': user['email']
-            }), 401
-
-        # Otherwise, login success
+                'success': True,
+                'similarity_score': 0.8,  # Default safe score
+                'is_anomaly': False,
+                'action_taken': 'insufficient_data'
+            })
+        
+        # Calculate similarity
+        similarity_score = calculate_simple_similarity(keystrokes, mouse_movements, user_id)
+        
+        # RELAXED thresholds for continuous monitoring
+        AUTO_LOCK_THRESHOLD = 0.2   # Only auto-lock if very different
+        ANOMALY_THRESHOLD = 0.25    # Flag anomaly if quite different
+        
+        is_anomaly = False
+        action_taken = 'none'
+        severity = 'low'
+        
+        if similarity_score < AUTO_LOCK_THRESHOLD:
+            action_taken = 'auto_lock'
+            severity = 'critical'
+            is_anomaly = True
+        elif similarity_score < ANOMALY_THRESHOLD:
+            action_taken = 'anomaly_logged'
+            severity = 'medium'
+            is_anomaly = True
+        
+        # Store if anomaly detected
+        if is_anomaly:
+            session_id = f"monitor_{user_id}_{int(time.time())}"
+            store_behavioral_result(
+                user_id, session_id, similarity_score, 
+                is_anomaly, action_taken, severity
+            )
+            logger.warning(f"🚨 Monitoring anomaly: user={user_id}, action={action_taken}")
+        
         return jsonify({
             'success': True,
-            'user_id': user['id'],
-            'email': user['email'],
-            'full_name': user.get('full_name', ''),
-            'role': user.get('role', 'user')
+            'similarity_score': float(similarity_score),
+            'is_anomaly': is_anomaly,
+            'action_taken': action_taken,
+            'severity': severity
         })
-
+        
     except Exception as e:
-        logger.error(f"Login error: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+        logger.error(f"Monitor error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/behavioral-verify', methods=['POST'])
-def behavioral_verify():
-    """
-    Behavioral verification endpoint - Used during login and continuous monitoring
-    """
+def behavioral_verify_adapted():
+    """Enhanced behavioral verification endpoint - adapted for existing schema"""
     try:
         data = request.get_json()
         
-        # Validate required fields
-        user_id = data.get('user_id')
+        user_id = data.get('user_id')  # TEXT in your schema
         behavioral_data = data.get('behavioralData')
         typed_text = data.get('typedText', '')
         session_id = data.get('session_id', f"verify_{user_id}_{int(time.time())}")
+        verification_type = data.get('verification_type', 'manual')
         
         if not user_id or not behavioral_data:
             return jsonify({
@@ -576,7 +809,6 @@ def behavioral_verify():
                 'error': 'Missing required fields: user_id and behavioralData'
             }), 400
         
-        # For strict verification, ensure the reference sentence is typed correctly
         REFERENCE_SENTENCE = "The quick brown fox jumps over the lazy dog."
         if typed_text and typed_text != REFERENCE_SENTENCE:
             return jsonify({
@@ -586,12 +818,61 @@ def behavioral_verify():
                 'received': typed_text
             }), 400
         
-        logger.info(f"🔍 Starting behavioral verification for {user_id}")
+        logger.info(f"🔍 Starting behavioral verification for {user_id} (type: {verification_type})")
         
-        # Perform verification
-        result = asyncio.run(
-            supabase_manager.verify_behavioral_pattern(user_id, behavioral_data, session_id)
+        # Enhanced verification with anomaly detection
+        result = run_async(
+            verify_behavioral_pattern_adapted(
+                user_id, 
+                behavioral_data, 
+                session_id,
+                verification_type=verification_type
+            )
         )
+        
+        # Check for critical anomalies that require immediate action
+        similarity_score = result.get('similarity_score', 0)
+        anomaly_score = result.get('anomaly_score', 0)
+        
+        if similarity_score < 0.3:  # AUTO_LOCK_THRESHOLD
+            result['action'] = 'auto_lock'
+            result['severity'] = 'critical'
+            
+            # Update user status (convert to UUID if needed)
+            if supabase_manager.client:
+                try:
+                    supabase_manager.client.table("users") \
+                        .update({"status": "suspended"}) \
+                        .eq("id", user_id) \
+                        .execute()
+                except Exception as e:
+                    logger.error(f"Failed to suspend user: {e}")
+            
+            # Log critical anomaly
+            anomaly_data = {
+                'user_id': str(user_id),
+                'session_id': session_id,
+                'anomaly_type': 'behavioral_verification_failed',
+                'anomaly_score': float(anomaly_score),
+                'severity': 'critical',
+                'action_taken': 'auto_lock',
+                'details': {
+                    'verification_type': verification_type,
+                    'similarity_score': float(similarity_score),
+                    'threshold': 0.3
+                },
+                'ip_address': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent', ''),
+                'event_ts': datetime.now().isoformat()
+            }
+            
+            if supabase_manager.client:
+                try:
+                    supabase_manager.client.table("anomaly_audit") \
+                        .insert(anomaly_data) \
+                        .execute()
+                except Exception as e:
+                    logger.error(f"Failed to log critical anomaly: {e}")
         
         return jsonify(result)
         
@@ -602,92 +883,348 @@ def behavioral_verify():
             'error': str(e)
         }), 500
 
-@app.route('/api/behavioral-monitor', methods=['POST'])
-def behavioral_monitor():
-    """
-    Continuous behavioral monitoring endpoint - Non-blocking background processing
-    """
-    try:
-        data = request.get_json()
-        user_id = data.get('user_id')
-        behavioral_data = data.get('behavioralData', {})
-        
-        if not user_id:
-            return jsonify({'success': False, 'error': 'User ID required'}), 400
-        
-        # Process in background (non-blocking)
-        executor.submit(
-            asyncio.run,
-            supabase_manager.verify_behavioral_pattern(
-                user_id, 
-                behavioral_data, 
-                f"monitor_{user_id}_{int(time.time())}"
-            )
-        )
-        
-        return jsonify({
-            'success': True,
-            'message': 'Behavioral data queued for processing'
-        })
-        
-    except Exception as e:
-        logger.error(f"Monitor error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/behavioral-analytics/<user_id>', methods=['GET'])
-def get_behavioral_analytics(user_id: str):
-    """
-    Get user's behavioral analytics summary
-    """
+async def verify_behavioral_pattern_adapted(user_id: str, behavioral_data: dict, session_id: str, continuous_mode: bool = False, verification_type: str = 'manual'):
+    """Behavioral pattern verification adapted for existing schema with TEXT user_id"""
     try:
         if not supabase_manager.client:
-            return jsonify({'success': False, 'error': 'Database not available'}), 500
+            return {
+                'success': False,
+                'error': 'Database not available',
+                'similarity_score': 0,
+                'anomaly_score': 0
+            }
         
-        # Get recent sessions
-        sessions_result = supabase_manager.client.table('behavioral_sessions') \
-            .select('*') \
-            .eq('user_id', user_id) \
-            .order('created_at', desc=True) \
-            .limit(50) \
+        # Get stored behavioral pattern using UUID user_id for behavioral_patterns table
+        stored_result = supabase_manager.client.table("behavioral_patterns") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .eq("is_active", True) \
+            .order("created_at", desc=True) \
+            .limit(1) \
             .execute()
         
-        # Get anomalies
-        anomalies_result = supabase_manager.client.table('anomaly_audits') \
-            .select('*') \
-            .eq('user_id', user_id) \
-            .order('created_at', desc=True) \
-            .limit(20) \
-            .execute()
+        if not stored_result.data:
+            return {
+                'success': False,
+                'error': 'No stored behavioral pattern found',
+                'similarity_score': 0,
+                'anomaly_score': 1.0
+            }
         
-        sessions = sessions_result.data or []
-        anomalies = anomalies_result.data or []
+        stored_pattern = stored_result.data[0]
         
-        # Calculate analytics
-        analytics = {
-            'total_sessions': len(sessions),
-            'successful_sessions': len([s for s in sessions if s.get('is_successful')]),
-            'total_anomalies': len(anomalies),
-            'recent_anomalies': len([
-                a for a in anomalies 
-                if datetime.fromisoformat(a['created_at'].replace('Z', '+00:00')) > 
-                   datetime.now() - timedelta(days=7)
-            ]),
-            'avg_similarity_score': np.mean([
-                s.get('similarity_scores', {}).get('overall_similarity', 0) 
-                for s in sessions if s.get('similarity_scores')
-            ]) if sessions else 0,
-            'sessions': sessions[:10],  # Return latest 10 sessions
-            'anomalies': anomalies[:5]   # Return latest 5 anomalies
+        # Calculate behavioral similarities
+        keystroke_similarity = calculate_keystroke_similarity(
+            behavioral_data.get('keystrokes', []),
+            stored_pattern['pattern_data'].get('keystroke_features', {})
+        )
+        
+        mouse_similarity = calculate_mouse_similarity(
+            behavioral_data.get('mouseMovements', []),
+            stored_pattern['pattern_data'].get('mouse_features', {})
+        )
+        
+        # Overall similarity score (weighted average)
+        overall_similarity = (keystroke_similarity * 0.6) + (mouse_similarity * 0.4)
+        
+        # Calculate anomaly score (inverse of similarity)
+        anomaly_score = 1.0 - overall_similarity
+        
+        # Determine success based on threshold
+        success_threshold = 0.4 if continuous_mode else 0.5
+        is_successful = overall_similarity >= success_threshold
+        
+        # Store session record using TEXT user_id
+        session_data = {
+            'user_id': str(user_id),  # Store as TEXT
+            'session_id': session_id,
+            'similarity_scores': {
+                'overall_similarity': float(overall_similarity),
+                'keystroke_similarity': float(keystroke_similarity),
+                'mouse_similarity': float(mouse_similarity)
+            },
+            'anomaly_score': float(anomaly_score),
+            'is_successful': is_successful,
+            'verification_type': verification_type,
+            'session_duration': behavioral_data.get('session_duration', 0),
+            'behavioral_metrics': {
+                'keystroke_count': len(behavioral_data.get('keystrokes', [])),
+                'mouse_count': len(behavioral_data.get('mouseMovements', [])),
+                'typing_speed': extract_typing_speed(behavioral_data.get('keystrokes', [])),
+                'mouse_velocity': extract_mouse_velocity(behavioral_data.get('mouseMovements', []))
+            },
+            'ip_address': '127.0.0.1',  # You can get actual IP in your endpoint
+            'user_agent': 'System',
+            'created_at': datetime.now().isoformat()
         }
+        
+        # Insert session record
+        supabase_manager.client.table("behavioral_sessions") \
+            .insert(session_data) \
+            .execute()
+        
+        return {
+            'success': is_successful,
+            'similarity_score': float(overall_similarity),
+            'keystroke_similarity': float(keystroke_similarity),
+            'mouse_similarity': float(mouse_similarity),
+            'anomaly_score': float(anomaly_score),
+            'session_id': session_id,
+            'verification_type': verification_type,
+            'threshold_met': overall_similarity >= success_threshold,
+            'anomaly_detected': anomaly_score > 0.6
+        }
+        
+    except Exception as e:
+        logger.error(f"Behavioral verification error: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'similarity_score': 0,
+            'anomaly_score': 1.0
+        }
+
+def calculate_keystroke_similarity(current_keystrokes: list, stored_features: dict) -> float:
+    """Calculate keystroke pattern similarity"""
+    if not current_keystrokes or not stored_features:
+        return 0.5  # Default similarity for missing data
+    
+    # Extract features from current keystrokes
+    current_features = extract_keystroke_features(current_keystrokes)
+    
+    # Compare key features
+    similarities = []
+    
+    # Typing speed similarity
+    if 'typing_speed' in stored_features and 'typing_speed' in current_features:
+        speed_diff = abs(stored_features['typing_speed'] - current_features['typing_speed'])
+        speed_similarity = max(0, 1 - (speed_diff / 100))  # Normalize by WPM
+        similarities.append(speed_similarity)
+    
+    # Dwell time similarity
+    if 'avg_dwell_time' in stored_features and 'avg_dwell_time' in current_features:
+        dwell_diff = abs(stored_features['avg_dwell_time'] - current_features['avg_dwell_time'])
+        dwell_similarity = max(0, 1 - (dwell_diff / 200))  # Normalize by ms
+        similarities.append(dwell_similarity)
+    
+    return sum(similarities) / len(similarities) if similarities else 0.5
+
+def calculate_mouse_similarity(current_movements: list, stored_features: dict) -> float:
+    """Calculate mouse movement pattern similarity"""
+    if not current_movements or not stored_features:
+        return 0.5  # Default similarity for missing data
+    
+    # Extract features from current movements
+    current_features = extract_mouse_features(current_movements)
+    
+    # Compare key features
+    similarities = []
+    
+    # Average velocity similarity
+    if 'avg_velocity' in stored_features and 'avg_velocity' in current_features:
+        velocity_diff = abs(stored_features['avg_velocity'] - current_features['avg_velocity'])
+        velocity_similarity = max(0, 1 - (velocity_diff / 500))  # Normalize by px/s
+        similarities.append(velocity_similarity)
+    
+    return sum(similarities) / len(similarities) if similarities else 0.5
+
+def extract_keystroke_features(keystrokes: list) -> dict:
+    """Extract keystroke timing features"""
+    if len(keystrokes) < 2:
+        return {'typing_speed': 0, 'avg_dwell_time': 0}
+    
+    # Calculate typing speed (basic)
+    total_time = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000  # Convert to seconds
+    total_chars = len([k for k in keystrokes if k['type'] == 'keydown'])
+    typing_speed = (total_chars / 5) / (total_time / 60) if total_time > 0 else 0  # WPM calculation
+    
+    # Calculate average dwell time (simplified)
+    dwell_times = []
+    key_press_times = {}
+    for keystroke in keystrokes:
+        key = keystroke['key']
+        timestamp = keystroke['timestamp']
+        event_type = keystroke['type']
+        
+        if event_type == 'keydown':
+            key_press_times[key] = timestamp
+        elif event_type == 'keyup' and key in key_press_times:
+            dwell_time = timestamp - key_press_times[key]
+            dwell_times.append(dwell_time)
+            del key_press_times[key]
+    
+    avg_dwell_time = sum(dwell_times) / len(dwell_times) if dwell_times else 0
+    
+    return {
+        'typing_speed': typing_speed,
+        'avg_dwell_time': avg_dwell_time,
+        'total_keystrokes': len(keystrokes)
+    }
+
+def extract_mouse_features(movements: list) -> dict:
+    """Extract mouse movement features"""
+    if len(movements) < 2:
+        return {'avg_velocity': 0, 'total_movements': 0}
+    
+    velocities = []
+    
+    # Calculate velocities
+    for i in range(1, len(movements)):
+        prev = movements[i-1]
+        curr = movements[i]
+        
+        if prev['type'] == 'mousemove' and curr['type'] == 'mousemove':
+            dx = curr['x'] - prev['x']
+            dy = curr['y'] - prev['y']
+            dt = curr['timestamp'] - prev['timestamp']
+            
+            if dt > 0:
+                distance = (dx**2 + dy**2)**0.5
+                velocity = distance / dt
+                velocities.append(velocity)
+    
+    return {
+        'avg_velocity': sum(velocities) / len(velocities) if velocities else 0,
+        'total_movements': len(movements),
+        'total_clicks': len([m for m in movements if m['type'] == 'click'])
+    }
+
+def extract_typing_speed(keystrokes: list) -> float:
+    """Extract typing speed from keystrokes"""
+    if len(keystrokes) < 2:
+        return 0
+    
+    total_time = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000
+    total_chars = len([k for k in keystrokes if k['type'] == 'keydown'])
+    return (total_chars / 5) / (total_time / 60) if total_time > 0 else 0
+
+def extract_mouse_velocity(movements: list) -> float:
+    """Extract average mouse velocity"""
+    if len(movements) < 2:
+        return 0
+    
+    velocities = []
+    for i in range(1, len(movements)):
+        prev = movements[i-1]
+        curr = movements[i]
+        
+        if prev['type'] == 'mousemove' and curr['type'] == 'mousemove':
+            dx = curr['x'] - prev['x']
+            dy = curr['y'] - prev['y']
+            dt = curr['timestamp'] - prev['timestamp']
+            
+            if dt > 0:
+                distance = (dx**2 + dy**2)**0.5
+                velocity = distance / dt
+                velocities.append(velocity)
+    
+    return sum(velocities) / len(velocities) if velocities else 0
+
+@app.route('/api/admin/anomalies/recent', methods=['GET'])
+@cross_origin()
+def get_recent_anomalies_admin():
+    """Get recent anomalies for admin dashboard - SIMPLIFIED"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        severity_filter = request.args.get('severity', 'all')
+        
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Build query
+        query = supabase_manager.client.table("anomaly_audit") \
+            .select("*") \
+            .order("event_ts", desc=True) \
+            .limit(limit)
+        
+        if severity_filter != 'all':
+            query = query.eq('severity', severity_filter)
+        
+        result = query.execute()
         
         return jsonify({
             'success': True,
-            'analytics': analytics
+            'anomalies': result.data or [],
+            'total': len(result.data or [])
         })
         
     except Exception as e:
-        logger.error(f"Analytics error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error fetching admin anomalies: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user/anomalies/<user_id>', methods=['GET'])
+@cross_origin()
+def get_user_anomalies(user_id):
+    """Get anomalies for specific user - SIMPLIFIED"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Query using TEXT user_id from anomaly_audit table
+        result = supabase_manager.client.table("anomaly_audit") \
+            .select("*") \
+            .eq("user_id", str(user_id)) \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'anomalies': result.data or [],
+            'total': len(result.data or [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching user anomalies: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user/behavioral-sessions/<user_id>', methods=['GET'])
+@cross_origin()
+def get_user_behavioral_sessions(user_id):
+    """Get behavioral sessions for specific user - SIMPLIFIED"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
+        
+        # Query using TEXT user_id from behavioral_sessions table
+        result = supabase_manager.client.table("behavioral_sessions") \
+            .select("*") \
+            .eq("user_id", str(user_id)) \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'sessions': result.data or [],
+            'total': len(result.data or [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching behavioral sessions: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/sequential-liveness-detect', methods=['POST'])
 def sequential_liveness_detect_optimized():
@@ -820,11 +1357,17 @@ def sequential_liveness_detect_optimized():
 
 @app.route('/api/ekyc', methods=['POST'])
 def ekyc_process():
+    """Enhanced eKYC processing with both front and back MyKad OCR"""
+    try:
         data = request.get_json()
         base64_image = data.get("image")
+        side = data.get("side", "front")  # Either 'front' or 'back'
+        user_id = data.get("user_id", "unknown")
 
         if not base64_image:
             return jsonify({"success": False, "error": "No image provided"}), 400
+
+        logger.info(f"🔍 Processing eKYC for user: {user_id} ({side} side)")
 
         # Decode image
         if ',' in base64_image:
@@ -833,180 +1376,707 @@ def ekyc_process():
         nparr = np.frombuffer(img_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        # Call OCR
-        ocr_result = mykad_ocr.process_mykad_front(img)
-        return jsonify(ocr_result)    
-    
+        if img is None:
+            return jsonify({"success": False, "error": "Invalid image format"}), 400
 
-# Register blueprints after app is created
-def register_blueprints():
-    """Register all blueprints to avoid circular imports"""
+        logger.info("📝 Starting MyKad OCR processing...")
+
+        if side == "front":
+            ocr_result = mykad_ocr.process_mykad_front(img)
+        else:
+            ocr_result = mykad_ocr.process_mykad_back(img)
+
+        logger.info(f"📝 OCR result: {ocr_result.get('success', False)}")
+        if ocr_result.get('success'):
+            ic_number = ocr_result.get('ic_number_back') if side == 'back' else ocr_result.get('extracted_info', {}).get('ic_number')
+            logger.info(f"✅ IC number extracted: {ic_number}")
+        else:
+            logger.warning(f"❌ OCR failed: {ocr_result.get('error', 'Unknown error')}")
+
+        return jsonify(ocr_result)
+
+    except Exception as e:
+        logger.error(f"eKYC process error: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ============= LIVENESS DETECTION ENDPOINTS =============
+
+def initialize_detector():
+    """Initialize the liveness detector models"""
+    initialize_models()
+    if 'DETECTOR' in globals():
+        DETECTOR.reset_counters()
+
+def process_base64_image(base64_str):
+    """Convert base64 string to OpenCV image"""
+    if base64_str.startswith("data:image"):
+        base64_str = base64_str.split(",")[1]
+    img_data = base64.b64decode(base64_str)
+    nparr = np.frombuffer(img_data, np.uint8)
+    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
+    """Process frame for liveness detection with user-specific tracking"""
     try:
-        # Import and register blueprints here to avoid circular imports
-        from routes.ekyc import ekyc_bp
-        app.register_blueprint(ekyc_bp, url_prefix='/api')
-        logger.info("✅ eKYC blueprint registered")
-    except ImportError as e:
-        logger.warning(f"⚠️ Could not import eKYC blueprint: {e}")
+        if user_id is None:
+            user_id = "default_user"
 
+        if reset_counters and 'DETECTOR' in globals():
+            DETECTOR.reset_user_counters(user_id)
+
+        frame = process_base64_image(face_image_b64)
+        result = DETECTOR.process_frame_for_user(frame, user_id)
+
+        # Build liveness_validation field to match frontend expectations
+        step_requirements = {
+            'blinks_met': result['blink_count'] >= 3,
+            'mouth_met': result['mouth_open_count'] >= 2,
+            'head_met': result['head_movement_count'] >= 2,
+            'score_met': result['face_real_score'] >= 0.2
+        }
+        all_met = all(step_requirements.values())
+
+        result['liveness_validation'] = {
+            'overall_liveness_passed': all_met,
+            'step_requirements': step_requirements
+        }
+
+        return result
+
+    except Exception as e:
+        logger.error(f"process_frame_api error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "face_detected": False,
+            "blink_count": 0,
+            "mouth_open_count": 0,
+            "head_movement_count": 0,
+            "face_real_score": 0.0,
+            "liveness_validation": {
+                "overall_liveness_passed": False,
+                "step_requirements": {
+                    "blinks_met": False,
+                    "mouth_met": False,
+                    "head_met": False,
+                    "score_met": False
+                }
+            }
+        }
 
 @app.route('/api/biometric-login-verify', methods=['POST', 'OPTIONS'])
-@cross_origin(origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'])
+@cross_origin()
 def biometric_login_verify():
-    """
-    Enhanced biometric login verification with better error handling
-    """
+    """FIXED: Enhanced biometric login verification with proper error handling"""
     try:
-        # Handle preflight
         if request.method == 'OPTIONS':
             response = make_response()
             response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin'))
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
             response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
             return response
-        
+
         data = request.get_json()
-        
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No JSON data provided'
-            }), 400
-        
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+
         user_id = data.get('user_id')
         face_image_b64 = data.get('face_image')
-        
+        ip_address = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+
         if not user_id or not face_image_b64:
-            return jsonify({
-                'success': False,
-                'error': 'User ID and face image are required'
-            }), 400
-        
+            return jsonify({'success': False, 'error': 'User ID and face image are required'}), 400
+
         logger.info(f"🔍 Starting biometric login verification for user: {user_id}")
-        
-        # Check if face verifier is available
-        if not face_verifier:
-            logger.warning("Face verifier not available, using fallback verification")
-            return fallback_face_verification(user_id, face_image_b64)
-        
-        # Get stored face embedding from database
+
         if not supabase_manager.client:
-            return jsonify({
-                'success': False,
-                'error': 'Database not available'
-            }), 500
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+
+        # Get user email for logging
+        user_result = supabase_manager.client.table("users") \
+            .select("email") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+
+        user_email = user_result.data['email'] if user_result.data else 'unknown'
         
-        # Query stored biometric data
-        stored_result = supabase_manager.client.table("biometric_data") \
-            .select("face_embedding, quality_score, created_at") \
+        # 🔥 FIXED: Save face image for audit trail
+        face_image_url = ''
+        try:
+            # Convert base64 to binary for storage
+            if ',' in face_image_b64:
+                base64_content = face_image_b64.split(',')[1]
+            else:
+                base64_content = face_image_b64
+            
+            binary_data = base64.b64decode(base64_content)
+            timestamp = int(time.time())
+            
+            # Upload face image for audit
+            face_image_url = supabase_manager.upload_debug_face_file(
+                user_id, binary_data, timestamp
+            )
+            logger.info(f"📸 Login face image saved: {face_image_url}")
+            
+        except Exception as upload_error:
+            logger.error(f"Failed to save login face image: {upload_error}")
+            # Continue with verification even if image save fails
+
+        # 🔥 FIXED: Load enrolled biometric data
+        enrolled_biometric = supabase_manager.client.table("biometric_data") \
+            .select("*") \
             .eq("user_id", user_id) \
             .eq("biometric_type", "face") \
             .order("created_at", desc=True) \
             .limit(1) \
             .execute()
-        
-        if not stored_result.data:
+
+        if not enrolled_biometric.data:
+            # Log failed attempt
+            supabase_manager.save_login_audit(
+                user_id=user_id,
+                email=user_email,
+                success=False,
+                error_reason="No enrolled biometric data found",
+                ip_address=ip_address,
+                user_agent=user_agent,
+                face_image_url=face_image_url
+            )
             return jsonify({
-                'success': False,
-                'error': 'No biometric data found for user'
-            }), 404
-        
-        stored_data = stored_result.data[0]
-        stored_embedding = stored_data['face_embedding']
-        
-        if not stored_embedding:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid stored face data'
+                'success': False, 
+                'error': 'No enrolled biometric data found'
             }), 400
+
+        enrolled_face = enrolled_biometric.data[0]
+        stored_embedding = enrolled_face.get('face_embedding', [])
         
-        logger.info(f"📊 Found stored embedding with {len(stored_embedding)} dimensions")
+        # 🔥 FIXED: Use corrected face verification
+        if not face_verifier:
+            logger.error("Face verifier not initialized")
+            return jsonify({'success': False, 'error': 'Face verification service unavailable'}), 500
         
-        # Process current face image
-        try:
-            frame = process_base64_image(face_image_b64)
-            if frame is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'Failed to process face image'
-                }), 400
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': f'Error processing image: {str(e)}'
-            }), 400
+        # Compare faces with proper data types
+        similarity_score, is_match = face_verifier.compare_faces(
+            stored_embedding,  # List from database
+            face_image_b64     # Base64 string to be processed
+        )
         
-        # Use enhanced face verification model
-        verification_result = face_verifier.verify_for_login(frame, stored_embedding)
-        
-        if not verification_result['success']:
-            logger.warning(f"❌ Face verification failed: {verification_result.get('error')}")
-            log_failed_attempt(user_id, verification_result)
-            
-            return jsonify({
-                'success': False,
-                'error': verification_result.get('error', 'Face verification failed'),
-                'similarity': verification_result.get('similarity', 0),
-                'threshold': face_verifier.LOGIN_THRESHOLD
-            }), 401
-        
-        # Check if face matches
-        is_match = verification_result.get('is_match', False)
-        similarity = verification_result.get('similarity', 0)
+        # Log the login attempt
+        audit_result = supabase_manager.save_login_audit(
+            user_id=user_id,
+            email=user_email,
+            success=is_match,
+            error_reason=None if is_match else f"Face similarity too low: {similarity_score:.3f}",
+            ip_address=ip_address,
+            user_agent=user_agent,
+            biometric_scores={
+                'face_similarity': similarity_score,
+                'threshold_used': face_verifier.LOGIN_THRESHOLD
+            },
+            face_image_url=face_image_url
+        )
         
         if is_match:
-            logger.info(f"✅ Face verification successful: similarity={similarity:.3f}")
+            logger.info(f"✅ Biometric login successful for user {user_id}")
+            return jsonify({
+                'success': True,
+                'similarity_score': similarity_score,
+                'message': 'Biometric verification successful'
+            })
         else:
-            logger.warning(f"❌ Face verification failed: similarity={similarity:.3f} below threshold={face_verifier.LOGIN_THRESHOLD}")
+            logger.warning(f"❌ Biometric login failed for user {user_id} - similarity: {similarity_score:.3f}")
+            return jsonify({
+                'success': False,
+                'error': 'Face verification failed',
+                'similarity_score': similarity_score,
+                'message': f'Face similarity ({similarity_score:.3f}) below threshold ({face_verifier.LOGIN_THRESHOLD})'
+            }), 401
+
+    except Exception as e:
+        logger.error(f"❌ Error in biometric login verification: {str(e)}", exc_info=True)
         
-        # Log the authentication attempt
-        log_data = {
-            'user_id': user_id,
-            'success': is_match,
-            'biometric_scores': {
-                'face_similarity': float(similarity),
-                'face_distance': verification_result.get('distance', 0),
-                'quality_score': verification_result.get('quality_score', 0),
-                'confidence_level': verification_result.get('confidence_level', 'UNKNOWN')
-            },
-            'ip_addr': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent', ''),
-            'event_ts': datetime.now().isoformat(),
-            'failure_reason': None if is_match else 'biometric_similarity_low'
-        }
-        
+        # Try to save failed audit if possible
         try:
-            if supabase_manager.client:
-                supabase_manager.client.table("login_audit").insert(log_data).execute()
-                logger.info("📝 Login attempt logged successfully")
-        except Exception as e:
-            logger.error(f"Failed to log login attempt: {e}")
+            if 'user_id' in locals() and 'user_email' in locals():
+                supabase_manager.save_login_audit(
+                    user_id=user_id,
+                    email=user_email,
+                    success=False,
+                    error_reason=f"System error: {str(e)}",
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get('User-Agent', ''),
+                    face_image_url=face_image_url if 'face_image_url' in locals() else ''
+                )
+        except Exception as audit_error:
+            logger.error(f"Failed to save error audit: {audit_error}")
         
-        # Return verification result
-        response_data = {
-            'success': is_match,
-            'similarity': float(similarity),
-            'threshold': face_verifier.LOGIN_THRESHOLD,
-            'quality_score': verification_result.get('quality_score', 0),
-            'confidence_level': verification_result.get('confidence_level', 'UNKNOWN'),
-            'message': 'Face verification successful' if is_match else f'Face similarity too low: {similarity:.3f}'
+        return jsonify({
+            'success': False, 
+            'error': 'Internal server error during biometric verification'
+        }), 500
+    
+# ============= SIMPLIFIED BEHAVIORAL ENDPOINTS =============
+
+@app.route('/api/behavioral-test', methods=['POST'])
+@cross_origin()
+def behavioral_test_endpoint():
+    """Simplified behavioral test endpoint for demo purposes"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        behavioral_data = data.get('behavioralData')
+        session_id = data.get('session_id', f"test_{user_id}_{int(time.time())}")
+        test_mode = data.get('test_mode', False)
+        
+        if not user_id or not behavioral_data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: user_id and behavioralData'
+            }), 400
+        
+        logger.info(f"🧪 Running behavioral test for user {user_id}")
+        
+        # Extract simple features
+        keystrokes = behavioral_data.get('keystrokes', [])
+        mouse_movements = behavioral_data.get('mouseMovements', [])
+        
+        if len(keystrokes) < 5:
+            return jsonify({
+                'success': False,
+                'error': 'Not enough keystroke data (minimum 5 required)'
+            }), 400
+        
+        # Get stored baseline pattern
+        if not supabase_manager.client:
+            # Demo mode - simulate stored pattern
+            stored_pattern = {
+                'keystroke_features': {'typing_speed': 45, 'avg_dwell_time': 120},
+                'mouse_features': {'avg_velocity': 150}
+            }
+        else:
+            # Get from database (behavioral_patterns uses UUID user_id)
+            pattern_result = supabase_manager.client.table("behavioral_patterns") \
+                .select("pattern_data") \
+                .eq("user_id", user_id) \
+                .eq("is_active", True) \
+                .order("created_at", desc=True) \
+                .limit(1) \
+                .execute()
+            
+            if not pattern_result.data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No baseline behavioral pattern found. Please complete registration first.'
+                }), 404
+            
+            stored_pattern = pattern_result.data[0]['pattern_data']
+        
+        # Calculate simple similarity
+        current_features = calculate_simple_features(keystrokes, mouse_movements)
+        similarity_score = calculate_simple_similarity(current_features, stored_pattern)
+        
+        # Simple anomaly detection - LOW THRESHOLD FOR DEMO
+        ANOMALY_THRESHOLD = 0.3  # Only flag if similarity < 30%
+        is_anomaly = similarity_score < ANOMALY_THRESHOLD
+        
+        # Determine action
+        action_taken = 'none'
+        severity = 'low'
+        
+        if similarity_score < 0.15:  # Very low similarity
+            action_taken = 'auto_lock'
+            severity = 'critical'
+        elif is_anomaly:
+            action_taken = 'warning'
+            severity = 'medium'
+        else:
+            action_taken = 'passed'
+            severity = 'low'
+        
+        # Store session in behavioral_sessions (uses TEXT user_id)
+        session_data = {
+            'user_id': str(user_id),  # Store as TEXT
+            'session_id': session_id,
+            'similarity_scores': {
+                'overall_similarity': float(similarity_score),
+                'keystroke_similarity': float(current_features.get('keystroke_similarity', 0.5)),
+                'mouse_similarity': float(current_features.get('mouse_similarity', 0.5))
+            },
+            'anomaly_score': float(1 - similarity_score),
+            'is_successful': not is_anomaly,
+            'duration_seconds': int((keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000) if keystrokes else 0,
+            'created_at': datetime.now().isoformat()
         }
         
-        return jsonify(response_data)
+        supabase_saved = False
+        
+        if supabase_manager.client:
+            try:
+                # Store session
+                supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+                
+                # Store anomaly if detected
+                if is_anomaly:
+                    anomaly_data = {
+                        'user_id': str(user_id),  # Store as TEXT
+                        'session_id': session_id,
+                        'anomaly_type': 'behavioral_test_anomaly',
+                        'anomaly_score': float(1 - similarity_score),
+                        'severity': severity,
+                        'action_taken': action_taken,
+                        'details': {
+                            'test_mode': test_mode,
+                            'similarity_score': float(similarity_score),
+                            'threshold': ANOMALY_THRESHOLD,
+                            'features': current_features
+                        },
+                        'created_at': datetime.now().isoformat()
+                    }
+                    
+                    supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+                    logger.info(f"🚨 Anomaly logged for test: user={user_id}, similarity={similarity_score:.3f}")
+                
+                supabase_saved = True
+                logger.info(f"✅ Test data saved to Supabase for user {user_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to save test data: {e}")
+        
+        # Return results
+        return jsonify({
+            'success': True,
+            'similarity_score': float(similarity_score),
+            'is_anomaly': is_anomaly,
+            'action_taken': action_taken,
+            'severity': severity,
+            'session_id': session_id,
+            'supabase_saved': supabase_saved,
+            'threshold': ANOMALY_THRESHOLD,
+            'details': {
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements),
+                'current_features': current_features,
+                'baseline_available': bool(stored_pattern)
+            }
+        })
         
     except Exception as e:
-        logger.error(f"Biometric login verification error: {e}", exc_info=True)
+        logger.error(f"Behavioral test error: {e}", exc_info=True)
         return jsonify({
             'success': False,
-            'error': 'Internal server error during verification'
+            'error': str(e)
         }), 500
 
-def fallback_face_verification(user_id: str, face_image_b64: str):
-    """
-    Fallback face verification using basic face_recognition library
-    """
+@app.route('/api/behavioral-check', methods=['POST'])
+@cross_origin()
+def behavioral_check_endpoint():
+    """Analyze behavioral data and return similarity without storing."""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        behavioral_data = data.get('behavioralData')
+        session_id = data.get('session_id', f"check_{user_id}_{int(time.time())}")
+        check_type = data.get('check_type', 'continuous')
+        
+        if not user_id or not behavioral_data:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        keystrokes = behavioral_data.get('keystrokes', [])
+        mouse_movements = behavioral_data.get('mouseMovements', [])
+        
+        if len(keystrokes) < 3:
+            return jsonify({
+                'success': True,
+                'similarity_score': 0.8,
+                'is_anomaly': False,
+                'action_taken': 'insufficient_data',
+                'message': 'Insufficient data for check'
+            })
+        
+        # Load baseline pattern
+        if supabase_manager.client:
+            result = supabase_manager.client.table("behavioral_patterns") \
+                .select("pattern_data") \
+                .eq("user_id", user_id) \
+                .eq("is_active", True) \
+                .limit(1).execute()
+            
+            if not result.data:
+                return jsonify({
+                    'success': True,
+                    'similarity_score': 0.8,
+                    'is_anomaly': False,
+                    'action_taken': 'no_baseline'
+                })
+            stored_pattern = result.data[0]['pattern_data']
+        else:
+            stored_pattern = {
+                'keystroke_features': {'typing_speed': 45, 'avg_dwell_time': 120},
+                'mouse_features': {'avg_velocity': 150}
+            }
+        
+        # Compare
+        current_features = calculate_simple_features(keystrokes, mouse_movements)
+        similarity_score = calculate_simple_similarity(current_features, stored_pattern)
+        
+        AUTO_LOCK_THRESHOLD = 0.2
+        ANOMALY_THRESHOLD = 0.25
+        
+        is_anomaly = similarity_score < ANOMALY_THRESHOLD
+        action_taken = 'none'
+        severity = 'low'
+
+        if similarity_score < AUTO_LOCK_THRESHOLD:
+            action_taken = 'auto_lock'
+            severity = 'critical'
+        elif is_anomaly:
+            action_taken = 'anomaly_logged'
+            severity = 'medium'
+        else:
+            action_taken = 'passed'
+
+        duration = int((keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000)
+
+        return jsonify({
+            'success': True,
+            'similarity_score': float(similarity_score),
+            'keystroke_similarity': float(current_features.get('keystroke_similarity', 0.5)),
+            'mouse_similarity': float(current_features.get('mouse_similarity', 0.5)),
+            'anomaly_score': float(1 - similarity_score),
+            'is_anomaly': is_anomaly,
+            'severity': severity,
+            'action_taken': action_taken,
+            'session_id': session_id,
+            'duration': duration,
+            'thresholds': {
+                'auto_lock': AUTO_LOCK_THRESHOLD,
+                'anomaly': ANOMALY_THRESHOLD
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Behavioral check error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/save-behavioral-session', methods=['POST'])
+@cross_origin()
+def save_behavioral_session():
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        session_id = data.get('session_id')
+        similarity_scores = data.get('similarity_scores', {})
+        anomaly_score = data.get('anomaly_score')
+        is_successful = data.get('is_successful', True)
+        duration_seconds = data.get('duration_seconds', 10)
+        verification_type = data.get('verification_type', 'continuous')
+        created_at = datetime.now().isoformat()
+
+        session_data = {
+            'user_id': user_id,
+            'session_id': session_id,
+            'similarity_scores': similarity_scores,
+            'anomaly_score': anomaly_score,
+            'is_successful': is_successful,
+            'duration_seconds': duration_seconds,
+            'verification_type': verification_type,
+            'created_at': created_at
+        }
+
+        supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+        logger.info(f"✅ Behavioral session saved for user {user_id}")
+
+        return jsonify({"success": True, "message": "Session saved"}), 200
+
+    except Exception as e:
+        logger.error(f"❌ Failed to save behavioral session: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/save-anomaly', methods=['POST'])
+@cross_origin()
+def save_anomaly():
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        session_id = data.get('session_id', f"session_{int(time.time())}")
+        anomaly_type = data.get('anomaly_type', 'behavioral_anomaly')
+        severity = data.get('severity', 'medium')
+        action_taken = data.get('action_taken', 'none')
+        score = data.get('score', 0.0)
+        details = data.get('details', {})
+        created_at = datetime.now().isoformat()
+
+        anomaly_data = {
+            'user_id': user_id,
+            'session_id': session_id,
+            'anomaly_type': anomaly_type,
+            'severity': severity,
+            'action_taken': action_taken,
+            'score': score,
+            'details': details,
+            'created_at': created_at
+        }
+
+        supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+        logger.info(f"🚨 Anomaly recorded for user {user_id}")
+
+        return jsonify({"success": True, "message": "Anomaly saved"}), 200
+
+    except Exception as e:
+        logger.error(f"❌ Failed to save anomaly: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============= HELPER FUNCTIONS =============
+
+def calculate_simple_features(keystrokes, mouse_movements):
+    """Calculate simple behavioral features for demo"""
+    features = {
+        'keystroke_count': len(keystrokes),
+        'mouse_count': len(mouse_movements),
+        'typing_speed': 0,
+        'avg_dwell_time': 0,
+        'avg_velocity': 0,
+        'keystroke_similarity': 0.5,
+        'mouse_similarity': 0.5
+    }
+    
+    # Simple typing speed calculation
+    if len(keystrokes) > 1:
+        total_time = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000.0
+        if total_time > 0:
+            features['typing_speed'] = len(keystrokes) / total_time * 60  # Keys per minute
+    
+    # Simple dwell time calculation
+    key_press_times = {}
+    dwell_times = []
+    
+    for keystroke in keystrokes:
+        key = keystroke['key']
+        timestamp = keystroke['timestamp']
+        event_type = keystroke.get('type', 'keydown')
+        
+        if event_type == 'keydown':
+            key_press_times[key] = timestamp
+        elif event_type == 'keyup' and key in key_press_times:
+            dwell_time = timestamp - key_press_times[key]
+            if 0 < dwell_time < 1000:  # Reasonable limits
+                dwell_times.append(dwell_time)
+            del key_press_times[key]
+    
+    if dwell_times:
+        features['avg_dwell_time'] = sum(dwell_times) / len(dwell_times)
+    
+    # Simple mouse velocity calculation
+    if len(mouse_movements) > 1:
+        velocities = []
+        for i in range(1, len(mouse_movements)):
+            prev = mouse_movements[i-1]
+            curr = mouse_movements[i]
+            
+            if prev.get('type') == 'mousemove' and curr.get('type') == 'mousemove':
+                dx = curr['x'] - prev['x']
+                dy = curr['y'] - prev['y']
+                dt = curr['timestamp'] - prev['timestamp']
+                
+                if dt > 0:
+                    distance = (dx**2 + dy**2)**0.5
+                    velocity = distance / dt
+                    velocities.append(velocity)
+        
+        if velocities:
+            features['avg_velocity'] = sum(velocities) / len(velocities)
+    
+    return features
+
+def calculate_simple_similarity(current_features, stored_pattern):
+    """Calculate simple similarity score for demo (0-1)"""
+    try:
+        # Extract current features
+        similarities = []
+        
+        # Typing speed comparison
+        current_speed = current_features.get('typing_speed', 0)
+        stored_speed = stored_pattern.get('keystroke_features', {}).get('typing_speed', 45)
+        if stored_speed > 0:
+            speed_similarity = max(0, 1 - abs(current_speed - stored_speed) / stored_speed)
+            similarities.append(speed_similarity)
+        
+        # Mouse velocity comparison
+        current_velocity = current_features.get('avg_velocity', 0)
+        stored_velocity = stored_pattern.get('mouse_features', {}).get('avg_velocity', 150)
+        if stored_velocity > 0:
+            velocity_similarity = max(0, 1 - abs(current_velocity - stored_velocity) / stored_velocity)
+            similarities.append(velocity_similarity)
+        
+        # Return average similarity (0-1)
+        return sum(similarities) / len(similarities) if similarities else 0.5
+        
+    except Exception as e:
+        logger.error(f"Similarity calculation error: {e}")
+        return 0.5  # Default safe score
+    
+def store_behavioral_result(user_id, session_id, similarity_score, is_anomaly, action_taken, severity):
+    """Store results in Supabase"""
+    try:
+        if not supabase_manager.client:
+            return False
+        
+        # Store session
+        session_data = {
+            'user_id': str(user_id),
+            'session_id': session_id,
+            'similarity_scores': {
+                'overall_similarity': float(similarity_score),
+                'keystroke_similarity': float(similarity_score),
+                'mouse_similarity': float(similarity_score)
+            },
+            'anomaly_score': float(1 - similarity_score),
+            'is_successful': not is_anomaly,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+        
+        # Store anomaly if detected
+        if is_anomaly:
+            anomaly_data = {
+                'user_id': str(user_id),
+                'session_id': session_id,
+                'anomaly_type': 'behavioral_test_anomaly',
+                'anomaly_score': float(1 - similarity_score),
+                'severity': severity,
+                'action_taken': action_taken,
+                'details': {
+                    'similarity_score': float(similarity_score),
+                    'test_mode': True
+                },
+                'created_at': datetime.now().isoformat()
+            }
+            
+            supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Store error: {e}")
+        return False
+
+# ============= HELPER METHODS =============
+
+def fallback_face_verification(user_id: str, face_image_b64: str, email: str, ip_address: str):
+    """Fallback face verification using basic face_recognition library"""
     try:
         logger.info("🔄 Using fallback face verification")
+        
+        if not supabase_manager.client:
+            return jsonify({
+                'success': False,
+                'error': 'Database not available'
+            }), 500
         
         # Get stored face embedding
         stored_result = supabase_manager.client.table("biometric_data") \
@@ -1018,6 +2088,9 @@ def fallback_face_verification(user_id: str, face_image_b64: str):
             .execute()
         
         if not stored_result.data:
+            run_async(supabase_manager.log_login_attempt(
+                email, 'face', False, 'no_biometric_data_fallback', ip_address
+            ))
             return jsonify({
                 'success': False,
                 'error': 'No biometric data found'
@@ -1031,6 +2104,9 @@ def fallback_face_verification(user_id: str, face_image_b64: str):
         # Extract face encoding from current image
         face_encodings = face_recognition.face_encodings(frame)
         if not face_encodings:
+            run_async(supabase_manager.log_login_attempt(
+                email, 'face', False, 'no_face_detected_fallback', ip_address
+            ))
             return jsonify({
                 'success': False,
                 'error': 'No face detected in image'
@@ -1050,122 +2126,29 @@ def fallback_face_verification(user_id: str, face_image_b64: str):
         logger.info(f"Fallback verification: similarity={similarity:.3f}, threshold={FALLBACK_THRESHOLD}")
         
         # Log the attempt
-        log_data = {
-            'user_id': user_id,
-            'success': is_match,
-            'biometric_scores': {
-                'face_similarity': float(similarity),
-                'face_distance': float(distance),
-                'verification_method': 'fallback'
-            },
-            'ip_addr': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent', ''),
-            'event_ts': datetime.now().isoformat()
-        }
-        
-        if supabase_manager.client:
-            supabase_manager.client.table("login_audit").insert(log_data).execute()
+        run_async(supabase_manager.log_login_attempt(
+            email, 'face', is_match, None if is_match else 'fallback_similarity_low', ip_address
+        ))
         
         return jsonify({
             'success': is_match,
             'similarity': float(similarity),
             'threshold': FALLBACK_THRESHOLD,
             'verification_method': 'fallback',
-            'message': 'Face verification successful (fallback)' if is_match else 'Face verification failed (fallback)'
+            'message': 'Face verification successful (fallback)' if is_match else 'Face verification failed (fallback)',
+            'can_request_otp': not is_match
         })
         
     except Exception as e:
         logger.error(f"Fallback verification error: {e}")
+        run_async(supabase_manager.log_login_attempt(
+            email, 'face', False, f'fallback_error_{str(e)}', ip_address
+        ))
         return jsonify({
             'success': False,
-            'error': 'Fallback verification failed'
+            'error': 'Fallback verification failed',
+            'can_request_otp': True
         }), 500
-
-def log_failed_attempt(user_id: str, verification_result: dict):
-    """
-    Log failed biometric authentication attempt
-    """
-    try:
-        log_data = {
-            'user_id': user_id,
-            'success': False,
-            'biometric_scores': {
-                'face_similarity': verification_result.get('similarity', 0),
-                'error': verification_result.get('error', 'Unknown error')
-            },
-            'ip_addr': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent', ''),
-            'event_ts': datetime.now().isoformat(),
-            'failure_reason': 'biometric_verification_error'
-        }
-        
-        if supabase_manager.client:
-            supabase_manager.client.table("login_audit").insert(log_data).execute()
-            
-    except Exception as e:
-        logger.error(f"Failed to log authentication attempt: {e}")
-
-@app.route('/api/check-biometric-enrollment/<user_id>', methods=['GET'])
-def check_biometric_enrollment(user_id: str):
-    """
-    Check if user has biometric data enrolled
-    """
-    try:
-        if not supabase_manager.client:
-            return jsonify({
-                'enrolled': False,
-                'error': 'Database not available'
-            }), 500
-        
-        # Check for face biometric data
-        result = supabase_manager.client.table("biometric_data") \
-            .select("id, created_at, quality_score") \
-            .eq("user_id", user_id) \
-            .eq("biometric_type", "face") \
-            .order("created_at", desc=True) \
-            .limit(1) \
-            .execute()
-        
-        enrolled = bool(result.data)
-        
-        response_data = {
-            'enrolled': enrolled,
-            'user_id': user_id
-        }
-        
-        if enrolled:
-            biometric_data = result.data[0]
-            response_data.update({
-                'enrollment_date': biometric_data['created_at'],
-                'quality_score': biometric_data.get('quality_score', 0)
-            })
-        
-        return jsonify(response_data)
-        
-    except Exception as e:
-        logger.error(f"Error checking biometric enrollment: {e}")
-        return jsonify({
-            'enrolled': False,
-            'error': 'Failed to check enrollment status'
-        }), 500
-
-# ============= DEBUG ROUTES ENDPOINT =============
-@app.route('/api/debug/routes', methods=['GET'])
-@cross_origin()
-def debug_routes():
-    """Debug endpoint to check available routes"""
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append({
-            'endpoint': rule.endpoint,
-            'methods': list(rule.methods),
-            'rule': str(rule)
-        })
-    return jsonify({
-        'total_routes': len(routes),
-        'routes': routes,
-        'cors_enabled': True
-    })
 
 # ============= ERROR HANDLERS =============
 @app.errorhandler(404)
@@ -1196,17 +2179,19 @@ if __name__ == '__main__':
     print("=" * 60)
     print("🚀 MULTIMODAL BIOMETRIC AUTHENTICATION SYSTEM")
     print("=" * 60)
-    print("Step 1: User Credentials ✅")
-    print("Step 2: Liveness Detection ✅")
-    print("Step 3: Behavioral Patterns ✅")
-    print("Step 4: eKYC Verification ✅")
+    print("✅ Face Verification After Login")
+    print("✅ OTP Fallback for Failed Face Verification")
+    print("✅ Account Lockout Protection")
+    print("✅ Login Attempt Tracking")
+    print("✅ Enhanced OCR Processing")
+    print("✅ Real Email Sending")
     print("-" * 60)
     
     # Initialize detector
     print("Initializing liveness detector...")
     try:
         initialize_detector()
-        DETECTOR = LivenessDetector(supabase_manager)  # Fix: Initialize without arguments
+        DETECTOR = LivenessDetector(supabase_manager)
         logger.info("✅ Liveness detector initialized")
     except Exception as e:
         logger.error(f"⚠️ Could not initialize liveness detector: {e}")
@@ -1218,11 +2203,11 @@ if __name__ == '__main__':
     else:
         print("⚠️ Running in mock mode (no Supabase)")
     
-    # Register blueprints
-    register_blueprints()
-    
     print("-" * 60)
     print("📡 Server running on http://localhost:5000")
+    print("🔐 Rate limiting: 3 failed attempts = 15min lockout")
+    print("📧 OTP fallback: Available after 3 failed face attempts")
+    print("📧 Real email sending: Gmail SMTP + Supabase Auth")
     print("=" * 60)
     
     app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)

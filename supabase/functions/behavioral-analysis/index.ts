@@ -38,7 +38,7 @@ interface ScrollEvent {
 }
 
 class BehavioralAnalyzer {
-  private static readonly ANOMALY_THRESHOLD = 0.7
+  public static readonly ANOMALY_THRESHOLD = 0.7
   
   static extractKeystrokeFeatures(events: KeystrokeEvent[]): any {
     const features = {

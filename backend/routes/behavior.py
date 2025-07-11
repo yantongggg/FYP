@@ -383,7 +383,7 @@ class UnifiedBehavioralAnalyzer:
                 'created_at': datetime.utcnow().isoformat()
             }
             
-            self.supabase.table('anomaly_audits').insert(anomaly_data).execute()
+            self.supabase.table('anomaly_audit').insert(anomaly_data).execute()
             
         except Exception as e:
             logger.error(f"Failed to log anomaly: {e}")
@@ -525,7 +525,7 @@ def get_behavioral_analytics(user_id: str):
             .execute()
         
         # Get anomalies
-        anomalies_result = analyzer.supabase.table('anomaly_audits') \
+        anomalies_result = analyzer.supabase.table('anomaly_audit') \
             .select('*') \
             .eq('user_id', user_id) \
             .order('created_at', desc=True) \

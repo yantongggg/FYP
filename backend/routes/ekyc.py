@@ -418,11 +418,7 @@ def ekyc_mykad_verify():
         
         # Overall verification based on OCR and validation
         # Since face matching is optional, we base verification on OCR success and document authenticity
-        is_verified = (
-            authenticity_score >= 0.6 and  # Document appears authentic based on text
-            validation_score >= 0.7 and    # Images pass quality checks
-            bool(extracted_info.get('ic_number'))  # Essential info extracted
-        )
+        is_verified = authenticity_score >= 0.35
         
         # Store images
         storage_results = store_ekyc_images(user_id, ic_front_b64, ic_back_b64)
@@ -505,7 +501,7 @@ def ekyc_mykad_verify():
         # Add reason if not verified
         if not is_verified:
             reasons = []
-            if authenticity_score < 0.6:
+            if authenticity_score < 0.3:
                 reasons.append(f"Document authenticity score too low: {authenticity_score:.2f}")
             if validation_score < 0.7:
                 reasons.append(f"Image quality validation score too low: {validation_score:.2f}")

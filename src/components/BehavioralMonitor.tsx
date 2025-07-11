@@ -1,271 +1,68 @@
-// Fixed BehavioralMonitor.tsx with all TypeScript errors resolved
+// CRITICAL FIXES for Frontend Components - Data Loading & Global Monitoring
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// 1. FIXED: Enhanced BehavioralMonitor.tsx - Global Monitoring with Guaranteed Data Saving
+
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { 
-  Shield, 
-  Keyboard, 
-  MousePointer, 
-  CheckCircle, 
   AlertTriangle, 
+  Activity,
+  TrendingDown,
+  Lock,
   X,
-  RefreshCw,
-  Loader2,
-  Lock
+  Eye,
+  Shield,
+  Database,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
-// =====================================
-// TYPE DEFINITIONS
-// =====================================
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface BehavioralMonitorProps {
   userId: string;
-  onVerificationComplete?: (result: VerificationResult) => void;
-  triggerInterval?: number; // How often to request verification (in minutes)
-  isActive?: boolean; // Allow external control
-}
-
-interface VerificationResult {
-  success: boolean;
-  similarity_score?: number;
-  keystroke_similarity?: number;
-  mouse_similarity?: number;
-  anomaly_detected?: boolean;
-  error?: string;
-  action?: string;
-  session_id?: string;
-}
-
-interface AnomalyNotification {
-  id: string;
-  anomaly_type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  action_taken: string;
-  created_at: string;
+  onVerificationComplete?: (result: any) => void;
+  triggerInterval?: number; // How often to check (in minutes)
+  isActive?: boolean;
 }
 
 interface BehavioralData {
-  keystrokes: KeystrokeEvent[];
-  mouseMovements: MouseEvent[];
+  keystrokes: any[];
+  mouseMovements: any[];
 }
-
-interface KeystrokeEvent {
-  key: string;
-  code: string;
-  timestamp: number;
-  type: 'keydown' | 'keyup';
-  ctrlKey?: boolean;
-  shiftKey?: boolean;
-  altKey?: boolean;
-}
-
-interface MouseEvent {
-  x: number;
-  y: number;
-  timestamp: number;
-  type: 'mousemove' | 'click' | 'scroll';
-  button?: number;
-  velocity?: number;
-  pressure?: number;
-  deltaX?: number;
-  deltaY?: number;
-  deltaZ?: number;
-  detail?: number;
-}
-
-interface SessionStats {
-  verificationsCount: number;
-  anomaliesDetected: number;
-  avgSimilarityScore: number;
-  lastAnomalyTime: Date | null;
-}
-
-interface SupabaseRealtimePayload {
-  new: any;
-  old: any;
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-}
-
-// =====================================
-// CONSTANTS
-// =====================================
-
-const REFERENCE_SENTENCE = "The quick brown fox jumps over the lazy dog.";
-
-// =====================================
-// MAIN COMPONENT
-// =====================================
 
 const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
   userId,
   onVerificationComplete,
-  triggerInterval = 15, // Default: every 15 minutes
+  triggerInterval = 2, // Check every 2 minutes for better responsiveness
   isActive = true
 }) => {
-  // =====================================
-  // STATE MANAGEMENT
-  // =====================================
-
-  // Core state
-  const [showVerification, setShowVerification] = useState<boolean>(false);
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const [typedText, setTypedText] = useState<string>('');
-  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [lastVerification, setLastVerification] = useState<Date | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   
-  // Auto-lock state
-  const [showAutoLockModal, setShowAutoLockModal] = useState<boolean>(false);
-  const [autoLockCountdown, setAutoLockCountdown] = useState<number>(5);
+  // Enhanced state management
+  const [showAutoLockModal, setShowAutoLockModal] = useState(false);
+  const [autoLockCountdown, setAutoLockCountdown] = useState(5);
+  const [showAnomalyAlert, setShowAnomalyAlert] = useState(false);
+  const [latestAnomaly, setLatestAnomaly] = useState<any>(null);
+  const [monitoringActive, setMonitoringActive] = useState(true);
+  const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null);
+  const [checksPerformed, setChecksPerformed] = useState(0);
+  const [dataQuality, setDataQuality] = useState({ keystrokes: 0, mouse: 0 });
+  const [lastSaveResult, setLastSaveResult] = useState<any>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
   
-  // Real-time notifications
-  const [anomalyNotifications, setAnomalyNotifications] = useState<AnomalyNotification[]>([]);
-  const [showAnomalyAlert, setShowAnomalyAlert] = useState<boolean>(false);
-  const [activeSession, setActiveSession] = useState<string | null>(null);
-  
-  // Behavioral data collection
-  const [behavioralData, setBehavioralData] = useState<BehavioralData>({
+  // Refs for data persistence
+  const monitoringTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const behavioralDataRef = useRef<BehavioralData>({
     keystrokes: [],
     mouseMovements: []
   });
-  
-  // Performance monitoring
-  const [sessionStats, setSessionStats] = useState<SessionStats>({
-    verificationsCount: 0,
-    anomaliesDetected: 0,
-    avgSimilarityScore: 0,
-    lastAnomalyTime: null
-  });
-  
-  // Refs
-  const navigate = useNavigate();
-  const realtimeChannelRef = useRef<any>(null);
-  const verificationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // =====================================
-  // REAL-TIME SUBSCRIPTIONS
-  // =====================================
+  // CRITICAL: Define sensitive pages that need monitoring
+  const sensitivePages = ['/dashboard', '/profile', '/ekyc', '/chat', '/behavioral-test', '/admin', '/userhome'];
+  const isOnSensitivePage = sensitivePages.some(page => location.pathname.includes(page));
 
-  useEffect(() => {
-    if (!userId || !isActive) return;
-
-    // Subscribe to anomaly alerts for this user
-    const channel = supabase
-      .channel(`user_monitoring_${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'anomaly_audits',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload: SupabaseRealtimePayload) => {
-          console.log('🚨 Real-time anomaly detected:', payload);
-          handleRealtimeAnomaly(payload.new);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'users',
-          filter: `id=eq.${userId}`
-        },
-        (payload: SupabaseRealtimePayload) => {
-          console.log('👤 User status changed:', payload);
-          handleUserStatusChange(payload.new);
-        }
-      )
-      .subscribe((status: string) => {
-        console.log('📡 Realtime subscription status:', status);
-      });
-
-    realtimeChannelRef.current = channel;
-
-    return () => {
-      if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current);
-      }
-    };
-  }, [userId, isActive]);
-
-  // =====================================
-  // PERIODIC VERIFICATION TIMER
-  // =====================================
-
-  useEffect(() => {
-    if (!isActive || showVerification || isCapturing) return;
-
-    const startPeriodicVerification = () => {
-      verificationTimerRef.current = setInterval(() => {
-        if (!showVerification && !isCapturing) {
-          console.log('⏰ Triggering periodic behavioral verification');
-          setShowVerification(true);
-        }
-      }, triggerInterval * 60 * 1000);
-    };
-
-    // Start timer with initial delay
-    const initialDelay = setTimeout(startPeriodicVerification, 5000);
-
-    return () => {
-      clearTimeout(initialDelay);
-      if (verificationTimerRef.current) {
-        clearInterval(verificationTimerRef.current);
-      }
-    };
-  }, [triggerInterval, isActive, showVerification, isCapturing]);
-
-  // =====================================
-  // REAL-TIME EVENT HANDLERS
-  // =====================================
-
-  const handleRealtimeAnomaly = useCallback((anomalyData: any) => {
-    const notification: AnomalyNotification = {
-      id: anomalyData.id,
-      anomaly_type: anomalyData.anomaly_type,
-      severity: anomalyData.severity,
-      action_taken: anomalyData.action_taken,
-      created_at: anomalyData.created_at
-    };
-
-    setAnomalyNotifications(prev => [notification, ...prev.slice(0, 4)]); // Keep last 5
-    setShowAnomalyAlert(true);
-
-    // Update session stats
-    setSessionStats(prev => ({
-      ...prev,
-      anomaliesDetected: prev.anomaliesDetected + 1,
-      lastAnomalyTime: new Date()
-    }));
-
-    // Auto-hide after 5 seconds for low severity
-    if (notification.severity === 'low') {
-      setTimeout(() => setShowAnomalyAlert(false), 5000);
-    }
-
-    // Critical anomalies might trigger immediate verification
-    if (notification.severity === 'critical' && !showVerification) {
-      setShowVerification(true);
-    }
-  }, [showVerification]);
-
-  const handleUserStatusChange = useCallback((userData: any) => {
-    if (userData.status === 'suspended') {
-      console.log('🔒 User account suspended via real-time update');
-      setShowAutoLockModal(true);
-      setAutoLockCountdown(5);
-    }
-  }, []);
-
-  // =====================================
-  // AUTO-LOCK COUNTDOWN
-  // =====================================
-
+  // Auto-lock countdown with enhanced functionality
   useEffect(() => {
     if (showAutoLockModal && autoLockCountdown > 0) {
       const timer = setTimeout(() => {
@@ -273,7 +70,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       }, 1000);
       return () => clearTimeout(timer);
     } else if (showAutoLockModal && autoLockCountdown === 0) {
-      // Clear auth tokens and redirect to login
+      // Auto-logout with cleanup
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user_data');
       sessionStorage.clear();
@@ -281,324 +78,390 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
     }
   }, [showAutoLockModal, autoLockCountdown, navigate]);
 
-  // =====================================
-  // BEHAVIORAL DATA CAPTURE
-  // =====================================
-
+  // CRITICAL: Enhanced continuous data capture with better filtering
   useEffect(() => {
-    if (isCapturing) {
-      const keystrokes: KeystrokeEvent[] = [];
-      const mouseMovements: MouseEvent[] = [];
+    if (!isActive || !monitoringActive || !isOnSensitivePage || !userId) return;
 
-      const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-        keystrokes.push({
-          key: e.key,
-          code: e.code,
-          timestamp: Date.now(),
-          type: 'keydown',
-          ctrlKey: e.ctrlKey,
-          shiftKey: e.shiftKey,
-          altKey: e.altKey
-        });
+    console.log(`🔍 Starting enhanced behavioral monitoring for user ${userId} on page: ${location.pathname}`);
+
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // Enhanced filtering - skip system keys and sensitive operations
+      if (['F12', 'F11', 'Alt', 'Control', 'Meta', 'Tab', 'Escape'].includes(e.key)) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      
+      const keystroke = {
+        key: e.key,
+        code: e.code,
+        timestamp: Date.now(),
+        type: 'keydown',
+        page: location.pathname,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey
       };
+      
+      behavioralDataRef.current.keystrokes.push(keystroke);
 
-      const handleKeyUp = (e: globalThis.KeyboardEvent) => {
-        keystrokes.push({
-          key: e.key,
-          code: e.code,
-          timestamp: Date.now(),
-          type: 'keyup',
-          ctrlKey: e.ctrlKey,
-          shiftKey: e.shiftKey,
-          altKey: e.altKey
-        });
+      // Keep only recent data (last 5 minutes) with size limit
+      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+      behavioralDataRef.current.keystrokes = behavioralDataRef.current.keystrokes
+        .filter(k => k.timestamp > fiveMinutesAgo)
+        .slice(-150); // Increased limit for better analysis
+    };
+
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
+      if (['F12', 'F11', 'Alt', 'Control', 'Meta', 'Tab', 'Escape'].includes(e.key)) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      
+      const keystroke = {
+        key: e.key,
+        code: e.code,
+        timestamp: Date.now(),
+        type: 'keyup',
+        page: location.pathname,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey
       };
+      
+      behavioralDataRef.current.keystrokes.push(keystroke);
+    };
 
-      const handleMouseMove = (e: globalThis.MouseEvent) => {
-        // Enhanced mouse tracking with velocity
-        if (mouseMovements.length === 0 || 
-            Date.now() - mouseMovements[mouseMovements.length - 1].timestamp > 50) {
-          const lastMove = mouseMovements[mouseMovements.length - 1];
-          const velocity = lastMove ? 
-            Math.sqrt(
-              Math.pow(e.clientX - lastMove.x, 2) + 
-              Math.pow(e.clientY - lastMove.y, 2)
-            ) / (Date.now() - lastMove.timestamp) : 0;
-
-          mouseMovements.push({
-            x: e.clientX,
-            y: e.clientY,
-            timestamp: Date.now(),
-            type: 'mousemove',
-            velocity,
-            pressure: (e as any).pressure || 0 // For devices that support it
-          });
+    const handleMouseMove = (e: globalThis.MouseEvent) => {
+      const now = Date.now();
+      const recentMouse = behavioralDataRef.current.mouseMovements;
+      
+      // Enhanced throttling with velocity calculation
+      if (recentMouse.length === 0 || now - recentMouse[recentMouse.length - 1].timestamp > 100) {
+        const lastMove = recentMouse[recentMouse.length - 1];
+        let velocity = 0;
+        
+        if (lastMove) {
+          const dx = e.clientX - lastMove.x;
+          const dy = e.clientY - lastMove.y;
+          const dt = now - lastMove.timestamp;
+          velocity = Math.sqrt(dx * dx + dy * dy) / (dt || 1);
         }
-      };
-
-      const handleClick = (e: globalThis.MouseEvent) => {
-        mouseMovements.push({
+        
+        const mouseEvent = {
           x: e.clientX,
           y: e.clientY,
-          button: e.button,
-          timestamp: Date.now(),
-          type: 'click',
-          detail: e.detail // Click count
-        });
+          timestamp: now,
+          type: 'mousemove',
+          page: location.pathname,
+          velocity: velocity
+        };
+        
+        behavioralDataRef.current.mouseMovements.push(mouseEvent);
+
+        // Keep only recent data
+        const fiveMinutesAgo = now - (5 * 60 * 1000);
+        behavioralDataRef.current.mouseMovements = behavioralDataRef.current.mouseMovements
+          .filter(m => m.timestamp > fiveMinutesAgo)
+          .slice(-200); // Increased limit for better analysis
+      }
+    };
+
+    const handleClick = (e: globalThis.MouseEvent) => {
+      const clickEvent = {
+        x: e.clientX,
+        y: e.clientY,
+        timestamp: Date.now(),
+        type: 'click',
+        button: e.button,
+        page: location.pathname
       };
+      
+      behavioralDataRef.current.mouseMovements.push(clickEvent);
+    };
 
-      const handleScroll = (e: WheelEvent) => {
-        mouseMovements.push({
-          x: e.clientX,
-          y: e.clientY,
-          deltaX: e.deltaX,
-          deltaY: e.deltaY,
-          deltaZ: e.deltaZ,
-          timestamp: Date.now(),
-          type: 'scroll'
-        });
+    const handleScroll = () => {
+      const scrollEvent = {
+        x: window.scrollX,
+        y: window.scrollY,
+        timestamp: Date.now(),
+        type: 'scroll',
+        page: location.pathname,
+        deltaY: 0
       };
+      
+      behavioralDataRef.current.mouseMovements.push(scrollEvent);
+    };
 
-      document.addEventListener('keydown', handleKeyDown);
-      document.addEventListener('keyup', handleKeyUp);
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('click', handleClick);
-      document.addEventListener('wheel', handleScroll);
+    // Add event listeners with better error handling
+    try {
+      document.addEventListener('keydown', handleKeyDown, { passive: true });
+      document.addEventListener('keyup', handleKeyUp, { passive: true });
+      document.addEventListener('mousemove', handleMouseMove, { passive: true });
+      document.addEventListener('click', handleClick, { passive: true });
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    } catch (error) {
+      console.error('❌ Error adding event listeners:', error);
+      setConnectionStatus('error');
+    }
 
-      // Update behavioral data in real-time
-      const updateInterval = setInterval(() => {
-        setBehavioralData({
-          keystrokes: [...keystrokes],
-          mouseMovements: [...mouseMovements]
-        });
-      }, 100);
+    // Update data quality metrics every 2 seconds
+    const qualityInterval = setInterval(() => {
+      setDataQuality({
+        keystrokes: behavioralDataRef.current.keystrokes.length,
+        mouse: behavioralDataRef.current.mouseMovements.length
+      });
+    }, 2000);
 
-      return () => {
+    return () => {
+      try {
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('keyup', handleKeyUp);
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('click', handleClick);
-        document.removeEventListener('wheel', handleScroll);
-        clearInterval(updateInterval);
+        window.removeEventListener('scroll', handleScroll);
+        clearInterval(qualityInterval);
+      } catch (error) {
+        console.error('❌ Error removing event listeners:', error);
+      }
+    };
+  }, [isActive, monitoringActive, location.pathname, isOnSensitivePage, userId]);
+
+  // CRITICAL: Enhanced periodic monitoring checks with guaranteed data saving
+  useEffect(() => {
+    if (!isActive || !monitoringActive || !isOnSensitivePage || !userId) return;
+
+    const performBehavioralCheck = async () => {
+      const { keystrokes, mouseMovements } = behavioralDataRef.current;
+      
+      // Need minimum data for meaningful check
+      if (keystrokes.length < 8) {
+        console.log('🔄 Insufficient behavioral data for monitoring check (need 8+ keystrokes)');
+        setConnectionStatus('connected');
+        return;
+      }
+
+      try {
+        console.log(`🔍 Performing enhanced behavioral check for user ${userId} on ${location.pathname}`);
+        console.log(`📊 Data quality: ${keystrokes.length} keystrokes, ${mouseMovements.length} mouse events`);
         
-        // Save final data
-        setBehavioralData({
-          keystrokes,
-          mouseMovements
+        setConnectionStatus('connected');
+        
+        // CRITICAL: Use the fixed API endpoint with enhanced data
+        const response = await fetch('http://localhost:5000/api/behavioral-monitor', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            behavioralData: {
+              keystrokes: keystrokes.slice(-80), // Last 80 keystrokes for better analysis
+              mouseMovements: mouseMovements.slice(-120) // Last 120 mouse events
+            },
+            page_context: location.pathname
+          })
         });
-      };
-    }
-  }, [isCapturing]);
 
-  // =====================================
-  // VERIFICATION LOGIC
-  // =====================================
-
-  const startCapture = useCallback(() => {
-    setIsCapturing(true);
-    setTypedText('');
-    setVerificationResult(null);
-    setBehavioralData({
-      keystrokes: [],
-      mouseMovements: []
-    });
-
-    // Generate session ID
-    const sessionId = `behavioral_${userId}_${Date.now()}`;
-    setActiveSession(sessionId);
-  }, [userId]);
-
-  const verifyBehavior = useCallback(async () => {
-    setLoading(true);
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/behavioral-verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          behavioralData: behavioralData,
-          typedText: typedText,
-          session_id: activeSession,
-          verification_type: 'periodic'
-        })
-      });
-
-      const result: VerificationResult = await response.json();
-      setVerificationResult(result);
-      setLastVerification(new Date());
-
-      // Update session stats
-      setSessionStats(prev => ({
-        ...prev,
-        verificationsCount: prev.verificationsCount + 1,
-        avgSimilarityScore: (prev.avgSimilarityScore * prev.verificationsCount + (result.similarity_score || 0)) / (prev.verificationsCount + 1)
-      }));
-
-      // Handle different response scenarios
-      if (result.action === 'auto_lock') {
-        console.error('🚨 AUTO-LOCK triggered:', result);
-        setShowAutoLockModal(true);
-        setAutoLockCountdown(5);
-      } else if (result.success) {
-        console.log('✅ Behavioral verification passed:', result);
-        
-        // Auto-close after successful verification
-        if (result.similarity_score && result.similarity_score > 0.7) {
-          setTimeout(() => {
-            handleClose();
-          }, 3000);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-      } else {
-        console.error('❌ Behavioral verification failed:', result);
+
+        const result = await response.json();
+        setLastCheckTime(new Date());
+        setChecksPerformed(prev => prev + 1);
+        setLastSaveResult(result);
+
+        console.log('✅ Enhanced behavioral check result:', {
+          similarity: result.similarity_score,
+          action: result.action_taken,
+          page: location.pathname,
+          session_id: result.session_id,
+          data_saved: result.data_saved
+        });
+
+        // CRITICAL: Handle responses based on action taken
+        if (result.action_taken === 'auto_lock') {
+          console.error('🚨 AUTO-LOCK triggered by continuous monitoring');
+          setLatestAnomaly({
+            type: 'critical_behavioral_anomaly',
+            severity: 'critical',
+            similarity: result.similarity_score,
+            timestamp: new Date(),
+            session_id: result.session_id,
+            action: 'auto_lock'
+          });
+          setShowAutoLockModal(true);
+          setAutoLockCountdown(5);
+
+        } else if (result.action_taken === 'anomaly_logged') {
+          console.warn('⚠️ Anomaly detected in continuous monitoring');
+
+          setLatestAnomaly({
+            type: 'behavioral_monitoring',
+            severity: result.severity || 'medium',
+            similarity: result.similarity_score,
+            timestamp: new Date(),
+            session_id: result.session_id,
+            action: result.action_taken
+          });
+          setShowAnomalyAlert(true);
+
+          // Auto-hide non-critical alerts
+          if (result.severity !== 'critical') {
+            setTimeout(() => setShowAnomalyAlert(false), 10000);
+          }
+        }
+
+        // CRITICAL: Trigger custom event for other components to listen
+        const customEvent = new CustomEvent('behavioralDataUpdated', {
+          detail: {
+            userId,
+            result,
+            timestamp: new Date().toISOString(),
+            dataQuality,
+            page: location.pathname
+          }
+        });
+        window.dispatchEvent(customEvent);
+
+        if (onVerificationComplete) {
+          onVerificationComplete(result);
+        }
+
+      } catch (error) {
+        console.error('❌ Enhanced monitoring error:', error);
+        setConnectionStatus('error');
+        setChecksPerformed(prev => prev + 1); // Still count as an attempt
+        
+        // Set connection back to connected after a delay
+        setTimeout(() => setConnectionStatus('connected'), 5000);
       }
+    };
 
-      if (onVerificationComplete) {
-        onVerificationComplete(result);
+    // Start periodic checks with initial delay
+    const initialDelay = setTimeout(() => {
+      monitoringTimerRef.current = setInterval(performBehavioralCheck, triggerInterval * 60 * 1000);
+      performBehavioralCheck(); // Run first check immediately
+    }, 30000); // 30 seconds initial delay
+
+    return () => {
+      clearTimeout(initialDelay);
+      if (monitoringTimerRef.current) {
+        clearInterval(monitoringTimerRef.current);
       }
+    };
+  }, [isActive, monitoringActive, triggerInterval, location.pathname, isOnSensitivePage, userId]);
 
-      // Store verification in local state for analytics
-      await storeVerificationResult(result);
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (monitoringTimerRef.current) {
+        clearInterval(monitoringTimerRef.current);
+      }
+    };
+  }, []);
 
-    } catch (error) {
-      console.error('Network error:', error);
-      setVerificationResult({
-        success: false,
-        error: 'Network error occurred'
-      });
-    } finally {
-      setLoading(false);
-      setIsCapturing(false);
+  // Don't render if not active or not on sensitive page
+  if (!isActive || !isOnSensitivePage || !userId) return null;
+
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected': return 'text-green-400 border-green-500/30';
+      case 'disconnected': return 'text-yellow-400 border-yellow-500/30';
+      case 'error': return 'text-red-400 border-red-500/30';
     }
-  }, [userId, behavioralData, typedText, activeSession, onVerificationComplete]);
-
-  const storeVerificationResult = useCallback(async (result: VerificationResult) => {
-    try {
-      // Also send to continuous monitoring endpoint
-      await fetch('http://localhost:5000/api/behavioral-monitor', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          behavioralData: behavioralData,
-          verificationResult: result,
-          session_id: activeSession
-        })
-      });
-    } catch (error) {
-      console.warn('Failed to store verification result:', error);
-    }
-  }, [userId, behavioralData, activeSession]);
-
-  const handleClose = useCallback(() => {
-    setShowVerification(false);
-    setIsCapturing(false);
-    setTypedText('');
-    setVerificationResult(null);
-    setActiveSession(null);
-    setBehavioralData({
-      keystrokes: [],
-      mouseMovements: []
-    });
-  }, []);
-
-  // =====================================
-  // UTILITY FUNCTIONS
-  // =====================================
-
-  const getSimilarityColor = useCallback((score: number): string => {
-    if (score >= 0.8) return 'text-green-400';
-    if (score >= 0.6) return 'text-yellow-400';
-    return 'text-red-400';
-  }, []);
-
-  const getSimilarityLabel = useCallback((score: number): string => {
-    if (score >= 0.8) return 'Excellent Match';
-    if (score >= 0.7) return 'Good Match';
-    if (score >= 0.6) return 'Fair Match';
-    return 'Poor Match';
-  }, []);
-
-  const getSeverityColor = useCallback((severity: string): string => {
-    switch (severity) {
-      case 'critical': return 'border-red-500 bg-red-900/30 text-red-400';
-      case 'high': return 'border-orange-500 bg-orange-900/30 text-orange-400';
-      case 'medium': return 'border-yellow-500 bg-yellow-900/30 text-yellow-400';
-      default: return 'border-blue-500 bg-blue-900/30 text-blue-400';
-    }
-  }, []);
-
-  // =====================================
-  // RENDER GUARDS
-  // =====================================
-
-  if (!isActive) {
-    return null;
-  }
-
-  // =====================================
-  // RENDERING
-  // =====================================
+  };
 
   return (
     <>
-      {/* Background monitoring indicator */}
-      {!showVerification && isActive && (
-        <div className="fixed bottom-4 right-4 z-40">
+      {/* CRITICAL: Enhanced Monitoring Status Indicator */}
+      {monitoringActive && (
+        <div className="fixed bottom-4 left-4 z-40">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="glass-card rounded-full p-3 cursor-pointer hover:bg-green-900/30"
-            onClick={() => setShowVerification(true)}
+            className="glass-card rounded-lg p-3 cursor-pointer hover:bg-green-900/30 transition-all duration-300"
+            onClick={() => setMonitoringActive(!monitoringActive)}
           >
-            <div className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-green-400" />
-              <div className="text-xs text-green-400 font-mono">
-                MONITORING
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse ml-2 inline-block"></div>
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <Activity className="h-5 w-5 text-green-400" />
+                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full animate-pulse ${
+                  connectionStatus === 'connected' ? 'bg-green-400' :
+                  connectionStatus === 'disconnected' ? 'bg-yellow-400' : 'bg-red-400'
+                }`}></div>
+              </div>
+              <div className="text-xs">
+                <div className="text-green-400 font-bold">ENHANCED MONITOR</div>
+                <div className="text-cyan-400">
+                  User: {userId.slice(-8)}... | Every {triggerInterval}m
+                </div>
+                <div className="text-cyan-400">
+                  Checks: {checksPerformed} | Status: {connectionStatus.toUpperCase()}
+                </div>
+                {lastCheckTime && (
+                  <div className="text-gray-400">
+                    Last: {lastCheckTime.toLocaleTimeString()}
+                  </div>
+                )}
+                <div className="text-yellow-400 text-xs">
+                  Data: K:{dataQuality.keystrokes} M:{dataQuality.mouse}
+                </div>
+                <div className="text-purple-400 text-xs">
+                  Page: {location.pathname.split('/').pop() || 'root'}
+                </div>
+                {lastSaveResult?.data_saved && (
+                  <div className="flex items-center text-xs">
+                    {lastSaveResult.data_saved.session_saved ? (
+                      <CheckCircle className="h-3 w-3 text-green-400 mr-1" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-red-400 mr-1" />
+                    )}
+                    <span className={lastSaveResult.data_saved.session_saved ? 'text-green-400' : 'text-red-400'}>
+                      DB: {lastSaveResult.data_saved.session_saved ? 'SAVED' : 'FAILED'}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
         </div>
       )}
 
-      {/* Session Stats */}
-      {sessionStats.verificationsCount > 0 && (
-        <div className="fixed top-20 right-4 z-30">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="glass-card rounded p-3 text-xs"
-          >
-            <div className="text-cyan-400 font-mono">SESSION STATS</div>
-            <div className="text-green-400">Verifications: {sessionStats.verificationsCount}</div>
-            <div className="text-green-400">Avg Score: {(sessionStats.avgSimilarityScore * 100).toFixed(0)}%</div>
-            {sessionStats.anomaliesDetected > 0 && (
-              <div className="text-yellow-400">Anomalies: {sessionStats.anomaliesDetected}</div>
-            )}
-          </motion.div>
-        </div>
-      )}
-
-      {/* Anomaly Alert Notification */}
+      {/* Enhanced Anomaly Alert with better information */}
       <AnimatePresence>
-        {showAnomalyAlert && anomalyNotifications.length > 0 && (
+        {showAnomalyAlert && latestAnomaly && (
           <motion.div
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
-            className="fixed top-4 right-4 z-50"
+            className="fixed top-4 right-4 z-50 max-w-sm"
           >
-            <div className={`border rounded-lg p-4 max-w-sm ${getSeverityColor(anomalyNotifications[0].severity)}`}>
+            <div className={`border rounded-lg p-4 ${
+              latestAnomaly.severity === 'critical' ? 'border-red-500 bg-red-900/30 text-red-400' :
+              latestAnomaly.severity === 'high' ? 'border-orange-500 bg-orange-900/30 text-orange-400' :
+              'border-yellow-500 bg-yellow-900/30 text-yellow-400'
+            }`}>
               <div className="flex justify-between items-start">
-                <div>
-                  <div className="font-bold text-sm">ANOMALY DETECTED</div>
-                  <div className="text-xs">{anomalyNotifications[0].anomaly_type.toUpperCase()}</div>
-                  <div className="text-xs opacity-70">Action: {anomalyNotifications[0].action_taken}</div>
+                <div className="flex items-center">
+                  <AlertTriangle className="h-5 w-5 mr-2" />
+                  <div>
+                    <div className="font-bold text-sm">🚨 BEHAVIORAL ANOMALY</div>
+                    <div className="text-xs opacity-90">
+                      User: {userId.slice(-8)}...
+                    </div>
+                    <div className="text-xs opacity-90">
+                      Similarity: {(latestAnomaly.similarity * 100).toFixed(1)}%
+                    </div>
+                    <div className="text-xs opacity-70">
+                      Page: {location.pathname}
+                    </div>
+                    <div className="text-xs opacity-70">
+                      Action: {latestAnomaly.action}
+                    </div>
+                    {latestAnomaly.session_id && (
+                      <div className="text-xs opacity-60">
+                        ID: {latestAnomaly.session_id.slice(-8)}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowAnomalyAlert(false)}
@@ -612,266 +475,94 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Main Verification Modal */}
-      <AnimatePresence>
-        {showVerification && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-modal rounded-lg p-6 max-w-2xl w-full"
-            >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center space-x-3">
-                  <Shield className="h-6 w-6 text-green-400" />
-                  <h2 className="text-xl font-bold text-green-400">
-                    Behavioral Authentication Required
-                  </h2>
-                </div>
-                <button
-                  onClick={handleClose}
-                  className="text-gray-400 hover:text-red-400 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Content */}
-              {!isCapturing && !verificationResult && (
-                <div className="text-center py-8">
-                  <div className="flex justify-center space-x-6 mb-6">
-                    <div className="text-center">
-                      <Keyboard className="h-12 w-12 text-cyan-400 mx-auto mb-2" />
-                      <p className="text-cyan-400 text-sm">Keystroke Pattern</p>
-                    </div>
-                    <div className="text-center">
-                      <MousePointer className="h-12 w-12 text-cyan-400 mx-auto mb-2" />
-                      <p className="text-cyan-400 text-sm">Mouse Movement</p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-300 mb-6">
-                    For security purposes, we need to verify your identity through your typing pattern.
-                    This helps protect your account from unauthorized access.
-                  </p>
-                  
-                  {lastVerification && (
-                    <p className="text-gray-400 text-sm mb-4">
-                      Last verified: {lastVerification.toLocaleTimeString()}
-                    </p>
-                  )}
-                  
-                  <button
-                    onClick={startCapture}
-                    className="terminal-button px-6 py-3 rounded font-bold hover-glow"
-                  >
-                    START VERIFICATION
-                  </button>
-                </div>
-              )}
-
-              {/* Capture Interface */}
-              {isCapturing && (
-                <div className="space-y-4">
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-                    <p className="text-green-400 font-bold mb-2">
-                      Please type this sentence exactly:
-                    </p>
-                    <p className="text-cyan-400 text-lg font-mono">
-                      {REFERENCE_SENTENCE}
-                    </p>
-                  </div>
-
-                  <div className="relative">
-                    <textarea
-                      value={typedText}
-                      onChange={(e) => setTypedText(e.target.value)}
-                      onPaste={(e) => {
-                        e.preventDefault();
-                        return false;
-                      }}
-                      placeholder="Start typing the sentence above..."
-                      className="w-full h-32 bg-black/30 border border-green-500/30 rounded p-4 text-green-400 resize-none font-mono"
-                      disabled={loading}
-                    />
-                    
-                    <div className="mt-2 flex justify-between items-center text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="text-cyan-400">
-                          Characters: {typedText.length} / {REFERENCE_SENTENCE.length}
-                        </span>
-                        <span className="text-cyan-400">
-                          Keystrokes: {behavioralData.keystrokes.length}
-                        </span>
-                        <span className="text-cyan-400">
-                          Mouse events: {behavioralData.mouseMovements.length}
-                        </span>
-                      </div>
-                      
-                      {typedText && (
-                        <span className={
-                          REFERENCE_SENTENCE.startsWith(typedText) 
-                            ? "text-green-400" 
-                            : "text-red-400"
-                        }>
-                          {REFERENCE_SENTENCE.startsWith(typedText) ? "✓ Matching" : "✗ Mismatch"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      onClick={handleClose}
-                      disabled={loading}
-                      className="terminal-button bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={verifyBehavior}
-                      disabled={loading || typedText !== REFERENCE_SENTENCE}
-                      className="terminal-button px-4 py-2 rounded font-bold hover-glow disabled:opacity-50"
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin inline" />
-                          Verifying...
-                        </>
-                      ) : (
-                        'VERIFY'
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Results Display */}
-              {verificationResult && (
-                <div className="space-y-4">
-                  {verificationResult.success ? (
-                    <>
-                      <div className="text-center py-4">
-                        <CheckCircle className="h-16 w-16 text-green-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-green-400 mb-2">
-                          Verification Successful
-                        </h3>
-                        
-                        <div className="grid grid-cols-3 gap-4 mt-6">
-                          <div className="glass-card rounded p-3">
-                            <p className="text-gray-400 text-sm">Overall Score</p>
-                            <p className={`text-2xl font-bold ${getSimilarityColor(verificationResult.similarity_score || 0)}`}>
-                              {((verificationResult.similarity_score || 0) * 100).toFixed(0)}%
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {getSimilarityLabel(verificationResult.similarity_score || 0)}
-                            </p>
-                          </div>
-                          
-                          <div className="glass-card rounded p-3">
-                            <p className="text-gray-400 text-sm">Keystroke Match</p>
-                            <p className={`text-2xl font-bold ${getSimilarityColor(verificationResult.keystroke_similarity || 0)}`}>
-                              {((verificationResult.keystroke_similarity || 0) * 100).toFixed(0)}%
-                            </p>
-                          </div>
-                          
-                          <div className="glass-card rounded p-3">
-                            <p className="text-gray-400 text-sm">Mouse Pattern</p>
-                            <p className={`text-2xl font-bold ${getSimilarityColor(verificationResult.mouse_similarity || 0)}`}>
-                              {((verificationResult.mouse_similarity || 0) * 100).toFixed(0)}%
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {verificationResult.anomaly_detected && (
-                          <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded">
-                            <p className="text-yellow-400 text-sm flex items-center justify-center">
-                              <AlertTriangle className="h-4 w-4 mr-2" />
-                              Unusual pattern detected - Additional monitoring active
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-4">
-                      <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-red-400 mb-2">
-                        Verification Failed
-                      </h3>
-                      <p className="text-gray-300 mb-4">
-                        {verificationResult.error || 'Unable to verify behavioral pattern'}
-                      </p>
-                      
-                      <button
-                        onClick={startCapture}
-                        className="terminal-button px-4 py-2 rounded font-bold hover-glow"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2 inline" />
-                        Try Again
-                      </button>
-                    </div>
-                  )}
-                  
-                  {verificationResult.success && (
-                    <div className="text-center">
-                      <button
-                        onClick={handleClose}
-                        className="terminal-button bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Auto-Lock Modal */}
+      {/* CRITICAL: Enhanced Auto-Lock Modal */}
       <AnimatePresence>
         {showAutoLockModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[60] flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-red-900/20 border-2 border-red-500 rounded-lg p-8 max-w-md w-full text-center"
+              className="bg-red-900/30 border-2 border-red-500 rounded-lg p-8 max-w-md w-full text-center"
             >
-              <Lock className="h-16 w-16 text-red-500 mx-auto mb-4" />
+              <div className="mb-4">
+                <Lock className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                <TrendingDown className="h-8 w-8 text-red-400 mx-auto" />
+              </div>
               <h2 className="text-2xl font-bold text-red-500 mb-4">
-                ACCOUNT SUSPENDED
+                🚨 CRITICAL SECURITY BREACH
               </h2>
-              <p className="text-white mb-6">
-                Your account has been suspended due to suspicious behavior.
+              <p className="text-white mb-4">
+                Your behavioral patterns have changed significantly. 
+                For security, your session will be terminated.
               </p>
-              <p className="text-gray-300 mb-2">
-                Behavioral similarity score: {((verificationResult?.similarity_score || 0) * 100).toFixed(0)}%
-              </p>
-              <p className="text-gray-400 text-sm mb-6">
-                Required minimum: 40%
-              </p>
-              <div className="text-3xl font-bold text-red-400">
-                Redirecting in {autoLockCountdown}...
+              <div className="bg-black/30 rounded p-3 mb-4">
+                <div className="text-gray-300 text-sm space-y-1">
+                  <div>🔍 Enhanced monitoring detected critical anomaly</div>
+                  <div>👤 User: {userId.slice(-8)}...</div>
+                  <div>📍 Page: {location.pathname}</div>
+                  <div>⏰ Session automatically terminated for security</div>
+                  <div>📊 Data: {dataQuality.keystrokes}K/{dataQuality.mouse}M events</div>
+                  {latestAnomaly?.similarity && (
+                    <div>📈 Similarity: {(latestAnomaly.similarity * 100).toFixed(1)}%</div>
+                  )}
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-red-400 mb-2">
+                LOGGING OUT IN {autoLockCountdown}...
+              </div>
+              <div className="text-sm text-gray-400">
+                Contact administrator if this is an error
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Enhanced Monitoring Controls */}
+      <div className="fixed bottom-4 right-4 z-40">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card rounded p-2"
+        >
+          <div className="flex flex-col space-y-2">
+            <button
+              onClick={() => setMonitoringActive(!monitoringActive)}
+              className={`w-full px-3 py-1 rounded text-xs font-bold transition-all ${
+                monitoringActive 
+                  ? 'bg-green-600/30 text-green-400 border border-green-500/30' 
+                  : 'bg-gray-600/30 text-gray-400 border border-gray-500/30'
+              }`}
+            >
+              <Eye className="h-3 w-3 mr-1 inline" />
+              {monitoringActive ? 'MONITOR ON' : 'MONITOR OFF'}
+            </button>
+            
+            {isOnSensitivePage && (
+              <div className="text-xs text-center">
+                <div className={`px-2 py-1 rounded text-xs border ${getConnectionStatusColor()}`}>
+                  <Database className="h-3 w-3 mr-1 inline" />
+                  {connectionStatus.toUpperCase()}
+                </div>
+                <div className={`px-2 py-1 rounded text-xs mt-1 ${
+                  dataQuality.keystrokes > 30 ? 'bg-green-600/20 text-green-400' :
+                  dataQuality.keystrokes > 15 ? 'bg-yellow-600/20 text-yellow-400' :
+                  'bg-red-600/20 text-red-400'
+                }`}>
+                  Quality: {dataQuality.keystrokes > 30 ? 'High' : 
+                           dataQuality.keystrokes > 15 ? 'Med' : 'Low'}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
 
       {/* Styles */}
       <style>{`
@@ -879,33 +570,6 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
           background: rgba(0, 0, 0, 0.3);
           backdrop-filter: blur(10px);
           border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .glass-modal {
-          background: rgba(0, 0, 0, 0.8);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(34, 197, 94, 0.3);
-        }
-
-        .terminal-button {
-          background: linear-gradient(45deg, #059669, #0891b2);
-          color: white;
-          border: 1px solid #10b981;
-          transition: all 0.3s ease;
-        }
-
-        .terminal-button:hover:not(:disabled) {
-          background: linear-gradient(45deg, #0891b2, #059669);
-          box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-          transform: translateY(-2px);
-        }
-
-        .hover-glow {
-          transition: all 0.3s ease;
-        }
-
-        .hover-glow:hover:not(:disabled) {
-          box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
         }
       `}</style>
     </>

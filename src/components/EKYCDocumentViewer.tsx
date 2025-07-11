@@ -100,7 +100,7 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
 
         {frontDoc?.extracted_info && (
           <>
-        <div className="mt-4 p-4 bg-black/30 rounded">
+        {/* <div className="mt-4 p-4 bg-black/30 rounded">
           <h4 className="text-sm font-bold text-green-400 mb-3">EXTRACTED_INFORMATION</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm font-mono text-cyan-400">
             <div>
@@ -114,7 +114,7 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
               <p><span className="text-gray-400">DATE OF BIRTH:</span> {frontDoc.extracted_info?.date_of_birth || 'N/A'}</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
           </>
         )}
