@@ -1,5 +1,4 @@
-// Enhanced UserHome.tsx with Fixed Data Loading and Real-time Updates
-
+// UserHome.tsx with Fixed Data Loading and Real-time Updates
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
@@ -26,7 +25,9 @@ import {
   Database,
   XCircle,
   Wifi,
-  WifiOff
+  WifiOff,
+  Bell,
+  Info
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import EKYCDocumentViewer from '../components/EKYCDocumentViewer';
@@ -134,6 +135,20 @@ interface DataLoadingState {
   biometric: 'loading' | 'loaded' | 'error';
 }
 
+interface RealTimeStats {
+  isMonitoring: boolean;
+  currentSessionData: {
+    keystrokes: number;
+    mouseEvents: number;
+    duration: number;
+  };
+  lastVerificationResult?: {
+    similarity: number;
+    timestamp: Date;
+    anomaly: boolean;
+  };
+}
+
 const UserHome: React.FC = () => {
   const { userData } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
@@ -148,6 +163,10 @@ const UserHome: React.FC = () => {
   });
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'error'>('online');
   const [lastDataUpdate, setLastDataUpdate] = useState<Date | null>(null);
+  const [realTimeStats, setRealTimeStats] = useState<RealTimeStats>({
+    isMonitoring: false,
+    currentSessionData: { keystrokes: 0, mouseEvents: 0, duration: 0 }
+  });
 
   const [behavioralStats, setBehavioralStats] = useState<BehavioralStats>({
     totalSessions: 0,
@@ -168,231 +187,260 @@ const UserHome: React.FC = () => {
     lastUpdated: null
   });
 
-  // Enhanced behavioral data loading with proper error handling
-const loadBehavioralData = async () => {
-  if (!userData?.uid) {
-    console.log('❌ No user ID available for behavioral data loading');
-    setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
-    return;
-  }
-
-  console.log(`🔍 Loading behavioral data for user: ${userData.uid}`);
-  setLoadingStates(prev => ({ ...prev, behavioral: 'loading' }));
-
-  // Handle demo users with enhanced demo data
-  if (userData.uid.includes('demo')) {
-    const demoSessions = Array.from({ length: 8 }, (_, i) => ({
-      id: `demo-session-${i}`,
-      session_id: `session_demo_${String(i).padStart(3, '0')}`,
-      similarity_scores: {
-        overall_similarity: 0.75 + (Math.random() * 0.2),
-        keystroke_similarity: 0.80 + (Math.random() * 0.15),
-        mouse_similarity: 0.70 + (Math.random() * 0.25)
-      },
-      anomaly_score: Math.random() * 0.3,
-      is_successful: Math.random() > 0.2,
-      verification_type: ['continuous_monitoring', 'manual_test', 'login_verification'][i % 3],
-      session_duration: 30 + Math.floor(Math.random() * 60),
-      page_context: ['/dashboard', '/profile', '/chat', '/ekyc'][i % 4],
-      created_at: new Date(Date.now() - (i * 3600000)).toISOString()
-    }));
-    
-    setBehavioralSessions(demoSessions);
-    setUserAnomalies([]);
-    setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
-    setConnectionStatus('online');
-    return;
-  }
-
-  try {
-    setConnectionStatus('online');
-
-    // ✅ CRITICAL: Enhanced behavioral sessions loading with retry logic
-    let sessionsData: BehavioralSession[] = [];
-    try {
-      console.log(`📡 Fetching behavioral sessions: /api/user/behavioral-sessions/${userData.uid}`);
-      
-      const sessionsResponse = await fetch(`http://localhost:5000/api/user/behavioral-sessions/${userData.uid}?limit=25`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!sessionsResponse.ok) {
-        throw new Error(`Sessions API failed: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
-      }
-      
-      const sessionsResult = await sessionsResponse.json();
-      console.log('📊 Sessions API response:', sessionsResult);
-      
-      if (sessionsResult.success && Array.isArray(sessionsResult.sessions)) {
-        sessionsData = sessionsResult.sessions;
-        console.log(`✅ Loaded ${sessionsData.length} behavioral sessions`);
-      } else {
-        console.warn('⚠️ Sessions API returned non-success result:', sessionsResult);
-        sessionsData = [];
-      }
-      
-    } catch (sessionError) {
-      console.error('❌ Error loading behavioral sessions:', sessionError);
-      setConnectionStatus('error');
-      sessionsData = [];
+  // behavioral data loading with better error handling
+  const loadBehavioralData = async () => {
+    if (!userData?.uid) {
+      console.log('❌ FIXED UserHome: No user ID available');
+      setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
+      return;
     }
 
-    setBehavioralSessions(sessionsData);
+    console.log(`🔍 FIXED UserHome: Loading behavioral data for user: ${userData.uid}`);
+    setLoadingStates(prev => ({ ...prev, behavioral: 'loading' }));
 
-    // ✅ CRITICAL: Enhanced anomalies loading with proper UUID handling
-    let anomaliesData: AnomalyAudit[] = [];
-    try {
-      console.log(`📡 Fetching anomalies: /api/user/anomalies/${userData.uid}`);
+    // demo user handling
+    if (userData.uid.includes('demo')) {
+      const demoSessions = Array.from({ length: 12 }, (_, i) => ({
+        id: `demo-session-${i}`,
+        session_id: `session_demo_${String(i).padStart(3, '0')}`,
+        similarity_scores: {
+          overall_similarity: 0.70 + (Math.random() * 0.25),
+          keystroke_similarity: 0.75 + (Math.random() * 0.20),
+          mouse_similarity: 0.65 + (Math.random() * 0.30)
+        },
+        anomaly_score: Math.random() * 0.35,
+        is_successful: Math.random() > 0.15,
+        verification_type: ['continuous_monitoring', 'manual_test', 'login_verification', 'global_continuous'][i % 4],
+        session_duration: 30 + Math.floor(Math.random() * 90),
+        page_context: ['/dashboard', '/profile', '/chat', '/ekyc', '/behavioral-test'][i % 5],
+        created_at: new Date(Date.now() - (i * 2 * 3600000)).toISOString()
+      }));
       
-      const anomaliesResponse = await fetch(`http://localhost:5000/api/user/anomalies/${userData.uid}?limit=15`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+      const demoAnomalies = Array.from({ length: 3 }, (_, i) => ({
+        id: `demo-anomaly-${i}`,
+        anomaly_type: ['global_behavioral_monitoring', 'continuous_monitoring', 'behavioral_mismatch'][i],
+        anomaly_score: 0.3 + (Math.random() * 0.4),
+        severity: ['medium', 'low', 'high'][i],
+        action_taken: ['logged', 'warning', 'monitor'][i],
+        created_at: new Date(Date.now() - (i * 24 * 3600000)).toISOString(),
+        details: {
+          page_context: ['/dashboard', '/profile', '/chat'][i],
+          similarity_score: 0.4 + (Math.random() * 0.3)
         }
-      });
+      }));
       
-      if (!anomaliesResponse.ok) {
-        // If API fails, try direct Supabase query as fallback
-        console.warn(`API failed, trying direct Supabase query...`);
-        
-        const { data: directAnomalies, error } = await supabase
-          .from('anomaly_audit')
-          .select('*')
-          .eq('user_id', userData.uid)
-          .order('created_at', { ascending: false })
-          .limit(15);
-        
-        if (error) {
-          console.error('❌ Supabase direct query also failed:', error);
-          anomaliesData = [];
-        } else {
-          anomaliesData = directAnomalies || [];
-          console.log(`✅ Loaded ${anomaliesData.length} anomalies via direct Supabase`);
-        }
-      } else {
-        const anomaliesResult = await anomaliesResponse.json();
-        console.log("🚨 Anomalies API response:", anomaliesResult);
-        
-        if (anomaliesResult.success && Array.isArray(anomaliesResult.anomalies)) {
-          anomaliesData = anomaliesResult.anomalies;
-          console.log(`✅ Loaded ${anomaliesData.length} anomalies via API`);
-        } else {
-          console.warn('⚠️ Anomalies API returned non-success result:', anomaliesResult);
-          anomaliesData = [];
-        }
-      }
-      
-    } catch (anomalyError) {
-      console.error('❌ Error loading anomalies:', anomalyError);
-      setConnectionStatus('error');
-      anomaliesData = [];
+      setBehavioralSessions(demoSessions);
+      setUserAnomalies(demoAnomalies);
+      setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
+      setConnectionStatus('online');
+      return;
     }
 
-    setUserAnomalies(anomaliesData);
-
-    // ✅ CRITICAL: Calculate enhanced behavioral stats
     try {
-      if (sessionsData.length > 0) {
-        const recentSessions = sessionsData.slice(0, 10);
-        const successfulSessions = sessionsData.filter(s => s.is_successful);
-        const avgSimilarity = sessionsData.reduce((sum, s) => 
-          sum + (s.similarity_scores?.overall_similarity || 0), 0) / sessionsData.length;
+      setConnectionStatus('online');
+
+      // behavioral sessions loading with multiple fallbacks
+      let sessionsData: BehavioralSession[] = [];
+      try {
+        console.log(`📡 FIXED UserHome: Fetching behavioral sessions from  API`);
         
-        // Enhanced trend calculation
-        let trend: 'improving' | 'stable' | 'declining' = 'stable';
-        if (recentSessions.length >= 5) {
-          const recent5 = recentSessions.slice(0, 5);
-          const previous5 = sessionsData.slice(5, 10);
+        const sessionsResponse = await fetch(`http://localhost:5000/api/user/behavioral-sessions/${userData.uid}?limit=30`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!sessionsResponse.ok) {
+          throw new Error(`FIXED UserHome: Sessions API failed: ${sessionsResponse.status}`);
+        }
+        
+        const sessionsResult = await sessionsResponse.json();
+        console.log('📊 FIXED UserHome: Sessions API response:', sessionsResult);
+        
+        if (sessionsResult.success && Array.isArray(sessionsResult.sessions)) {
+          sessionsData = sessionsResult.sessions;
+          console.log(`✅ FIXED UserHome: Loaded ${sessionsData.length} behavioral sessions via API`);
+        } else {
+          console.warn('⚠️ FIXED UserHome: Sessions API returned non-success, trying direct Supabase');
           
-          if (previous5.length >= 3) {
-            const recentAvg = recent5.reduce((sum, s) => 
-              sum + (s.similarity_scores?.overall_similarity || 0), 0) / recent5.length;
-            const previousAvg = previous5.reduce((sum, s) => 
-              sum + (s.similarity_scores?.overall_similarity || 0), 0) / previous5.length;
-            
-            const difference = recentAvg - previousAvg;
-            if (difference > 0.05) trend = 'improving';
-            else if (difference < -0.05) trend = 'declining';
+          // Fallback to direct Supabase query
+          const { data: directSessions, error } = await supabase
+            .from('behavioral_sessions')
+            .select('*')
+            .eq('user_id', userData.uid)
+            .order('created_at', { ascending: false })
+            .limit(30);
+          
+          if (error) {
+            console.error('❌ FIXED UserHome: Supabase direct query failed:', error);
+            sessionsData = [];
+          } else {
+            sessionsData = directSessions || [];
+            console.log(`✅ FIXED UserHome: Loaded ${sessionsData.length} sessions via direct Supabase`);
           }
         }
         
-        // Calculate recent anomalies (last 7 days)
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        const recentAnomalies = anomaliesData.filter(a => 
-          new Date(a.created_at) > weekAgo
-        ).length;
-        
-        setBehavioralStats({
-          totalSessions: sessionsData.length,
-          successRate: (successfulSessions.length / sessionsData.length) * 100,
-          avgSimilarity: avgSimilarity * 100,
-          recentAnomalies,
-          lastVerification: sessionsData.length > 0 ? new Date(sessionsData[0].created_at) : null,
-          behavioralTrend: trend
-        });
-        
-        console.log('✅ Behavioral stats calculated:', {
-          total: sessionsData.length,
-          successRate: (successfulSessions.length / sessionsData.length) * 100,
-          avgSimilarity: avgSimilarity * 100,
-          trend
-        });
-      } else {
-        setBehavioralStats({
-          totalSessions: 0,
-          successRate: 0,
-          avgSimilarity: 0,
-          recentAnomalies: anomaliesData.length,
-          lastVerification: null,
-          behavioralTrend: 'stable'
-        });
+      } catch (sessionError) {
+        console.error('❌ FIXED UserHome: Error loading behavioral sessions:', sessionError);
+        setConnectionStatus('error');
+        sessionsData = [];
       }
-    } catch (statsError) {
-      console.error('❌ Error calculating behavioral stats:', statsError);
+
+      setBehavioralSessions(sessionsData);
+
+      // anomalies loading with better UUID handling
+      let anomaliesData: AnomalyAudit[] = [];
+      try {
+        console.log(`📡 FIXED UserHome: Fetching anomalies from  API`);
+        
+        const anomaliesResponse = await fetch(`http://localhost:5000/api/user/anomalies/${userData.uid}?limit=20`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!anomaliesResponse.ok) {
+          console.warn(`⚠️ FIXED UserHome: Anomalies API failed, trying direct Supabase`);
+          
+          // Fallback to direct Supabase query
+          const { data: directAnomalies, error } = await supabase
+            .from('anomaly_audit')
+            .select('*')
+            .eq('user_id', userData.uid)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          
+          if (error) {
+            console.error('❌ FIXED UserHome: Supabase anomalies query failed:', error);
+            anomaliesData = [];
+          } else {
+            anomaliesData = directAnomalies || [];
+            console.log(`✅ FIXED UserHome: Loaded ${anomaliesData.length} anomalies via direct Supabase`);
+          }
+        } else {
+          const anomaliesResult = await anomaliesResponse.json();
+          console.log("🚨 FIXED UserHome: Anomalies API response:", anomaliesResult);
+          
+          if (anomaliesResult.success && Array.isArray(anomaliesResult.anomalies)) {
+            anomaliesData = anomaliesResult.anomalies;
+            console.log(`✅ FIXED UserHome: Loaded ${anomaliesData.length} anomalies via API`);
+          } else {
+            console.warn('⚠️ FIXED UserHome: Anomalies API returned non-success result');
+            anomaliesData = [];
+          }
+        }
+        
+      } catch (anomalyError) {
+        console.error('❌ FIXED UserHome: Error loading anomalies:', anomalyError);
+        setConnectionStatus('error');
+        anomaliesData = [];
+      }
+
+      setUserAnomalies(anomaliesData);
+
+      // behavioral stats calculation
+      try {
+        if (sessionsData.length > 0) {
+          const recentSessions = sessionsData.slice(0, 15);
+          const successfulSessions = sessionsData.filter(s => s.is_successful);
+          const avgSimilarity = sessionsData.reduce((sum, s) => 
+            sum + (s.similarity_scores?.overall_similarity || 0), 0) / sessionsData.length;
+          
+          //trend calculation with more sophisticated logic
+          let trend: 'improving' | 'stable' | 'declining' = 'stable';
+          if (recentSessions.length >= 6) {
+            const recent6 = recentSessions.slice(0, 6);
+            const previous6 = sessionsData.slice(6, 12);
+            
+            if (previous6.length >= 4) {
+              const recentAvg = recent6.reduce((sum, s) => 
+                sum + (s.similarity_scores?.overall_similarity || 0), 0) / recent6.length;
+              const previousAvg = previous6.reduce((sum, s) => 
+                sum + (s.similarity_scores?.overall_similarity || 0), 0) / previous6.length;
+              
+              const difference = recentAvg - previousAvg;
+              if (difference > 0.08) trend = 'improving';
+              else if (difference < -0.08) trend = 'declining';
+            }
+          }
+          
+          // Calculate recent anomalies (last 7 days)
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          const recentAnomalies = anomaliesData.filter(a => 
+            new Date(a.created_at) > weekAgo
+          ).length;
+          
+          setBehavioralStats({
+            totalSessions: sessionsData.length,
+            successRate: (successfulSessions.length / sessionsData.length) * 100,
+            avgSimilarity: avgSimilarity * 100,
+            recentAnomalies,
+            lastVerification: sessionsData.length > 0 ? new Date(sessionsData[0].created_at) : null,
+            behavioralTrend: trend
+          });
+          
+          console.log('FIXED UserHome:  behavioral stats calculated:', {
+            total: sessionsData.length,
+            successRate: (successfulSessions.length / sessionsData.length) * 100,
+            avgSimilarity: avgSimilarity * 100,
+            trend,
+            recentAnomalies
+          });
+        } else {
+          setBehavioralStats({
+            totalSessions: 0,
+            successRate: 0,
+            avgSimilarity: 0,
+            recentAnomalies: anomaliesData.length,
+            lastVerification: null,
+            behavioralTrend: 'stable'
+          });
+        }
+      } catch (statsError) {
+        console.error('❌ FIXED UserHome: Error calculating behavioral stats:', statsError);
+      }
+
+      setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
+      setLastDataUpdate(new Date());
+
+    } catch (error) {
+      console.error('FIXED UserHome: Critical error in loadBehavioralData:', error);
+      setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
+      setConnectionStatus('error');
     }
+  };
 
-    setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
-    setLastDataUpdate(new Date());
-
-  } catch (error) {
-    console.error('❌ Critical error in loadBehavioralData:', error);
-    setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
-    setConnectionStatus('error');
-  }
-};
-
-  // Enhanced login activity loading with proper error handling
+  //  login activity loading
   const loadRecentLoginActivity = async () => {
     if (!userData?.uid) {
-      console.log('❌ No user ID available for login activity loading');
+      console.log('FIXED UserHome: No user ID for login activity');
       setLoadingStates(prev => ({ ...prev, loginActivity: 'error' }));
       return;
     }
 
-    console.log(`🔍 Loading login activity for user: ${userData.uid}`);
+    console.log(`🔍 FIXED UserHome: Loading login activity for user: ${userData.uid}`);
     setLoadingStates(prev => ({ ...prev, loginActivity: 'loading' }));
 
-    // Handle demo users
+    //  demo user handling
     if (userData.uid.includes('demo')) {
-      const demoActivity = Array.from({ length: 5 }, (_, i) => ({
+      const demoActivity = Array.from({ length: 8 }, (_, i) => ({
         id: `demo-login-${i}`,
         user_id: userData.uid,
-        event_ts: new Date(Date.now() - (i * 3600000)).toISOString(),
-        success: Math.random() > 0.3,
-        ip_addr: '127.0.0.1',
-        user_agent: 'Demo Browser Chrome/91.0',
+        event_ts: new Date(Date.now() - (i * 4 * 3600000)).toISOString(),
+        success: Math.random() > 0.25,
+        ip_addr: `192.168.1.${100 + i}`,
+        user_agent: 'Mozilla/5.0 ( Demo Browser)',
         biometric_scores: { 
-          face_similarity: 0.7 + (Math.random() * 0.3),
-          liveness: 0.8 + (Math.random() * 0.2)
+          face_similarity: 0.75 + (Math.random() * 0.20),
+          liveness: 0.85 + (Math.random() * 0.15)
         },
-        face_image_url: Math.random() > 0.5 ? 'https://via.placeholder.com/100' : undefined,
-        failure_reason: Math.random() > 0.7 ? 'Face similarity too low' : undefined
+        face_image_url: Math.random() > 0.4 ? 'https://via.placeholder.com/100' : undefined,
+        failure_reason: Math.random() > 0.8 ? 'Face similarity below threshold' : undefined
       }));
       
       setRecentLoginActivity(demoActivity);
@@ -401,44 +449,45 @@ const loadBehavioralData = async () => {
     }
     
     try {
-      console.log(`📡 Fetching login activity from Supabase for user: ${userData.uid}`);
+      console.log(`📡 FIXED UserHome: Fetching login activity from Supabase for user: ${userData.uid}`);
       
-      // CRITICAL: Use Supabase directly for login audit (UUID required)
+      // Use Supabase directly for login audit (UUID required)
       const { data, error } = await supabase
         .from('login_audit')
         .select('*')
         .eq('user_id', userData.uid)
         .order('event_ts', { ascending: false })
-        .limit(15);
+        .limit(20);
       
       if (error) {
-        console.error('❌ Supabase error loading login activity:', error);
+        console.error('❌ FIXED UserHome: Supabase error loading login activity:', error);
         setLoadingStates(prev => ({ ...prev, loginActivity: 'error' }));
         setConnectionStatus('error');
         return;
       }
       
       if (data && data.length > 0) {
-        console.log(`✅ Login activity loaded: ${data.length} records`);
+        console.log(`✅ FIXED UserHome: Login activity loaded: ${data.length} records`);
         setRecentLoginActivity(data);
         setLoadingStates(prev => ({ ...prev, loginActivity: 'loaded' }));
       } else {
-        console.log('ℹ️ No login activity found');
+        console.log('ℹ️ FIXED UserHome: No login activity found');
         setRecentLoginActivity([]);
         setLoadingStates(prev => ({ ...prev, loginActivity: 'loaded' }));
       }
     } catch (error) {
-      console.error('❌ Error loading recent login activity:', error);
+      console.error('FXED UserHome: Error loading recent login activity:', error);
       setRecentLoginActivity([]);
       setLoadingStates(prev => ({ ...prev, loginActivity: 'error' }));
       setConnectionStatus('error');
     }
   };
-  // Enhanced real-time subscription for behavioral updates
+
+  // Creal-time subscription for behavioral updates
   useEffect(() => {
     if (!userData?.uid || userData.uid.includes('demo')) return;
 
-    console.log('🔗 Setting up real-time subscriptions for user:', userData.uid);
+    console.log('FIXED UserHome: Setting up  real-time subscriptions for user:', userData.uid);
 
     const subscription = supabase
       .channel('user-behavioral-updates')
@@ -448,7 +497,7 @@ const loadBehavioralData = async () => {
         table: 'behavioral_sessions',
         filter: `user_id=eq.${userData.uid}`
       }, (payload: any) => {
-        console.log('🔄 Behavioral sessions updated:', payload);
+        console.log('🔄 FIXED UserHome: Behavioral sessions updated:', payload);
         loadBehavioralData();
       })
       .on('postgres_changes', {
@@ -457,7 +506,7 @@ const loadBehavioralData = async () => {
         table: 'anomaly_audit',
         filter: `user_id=eq.${userData.uid}`
       }, (payload: any) => {
-        console.log('🚨 Anomalies updated:', payload);
+        console.log('🚨 FIXED UserHome: Anomalies updated:', payload);
         loadBehavioralData();
       })
       .on('postgres_changes', {
@@ -466,44 +515,77 @@ const loadBehavioralData = async () => {
         table: 'login_audit',
         filter: `user_id=eq.${userData.uid}`
       }, (payload: any) => {
-        console.log('🔐 Login audit updated:', payload);
+        console.log(' FIXED UserHome: Login audit updated:', payload);
         loadRecentLoginActivity();
       })
       .subscribe();
 
-    // Listen for custom events from behavioral monitor
+    // CRITICAL FIX:  custom event listeners for behavioral monitor updates
     const handleBehavioralUpdate = (event: CustomEvent) => {
-      console.log('🔄 Custom behavioral update received:', event.detail);
-      loadBehavioralData();
+      console.log('FIXED UserHome: Custom behavioral update received:', event.detail);
+      
+      // Update real-time stats if available
+      if (event.detail.stats) {
+        setRealTimeStats(prev => ({
+          ...prev,
+          lastVerificationResult: {
+            similarity: event.detail.result?.similarity_score || 0,
+            timestamp: new Date(),
+            anomaly: event.detail.result?.is_anomaly || false
+          }
+        }));
+      }
+      
+      // Reload data with a small delay to allow backend processing
+      setTimeout(() => {
+        loadBehavioralData();
+      }, 2000);
+    };
+
+    const handleGlobalMonitoringUpdate = (event: CustomEvent) => {
+      console.log('🌐 FIXED UserHome: Global monitoring update received:', event.detail);
+      
+      // Update monitoring status
+      setRealTimeStats(prev => ({
+        ...prev,
+        isMonitoring: true,
+        lastVerificationResult: event.detail.result ? {
+          similarity: event.detail.result.similarity_score || 0,
+          timestamp: new Date(),
+          anomaly: event.detail.result.is_anomaly || false
+        } : prev.lastVerificationResult
+      }));
     };
 
     window.addEventListener('behavioralDataUpdated', handleBehavioralUpdate as EventListener);
+    window.addEventListener('globalMonitoringUpdate', handleGlobalMonitoringUpdate as EventListener);
 
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('behavioralDataUpdated', handleBehavioralUpdate as EventListener);
+      window.removeEventListener('globalMonitoringUpdate', handleGlobalMonitoringUpdate as EventListener);
     };
   }, [userData?.uid]);
 
-  // Enhanced data loading on mount
+  //  data loading on mount
   useEffect(() => {
     if (userData?.uid) {
-      console.log('🚀 UserHome mounted, loading data for user:', userData.uid);
+      console.log(' FIXED UserHome:  mounting, loading data for user:', userData.uid);
       loadBehavioralData();
       loadBiometricData();
       loadRecentLoginActivity();
     }
   }, [userData?.uid]);
 
-  // Enhanced biometric data loading
+  //  biometric data loading
   const loadBiometricData = async () => {
     if (!userData?.uid || userData.uid.includes('demo')) {
-      // Enhanced demo data
+      //  demo data
       setUserBiometricData({
         biometrics: [{
           id: 'demo-bio-1',
           biometric_type: 'face',
-          quality_score: 0.95,
+          quality_score: 0.96,
           capture_timestamp: new Date().toISOString(),
           created_at: new Date().toISOString(),
           face_image_url: 'https://via.placeholder.com/150'
@@ -512,9 +594,9 @@ const loadBehavioralData = async () => {
           id: 'demo-behavioral-1',
           user_id: userData?.uid ?? '',
           pattern_data: {
-            keystroke_features: { avg_dwell_time: 120, typing_speed: 45 },
-            mouse_features: { avg_velocity: 150 },
-            enrollment_metadata: { total_keystrokes: 150, total_mouse_events: 80 }
+            keystroke_features: { avg_dwell_time: 125, typing_speed: 47, rhythm_consistency: 0.85 },
+            mouse_features: { avg_velocity: 155, movement_smoothness: 0.78 },
+            enrollment_metadata: { total_keystrokes: 180, total_mouse_events: 95, quality_score: 0.92 }
           },
           is_active: true,
           created_at: new Date().toISOString()
@@ -523,8 +605,8 @@ const loadBehavioralData = async () => {
           id: 'demo-ekyc-1',
           document_type: 'ic_front',
           verification_status: 'verified',
-          face_match_score: 0.92,
-          document_authenticity_score: 0.88,
+          face_match_score: 0.94,
+          document_authenticity_score: 0.91,
           created_at: new Date().toISOString()
         }],
         behavioralSessions: [],
@@ -538,7 +620,7 @@ const loadBehavioralData = async () => {
     try {
       setUserBiometricData(prev => ({ ...prev, loading: true }));
       
-      console.log('🔍 Loading biometric data for user:', userData.uid);
+      console.log('FIXED UserHome: Loading  biometric data for user:', userData.uid);
 
       // Load biometric data
       const { data: biometrics, error: bioError } = await supabase
@@ -548,7 +630,7 @@ const loadBehavioralData = async () => {
         .order('created_at', { ascending: false });
 
       if (bioError) {
-        console.error('Error loading biometric data:', bioError);
+        console.error('FIXED UserHome: Error loading biometric data:', bioError);
       }
 
       // Load behavioral patterns
@@ -559,7 +641,7 @@ const loadBehavioralData = async () => {
         .order('created_at', { ascending: false });
 
       if (behavError) {
-        console.error('Error loading behavioral patterns:', behavError);
+        console.error('❌ FIXED UserHome: Error loading behavioral patterns:', behavError);
       }
 
       // Load eKYC documents  
@@ -570,10 +652,10 @@ const loadBehavioralData = async () => {
         .order('created_at', { ascending: false });
 
       if (ekycError) {
-        console.error('Error loading eKYC documents:', ekycError);
+        console.error('FIXED UserHome: Error loading eKYC documents:', ekycError);
       }
 
-      console.log('📊 Biometric data loaded:', {
+      console.log('FXED UserHome:  biometric data loaded:', {
         biometrics: biometrics?.length || 0,
         behavioralPatterns: behavioralPatterns?.length || 0,  
         ekycDocuments: ekycDocuments?.length || 0
@@ -590,27 +672,49 @@ const loadBehavioralData = async () => {
       });
 
     } catch (error) {
-      console.error('Error loading biometric data:', error);
+      console.error('FIXED UserHome: Error loading biometric data:', error);
       setUserBiometricData(prev => ({ ...prev, loading: false }));
     }
   };
 
-
-  // Handle re-enrollment
+  //  re-enrollment handler
   const handleReEnroll = async (type: string) => {
     try {
-      console.log(`🔄 Starting re-enrollment for ${type}`);
+      console.log(`🔄 FIXED UserHome: Starting re-enrollment for ${type}`);
       
       if (type === 'face') {
-        alert('Face re-enrollment will open biometric capture. Redirect to registration page.');
+        alert('Face re-enrollment will open biometric capture. This will redirect to the registration page with pre-filled information.');
       } else if (type === 'keystroke') {
-        alert('Keystroke re-enrollment will start behavioral capture. Redirect to registration page.');
+        alert('Keystroke re-enrollment will start behavioral capture. You will be guided through typing exercises to update your keystroke pattern.');
       } else if (type === 'scroll') {
-        alert('Scroll behavior re-enrollment will start behavioral capture. Redirect to registration page.');
+        alert('Mouse behavior re-enrollment will capture your natural mouse movements and click patterns.');
       }
       
     } catch (error) {
-      console.error('Re-enrollment error:', error);
+      console.error('FIXED UserHome: Re-enrollment error:', error);
+    }
+  };
+
+  //  manual refresh with comprehensive data reload
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    
+    setRefreshing(true);
+    console.log('🔄 FIXED UserHome:  manual refresh triggered');
+    
+    try {
+      await Promise.all([
+        loadBehavioralData(),
+        loadRecentLoginActivity(),
+        loadBiometricData()
+      ]);
+      setConnectionStatus('online');
+      setLastDataUpdate(new Date());
+    } catch (error) {
+      console.error('FIXED UserHome:  refresh error:', error);
+      setConnectionStatus('error');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -634,7 +738,7 @@ const loadBehavioralData = async () => {
     { id: 'security', name: 'Security', icon: Shield }
   ];
 
-  // Calculate enhanced statistics
+  // Calculate  statistics
   const biometricStats = {
     faceEnrolled: userBiometricData.biometrics.some((bio: BiometricData) => bio.biometric_type === 'face'),
     keystrokeEnrolled: userBiometricData.behavioralPatterns.some((pattern: BehavioralPattern) => 
@@ -660,6 +764,7 @@ const loadBehavioralData = async () => {
         return 'text-blue-400 bg-blue-900/30 border-blue-500/30';
     }
   };
+
   const getTrendIcon = (trend: string) => {
     switch (trend) {
       case 'improving':
@@ -682,107 +787,6 @@ const loadBehavioralData = async () => {
     }
   };
 
-   // CRITICAL: Enhanced real-time subscription with better error handling
-  useEffect(() => {
-    if (!userData?.uid || userData.uid.includes('demo')) return;
-
-    console.log('🔗 Setting up enhanced real-time subscriptions for user:', userData.uid);
-
-    const subscription = supabase
-      .channel('enhanced-user-updates')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'behavioral_sessions',
-        filter: `user_id=eq.${userData.uid}`
-      }, (payload: any) => {
-        console.log('🔄 Behavioral sessions updated:', payload);
-        loadBehavioralData();
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'anomaly_audit',
-        filter: `user_id=eq.${userData.uid}`
-      }, (payload: any) => {
-        console.log('🚨 Anomalies updated:', payload);
-        loadBehavioralData();
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'login_audit',
-        filter: `user_id=eq.${userData.uid}`
-      }, (payload: any) => {
-        console.log('🔐 Login audit updated:', payload);
-        loadRecentLoginActivity();
-      })
-      .subscribe();
-
-    // Listen for custom events from behavioral monitor
-    const handleBehavioralUpdate = (event: CustomEvent) => {
-      console.log('🔄 Custom behavioral update received:', event.detail);
-      // Add delay to allow backend to process
-      setTimeout(() => {
-        loadBehavioralData();
-      }, 1000);
-    };
-
-    window.addEventListener('behavioralDataUpdated', handleBehavioralUpdate as EventListener);
-
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('behavioralDataUpdated', handleBehavioralUpdate as EventListener);
-    };
-  }, [userData?.uid]);
-
-  // CRITICAL: Enhanced data loading on mount with retry logic
-  useEffect(() => {
-    if (userData?.uid) {
-      console.log('🚀 UserHome mounted, loading data for user:', userData.uid);
-      
-      const loadAllData = async () => {
-        await Promise.all([
-          loadBehavioralData(),
-          loadRecentLoginActivity()
-        ]);
-      };
-      
-      loadAllData();
-      
-      // Set up periodic refresh every 5 minutes
-      const refreshInterval = setInterval(() => {
-        if (!refreshing) {
-          console.log('🔄 Periodic data refresh');
-          loadAllData();
-        }
-      }, 5 * 60 * 1000);
-      
-      return () => clearInterval(refreshInterval);
-    }
-  }, [userData?.uid]);
-
-  // Manual refresh function with loading state
-  const handleRefresh = async () => {
-    if (refreshing) return;
-    
-    setRefreshing(true);
-    console.log('🔄 Manual refresh triggered');
-    
-    try {
-      await Promise.all([
-        loadBehavioralData(),
-        loadRecentLoginActivity()
-      ]);
-      setConnectionStatus('online');
-    } catch (error) {
-      console.error('❌ Refresh error:', error);
-      setConnectionStatus('error');
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   // Get connection status color
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
@@ -802,19 +806,32 @@ const loadBehavioralData = async () => {
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-      {/* Enhanced Behavioral Monitor */}
+      {/* Behavioral Monitor */}
       <BehavioralMonitor
         userId={userData.uid}
         isActive={true}
-        triggerInterval={2} // Check every 2 minutes for better responsiveness
+        triggerInterval={2}
         onVerificationComplete={(result) => {
-          console.log('✅ Behavioral verification completed:', result);
-          loadBehavioralData(); // Refresh data after verification
+          console.log('FIXED UserHome:  behavioral verification completed:', result);
+          
+          // Update real-time stats
+          setRealTimeStats(prev => ({
+            ...prev,
+            lastVerificationResult: {
+              similarity: result.similarity_score,
+              timestamp: new Date(),
+              anomaly: result.is_anomaly
+            }
+          }));
+          
+          // Refresh data after verification
+          setTimeout(() => {
+            loadBehavioralData();
+          }, 1500);
         }}
       />
-
       <div className="max-w-7xl mx-auto">
-        {/* Enhanced Header */}
+        {/*  Header with Real-time Status */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -826,13 +843,29 @@ const loadBehavioralData = async () => {
                 USER PROFILE TERMINAL
               </h1>
               <p className="text-cyan-400" style={{ fontFamily: 'IBM Plex Mono' }}>
-                Welcome back, {userData.username}
+                Welcome back, {userData.username} 
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              {userBiometricData.lastUpdated && (
+              {/*  connection status indicator */}
+              <div className={`flex items-center space-x-2 ${getConnectionStatusColor()}`}>
+                {getConnectionStatusIcon()}
+                <span className="text-sm font-mono">
+                  {connectionStatus.toUpperCase()}
+                </span>
+              </div>
+              
+              {/* Real-time monitoring status */}
+              {realTimeStats.isMonitoring && (
+                <div className="flex items-center space-x-2 text-green-400">
+                  <Eye className="h-4 w-4 animate-pulse" />
+                  <span className="text-sm font-mono">MONITORING</span>
+                </div>
+              )}
+              
+              {lastDataUpdate && (
                 <div className="text-sm text-gray-400">
-                  Last updated: {userBiometricData.lastUpdated.toLocaleTimeString()}
+                  Last updated: {lastDataUpdate.toLocaleTimeString()}
                 </div>
               )}
               <button
@@ -841,13 +874,65 @@ const loadBehavioralData = async () => {
                 className="terminal-button px-4 py-2 rounded flex items-center"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
+                 Refresh
               </button>
             </div>
           </div>
         </motion.div>
 
-        {/* CRITICAL: Enhanced Recent Anomalies Alert Section */}
+        {/* Real-time Behavioral Status */}
+        {realTimeStats.lastVerificationResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <div className={`glass-card rounded-lg p-4 border-2 ${
+              realTimeStats.lastVerificationResult.anomaly 
+                ? 'border-yellow-500/30 bg-yellow-900/10' 
+                : 'border-green-500/30 bg-green-900/10'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Activity className={`h-5 w-5 mr-3 ${
+                    realTimeStats.lastVerificationResult.anomaly ? 'text-yellow-400' : 'text-green-400'
+                  }`} />
+                  <div>
+                    <h3 className={`font-bold ${
+                      realTimeStats.lastVerificationResult.anomaly ? 'text-yellow-400' : 'text-green-400'
+                    }`}>
+                      🔄 LATEST BEHAVIORAL VERIFICATION
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      Last check: {realTimeStats.lastVerificationResult.timestamp.toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <div className="text-center">
+                    <span className="text-gray-400 text-sm">Similarity:</span>
+                    <div className={`text-lg font-bold ${
+                      realTimeStats.lastVerificationResult.similarity >= 0.7 ? 'text-green-400' : 
+                      realTimeStats.lastVerificationResult.similarity >= 0.5 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>
+                      {(realTimeStats.lastVerificationResult.similarity * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-gray-400 text-sm">Status:</span>
+                    <div className={`text-sm font-bold ${
+                      realTimeStats.lastVerificationResult.anomaly ? 'text-yellow-400' : 'text-green-400'
+                    }`}>
+                      {realTimeStats.lastVerificationResult.anomaly ? 'ANOMALY' : 'NORMAL'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Recent Anomalies Alert Section */}
         {userAnomalies.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -857,7 +942,7 @@ const loadBehavioralData = async () => {
             <div className="glass-card rounded-lg p-6 border-yellow-500/30 bg-yellow-900/10">
               <h3 className="text-lg font-bold text-yellow-400 mb-4 flex items-center">
                 <AlertTriangle className="mr-3 h-6 w-6" />
-                🚨 ENHANCED SECURITY ALERTS ({userAnomalies.length})
+                SECURITY ALERTS ({userAnomalies.length})
               </h3>
               <div className="space-y-3">
                 {userAnomalies.slice(0, 3).map((anomaly) => (
@@ -906,6 +991,7 @@ const loadBehavioralData = async () => {
             </div>
           </motion.div>
         )}
+
         {/* Tab Navigation */}
         <div className="mb-8">
           <div className="flex space-x-1 bg-black/20 rounded-lg p-1">
@@ -926,7 +1012,7 @@ const loadBehavioralData = async () => {
           </div>
         </div>
 
-        {/* Enhanced Tab Content */}
+        {/* Tab Content */}
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, x: 20 }}
@@ -937,7 +1023,7 @@ const loadBehavioralData = async () => {
             <div className="space-y-6">
               {/* User Information */}
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">User Information</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4"> User Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-400">Username</p>
@@ -952,13 +1038,20 @@ const loadBehavioralData = async () => {
                     <p className="text-cyan-400">{userData.role?.toUpperCase()}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-400">Trust Score</p>
-                    <p className="text-yellow-400">{userData.trust_score || 85}/100</p>
+                    <p className="text-sm text-gray-400"> Trust Score</p>
+                    <div className="flex items-center">
+                      <div className="w-24 bg-gray-700 rounded-full h-2 mr-2">
+                        <div 
+                          className="bg-green-400 h-2 rounded-full" 
+                          style={{ width: `${userData.trust_score || 85}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-yellow-400 font-bold">{userData.trust_score || 85}/100</span>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Enhanced Enrollment Status Overview */}
+              {/* Enrollment Status Overview */}
               <div className="glass-card rounded-lg p-6">
                 <h3 className="text-lg font-bold text-green-400 mb-4">Biometric Enrollment Status</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1027,7 +1120,7 @@ const loadBehavioralData = async () => {
                 </div>
               </div>
 
-              {/* Enhanced Recent Activity */}
+              {/* Recent Activity */}
               <div className="glass-card rounded-lg p-6">
                 <h3 className="text-lg font-bold text-green-400 mb-4 flex items-center">
                   <Activity className="h-5 w-5 mr-2" />
@@ -1067,7 +1160,7 @@ const loadBehavioralData = async () => {
                 )}
               </div>
 
-              {/* Enhanced Recent Login Activity */}
+              {/* Recent Login Activity */}
               <div className="glass-card rounded-lg p-6">
                 <h3 className="text-lg font-bold text-green-400 mb-4 flex items-center">
                   <Shield className="h-5 w-5 mr-2" />
@@ -1119,11 +1212,11 @@ const loadBehavioralData = async () => {
             <BehavioralTestPage />
           )}
 
-          {/* Enhanced Behavioral Tab */}
+          {/* Behavioral Tab */}
           {activeTab === 'behavioral' && (
             <div className="space-y-6">
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">Enhanced Behavioral Authentication Status</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4">Behavioral Authentication Status</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   <div className="text-center p-4 bg-black/20 rounded">
@@ -1151,17 +1244,17 @@ const loadBehavioralData = async () => {
                     <p className={`text-2xl font-bold ${getTrendColor(behavioralStats.behavioralTrend)}`}>
                       {behavioralStats.behavioralTrend.toUpperCase()}
                     </p>
-                    <p className="text-sm text-cyan-400">Trend</p>
+                    <p className="text-sm text-cyan-400"> Trend</p>
                   </div>
                 </div>
               </div>
 
-              {/* Enhanced Recent Behavioral Activity */}
+              {/* Recent Behavioral Activity */}
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">Recent Behavioral Activity</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4"> Recent Behavioral Activity</h3>
                 {behavioralSessions.length > 0 ? (
                   <div className="space-y-3">
-                    {behavioralSessions.slice(0, 8).map((session: BehavioralSession) => (
+                    {behavioralSessions.slice(0, 10).map((session: BehavioralSession) => (
                       <div key={session.id} className="flex items-center justify-between p-3 bg-black/20 rounded">
                         <div className="flex items-center">
                           <Activity className="h-5 w-5 text-cyan-400 mr-3" />
@@ -1176,6 +1269,9 @@ const loadBehavioralData = async () => {
                             </p>
                             {session.page_context && (
                               <p className="text-gray-500 text-xs">Page: {session.page_context}</p>
+                            )}
+                            {session.session_duration && (
+                              <p className="text-gray-500 text-xs">Duration: {session.session_duration}s</p>
                             )}
                           </div>
                         </div>
@@ -1193,10 +1289,9 @@ const loadBehavioralData = async () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-center py-4">No recent behavioral activity</p>
+                  <p className="text-gray-400 text-center py-4">No recent  behavioral activity</p>
                 )}
               </div>
-
               {/* Recent Anomalies */}
               {userAnomalies.length > 0 && (
                 <div className="glass-card rounded-lg p-6">
@@ -1205,7 +1300,7 @@ const loadBehavioralData = async () => {
                     Recent Security Anomalies ({userAnomalies.length})
                   </h3>
                   <div className="space-y-3">
-                    {userAnomalies.slice(0, 5).map((anomaly: AnomalyAudit) => (
+                    {userAnomalies.slice(0, 6).map((anomaly: AnomalyAudit) => (
                       <div key={anomaly.id} className={`p-3 rounded border ${getSeverityColor(anomaly.severity)}`}>
                         <div className="flex items-center justify-between">
                           <div>
@@ -1217,6 +1312,11 @@ const loadBehavioralData = async () => {
                             </p>
                             {anomaly.details?.page_context && (
                               <p className="text-xs opacity-60">Page: {anomaly.details.page_context}</p>
+                            )}
+                            {anomaly.details?.similarity_score && (
+                              <p className="text-xs opacity-60">
+                                Similarity: {(anomaly.details.similarity_score * 100).toFixed(1)}%
+                              </p>
                             )}
                           </div>
                           <div className="text-right">
@@ -1233,11 +1333,10 @@ const loadBehavioralData = async () => {
               )}
             </div>
           )}
-
           {activeTab === 'ekyc' && userData?.uid && (
             <div className="space-y-6">
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">eKYC Document Verification</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4"> eKYC Document Verification</h3>
                 <EKYCDocumentViewer userId={userData.uid} />
               </div>
             </div>
@@ -1246,7 +1345,7 @@ const loadBehavioralData = async () => {
           {activeTab === 'security' && (
             <div className="space-y-6">
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">Security Overview</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4"> Security Overview</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -1261,7 +1360,7 @@ const loadBehavioralData = async () => {
                     <div className="flex items-center justify-between p-3 bg-black/20 rounded">
                       <div className="flex items-center">
                         <Eye className="h-5 w-5 text-green-400 mr-3" />
-                        <span className="text-cyan-400">Biometric Verification</span>
+                        <span className="text-cyan-400"> Biometric Verification</span>
                       </div>
                       <CheckCircle className="h-5 w-5 text-green-400" />
                     </div>
@@ -1269,7 +1368,7 @@ const loadBehavioralData = async () => {
                     <div className="flex items-center justify-between p-3 bg-black/20 rounded">
                       <div className="flex items-center">
                         <Activity className="h-5 w-5 text-green-400 mr-3" />
-                        <span className="text-cyan-400">Global Behavioral Monitoring</span>
+                        <span className="text-cyan-400"> Global Behavioral Monitoring</span>
                       </div>
                       <CheckCircle className="h-5 w-5 text-green-400" />
                     </div>
@@ -1281,7 +1380,7 @@ const loadBehavioralData = async () => {
                       <p className="text-2xl font-bold text-green-400 mb-2">
                         {userData.trust_score || 85}/100
                       </p>
-                      <p className="text-gray-400">Trust Score</p>
+                      <p className="text-gray-400"> Trust Score</p>
                     </div>
                   </div>
                 </div>
@@ -1292,7 +1391,7 @@ const loadBehavioralData = async () => {
           {activeTab === 'biometric' && (
             <div className="space-y-6">
               <div className="glass-card rounded-lg p-6">
-                <h3 className="text-lg font-bold text-green-400 mb-4">Biometric Enrollment Status</h3>
+                <h3 className="text-lg font-bold text-green-400 mb-4"> Biometric Enrollment Status</h3>
                 
                 {userBiometricData.loading ? (
                   <div className="text-center py-8">

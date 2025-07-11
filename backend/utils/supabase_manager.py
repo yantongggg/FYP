@@ -1068,7 +1068,7 @@ class SupabaseManager:
             # Determine verification status
             confidence = authenticity.get('authenticity_score', 0)
             verification_status = 'verified' if (
-                confidence >= 0.6 and 
+                confidence >= 0.35 and 
                 bool(extracted_info.get('ic_number')) and
                 self._validate_ic_authenticity(front_image_rgb, back_image_rgb, ocr_result)
             ) else 'rejected'
