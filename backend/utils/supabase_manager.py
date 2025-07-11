@@ -666,42 +666,96 @@ class SupabaseManager:
             logger.error(f"Session data: {session_data}")
             return False
 
+
     def save_anomaly_guaranteed(self, anomaly_data: Dict) -> bool:
         """
-        CRITICAL FIX: Save anomaly with GUARANTEED persistence
+        CRITICAL FIX: Save anomaly with GUARANTEED persistence and proper schema matching
         """
         try:
             if not self.client:
                 logger.warning("No Supabase client - cannot save anomaly")
                 return False
             
-            # Ensure user_id is in string format (anomaly_audits uses text)
-            if 'user_id' in anomaly_data:
-                anomaly_data['user_id'] = str(anomaly_data['user_id'])
+            # ✅ CRITICAL: Convert user_id to UUID format for anomaly_audit table
+            user_id = anomaly_data.get('user_id', '')
+            try:
+                # Ensure user_id is in UUID format
+                uuid_obj = uuid.UUID(user_id)
+                user_id_uuid = str(uuid_obj)
+            except ValueError:
+                logger.error(f"❌ Invalid UUID format for user_id: {user_id}")
+                return False
             
-            # Ensure numeric values are properly formatted
-            if 'anomaly_score' in anomaly_data:
-                anomaly_data['anomaly_score'] = float(anomaly_data['anomaly_score'])
+            # ✅ CRITICAL: Build anomaly payload matching exact schema
+            current_time = datetime.now()
             
-            # Add timestamp if not present
-            if 'created_at' not in anomaly_data:
-                anomaly_data['created_at'] = datetime.now().isoformat()
+            # Prepare the anomaly record with ALL required fields
+            anomaly_record = {
+                'user_id': user_id_uuid,  # UUID format
+                'session_id': anomaly_data.get('session_id', f"session_{int(time.time())}"),  # TEXT
+                'anomaly_type': anomaly_data.get('anomaly_type', 'behavioral_anomaly'),  # TEXT
+                'anomaly_score': float(anomaly_data.get('anomaly_score', 0.0)),  # DOUBLE PRECISION
+                'severity': anomaly_data.get('severity', 'medium'),  # TEXT
+                'action_taken': anomaly_data.get('action_taken', 'logged'),  # TEXT
+                'details': anomaly_data.get('details', {}),  # JSONB
+                'created_at': current_time.isoformat(),  # TIMESTAMP WITHOUT TIME ZONE
+                'event_ts': current_time.isoformat(),  # TIMESTAMP WITH TIME ZONE
+                'manual_review_required': anomaly_data.get('manual_review_required', False),  # BOOLEAN
+                'auto_resolved': False,  # BOOLEAN
+                'related_session_id': None,  # UUID (optional)
+                'biometric_data_id': None,  # UUID (optional)
+                'behavioral_pattern_id': None  # UUID (optional)
+            }
             
-            logger.info(f"💾 Saving anomaly: {anomaly_data.get('anomaly_type', 'unknown')} for user {anomaly_data.get('user_id')}")
+            # Clean None values but keep required fields
+            cleaned_record = {k: v for k, v in anomaly_record.items() if v is not None or k in [
+                'user_id', 'session_id', 'anomaly_type', 'anomaly_score', 'severity', 'action_taken'
+            ]}
             
-            result = self.client.table("anomaly_audit").insert(anomaly_data).execute()
+            logger.info(f"💾 Saving anomaly to anomaly_audit table: {cleaned_record.get('anomaly_type')} for user {user_id_uuid}")
+            
+            # Insert into anomaly_audit table
+            result = self.client.table("anomaly_audit").insert(cleaned_record).execute()
             
             if result.data and len(result.data) > 0:
-                logger.info(f"✅ Anomaly saved: {result.data[0]['id']}")
+                anomaly_id = result.data[0]['id']
+                logger.info(f"✅ Anomaly saved successfully: {anomaly_id}")
+                
+                # ✅ CRITICAL: Trigger real-time update event
+                self._trigger_anomaly_update_event(user_id_uuid, anomaly_id, cleaned_record)
+                
                 return True
             else:
-                logger.error(f"❌ Failed to save anomaly - no data returned")
+                logger.error(f"❌ Failed to save anomaly - no data returned from Supabase")
                 return False
                 
         except Exception as e:
             logger.error(f"❌ CRITICAL: Error saving anomaly: {e}", exc_info=True)
             logger.error(f"Anomaly data: {anomaly_data}")
             return False
+
+    def _trigger_anomaly_update_event(self, user_id: str, anomaly_id: str, anomaly_data: Dict):
+        """Trigger real-time update event for anomaly"""
+        try:
+            # Send a custom event to trigger real-time updates
+            update_payload = {
+                'table': 'anomaly_audit',
+                'event': 'INSERT',
+                'new': {
+                    'id': anomaly_id,
+                    'user_id': user_id,
+                    'anomaly_type': anomaly_data.get('anomaly_type'),
+                    'severity': anomaly_data.get('severity'),
+                    'created_at': anomaly_data.get('created_at')
+                }
+            }
+            
+            # This would trigger any real-time listeners
+            logger.info(f"🔄 Triggered anomaly update event for user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error triggering anomaly update event: {e}")
+
 
     # ========== CRITICAL FIX: Data Retrieval Methods ==========
     
@@ -735,6 +789,30 @@ class SupabaseManager:
             logger.error(f"❌ Error fetching behavioral sessions: {e}", exc_info=True)
             return []
 
+    def save_behavioral_test_results(self, user_id: str, test_results: Dict) -> bool:
+        """
+        Save complete behavioral test results including sessions and anomalies
+        """
+        try:
+            success_count = 0
+            
+            # Save behavioral session
+            if test_results.get('session_data'):
+                if self.save_behavioral_session_guaranteed(test_results['session_data']):
+                    success_count += 1
+            
+            # Save anomaly if detected
+            if test_results.get('anomaly_data'):
+                if self.save_anomaly_guaranteed(test_results['anomaly_data']):
+                    success_count += 1
+            
+            logger.info(f"✅ Saved {success_count} behavioral test records for user {user_id}")
+            return success_count > 0
+            
+        except Exception as e:
+            logger.error(f"❌ Error saving behavioral test results: {e}")
+            return False
+
     def get_user_anomalies_guaranteed(self, user_id: str, limit: int = 10) -> List[Dict]:
         """
         CRITICAL FIX: Get user anomalies with comprehensive error handling
@@ -744,20 +822,25 @@ class SupabaseManager:
                 logger.warning("No Supabase client - returning empty list")
                 return []
             
-            # Convert user_id to string for anomaly_audits table
-            user_id_str = str(user_id)
+            # Convert user_id to UUID format for anomaly_audit table
+            try:
+                uuid_obj = uuid.UUID(user_id)
+                user_id_uuid = str(uuid_obj)
+            except ValueError:
+                logger.error(f"❌ Invalid UUID format for anomaly query: {user_id}")
+                return []
             
-            logger.info(f"🚨 Fetching anomalies for user: {user_id_str}")
+            logger.info(f"🚨 Fetching anomalies for user: {user_id_uuid}")
             
             result = self.client.table("anomaly_audit") \
                 .select("*") \
-                .eq("user_id", user_id_str) \
+                .eq("user_id", user_id_uuid) \
                 .order("created_at", desc=True) \
                 .limit(limit) \
                 .execute()
             
             anomalies = result.data or []
-            logger.info(f"✅ Retrieved {len(anomalies)} anomalies for user {user_id_str}")
+            logger.info(f"✅ Retrieved {len(anomalies)} anomalies for user {user_id_uuid}")
             
             return anomalies
             

@@ -169,198 +169,203 @@ const UserHome: React.FC = () => {
   });
 
   // Enhanced behavioral data loading with proper error handling
-  const loadBehavioralData = async () => {
-    if (!userData?.uid) {
-      console.log('❌ No user ID available for behavioral data loading');
-      setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
-      return;
-    }
+const loadBehavioralData = async () => {
+  if (!userData?.uid) {
+    console.log('❌ No user ID available for behavioral data loading');
+    setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
+    return;
+  }
 
-    console.log(`🔍 Loading behavioral data for user: ${userData.uid}`);
-    setLoadingStates(prev => ({ ...prev, behavioral: 'loading' }));
+  console.log(`🔍 Loading behavioral data for user: ${userData.uid}`);
+  setLoadingStates(prev => ({ ...prev, behavioral: 'loading' }));
 
-    // Handle demo users with enhanced demo data
-    if (userData.uid.includes('demo')) {
-      const demoSessions = Array.from({ length: 8 }, (_, i) => ({
-        id: `demo-session-${i}`,
-        session_id: `session_demo_${String(i).padStart(3, '0')}`,
-        similarity_scores: {
-          overall_similarity: 0.75 + (Math.random() * 0.2),
-          keystroke_similarity: 0.80 + (Math.random() * 0.15),
-          mouse_similarity: 0.70 + (Math.random() * 0.25)
-        },
-        anomaly_score: Math.random() * 0.3,
-        is_successful: Math.random() > 0.2,
-        verification_type: ['continuous_monitoring', 'manual_test', 'login_verification'][i % 3],
-        session_duration: 30 + Math.floor(Math.random() * 60),
-        page_context: ['/dashboard', '/profile', '/chat', '/ekyc'][i % 4],
-        created_at: new Date(Date.now() - (i * 3600000)).toISOString()
-      }));
+  // Handle demo users with enhanced demo data
+  if (userData.uid.includes('demo')) {
+    const demoSessions = Array.from({ length: 8 }, (_, i) => ({
+      id: `demo-session-${i}`,
+      session_id: `session_demo_${String(i).padStart(3, '0')}`,
+      similarity_scores: {
+        overall_similarity: 0.75 + (Math.random() * 0.2),
+        keystroke_similarity: 0.80 + (Math.random() * 0.15),
+        mouse_similarity: 0.70 + (Math.random() * 0.25)
+      },
+      anomaly_score: Math.random() * 0.3,
+      is_successful: Math.random() > 0.2,
+      verification_type: ['continuous_monitoring', 'manual_test', 'login_verification'][i % 3],
+      session_duration: 30 + Math.floor(Math.random() * 60),
+      page_context: ['/dashboard', '/profile', '/chat', '/ekyc'][i % 4],
+      created_at: new Date(Date.now() - (i * 3600000)).toISOString()
+    }));
+    
+    setBehavioralSessions(demoSessions);
+    setUserAnomalies([]);
+    setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
+    setConnectionStatus('online');
+    return;
+  }
+
+  try {
+    setConnectionStatus('online');
+
+    // ✅ CRITICAL: Enhanced behavioral sessions loading with retry logic
+    let sessionsData: BehavioralSession[] = [];
+    try {
+      console.log(`📡 Fetching behavioral sessions: /api/user/behavioral-sessions/${userData.uid}`);
       
-      setBehavioralSessions(demoSessions);
-      setUserAnomalies([]);
-      
-      const avgSimilarity = demoSessions.reduce((sum, s) => sum + s.similarity_scores.overall_similarity, 0) / demoSessions.length;
-      setBehavioralStats({
-        totalSessions: demoSessions.length,
-        successRate: (demoSessions.filter(s => s.is_successful).length / demoSessions.length) * 100,
-        avgSimilarity: avgSimilarity * 100,
-        recentAnomalies: 0,
-        lastVerification: new Date(),
-        behavioralTrend: 'improving'
+      const sessionsResponse = await fetch(`http://localhost:5000/api/user/behavioral-sessions/${userData.uid}?limit=25`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
       });
       
-      setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
-      setConnectionStatus('online');
-      return;
-    }
-
-    try {
-      setConnectionStatus('online');
-
-      // CRITICAL: Load behavioral sessions with enhanced error handling and retries
-      let sessionsData: BehavioralSession[] = [];
-      try {
-        console.log(`📡 Fetching behavioral sessions: /api/user/behavioral-sessions/${userData.uid}`);
-        
-        const sessionsResponse = await fetch(`http://localhost:5000/api/user/behavioral-sessions/${userData.uid}?limit=25`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!sessionsResponse.ok) {
-          throw new Error(`Sessions API failed: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
-        }
-        
-        const sessionsResult = await sessionsResponse.json();
-        console.log('📊 Sessions API response:', sessionsResult);
-        
-        if (sessionsResult.success && Array.isArray(sessionsResult.sessions)) {
-          sessionsData = sessionsResult.sessions;
-          console.log(`✅ Loaded ${sessionsData.length} behavioral sessions`);
-        } else {
-          console.warn('⚠️ Sessions API returned non-success result:', sessionsResult);
-          sessionsData = [];
-        }
-        
-      } catch (sessionError) {
-        console.error('❌ Error loading behavioral sessions:', sessionError);
-        setConnectionStatus('error');
+      if (!sessionsResponse.ok) {
+        throw new Error(`Sessions API failed: ${sessionsResponse.status} ${sessionsResponse.statusText}`);
+      }
+      
+      const sessionsResult = await sessionsResponse.json();
+      console.log('📊 Sessions API response:', sessionsResult);
+      
+      if (sessionsResult.success && Array.isArray(sessionsResult.sessions)) {
+        sessionsData = sessionsResult.sessions;
+        console.log(`✅ Loaded ${sessionsData.length} behavioral sessions`);
+      } else {
+        console.warn('⚠️ Sessions API returned non-success result:', sessionsResult);
         sessionsData = [];
       }
+      
+    } catch (sessionError) {
+      console.error('❌ Error loading behavioral sessions:', sessionError);
+      setConnectionStatus('error');
+      sessionsData = [];
+    }
 
-      setBehavioralSessions(sessionsData);
+    setBehavioralSessions(sessionsData);
 
-      // CRITICAL: Load user anomalies with enhanced error handling
-      let anomaliesData: AnomalyAudit[] = [];
-      try {
-        console.log(`📡 Fetching anomalies: /api/user/anomalies/${userData.uid}`);
-        
-        const anomaliesResponse = await fetch(`http://localhost:5000/api/user/anomalies/${userData.uid}?limit=15`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!anomaliesResponse.ok) {
-          throw new Error(`Anomalies API failed: ${anomaliesResponse.status} ${anomaliesResponse.statusText}`);
+    // ✅ CRITICAL: Enhanced anomalies loading with proper UUID handling
+    let anomaliesData: AnomalyAudit[] = [];
+    try {
+      console.log(`📡 Fetching anomalies: /api/user/anomalies/${userData.uid}`);
+      
+      const anomaliesResponse = await fetch(`http://localhost:5000/api/user/anomalies/${userData.uid}?limit=15`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
+      });
+      
+      if (!anomaliesResponse.ok) {
+        // If API fails, try direct Supabase query as fallback
+        console.warn(`API failed, trying direct Supabase query...`);
         
+        const { data: directAnomalies, error } = await supabase
+          .from('anomaly_audit')
+          .select('*')
+          .eq('user_id', userData.uid)
+          .order('created_at', { ascending: false })
+          .limit(15);
+        
+        if (error) {
+          console.error('❌ Supabase direct query also failed:', error);
+          anomaliesData = [];
+        } else {
+          anomaliesData = directAnomalies || [];
+          console.log(`✅ Loaded ${anomaliesData.length} anomalies via direct Supabase`);
+        }
+      } else {
         const anomaliesResult = await anomaliesResponse.json();
         console.log("🚨 Anomalies API response:", anomaliesResult);
         
         if (anomaliesResult.success && Array.isArray(anomaliesResult.anomalies)) {
           anomaliesData = anomaliesResult.anomalies;
-          console.log(`✅ Loaded ${anomaliesData.length} anomalies`);
+          console.log(`✅ Loaded ${anomaliesData.length} anomalies via API`);
         } else {
           console.warn('⚠️ Anomalies API returned non-success result:', anomaliesResult);
           anomaliesData = [];
         }
-        
-      } catch (anomalyError) {
-        console.error('❌ Error loading anomalies:', anomalyError);
-        setConnectionStatus('error');
-        anomaliesData = [];
       }
-
-      setUserAnomalies(anomaliesData);
-
-      // CRITICAL: Calculate enhanced behavioral stats with error handling
-      try {
-        if (sessionsData.length > 0) {
-          const recentSessions = sessionsData.slice(0, 10);
-          const successfulSessions = sessionsData.filter(s => s.is_successful);
-          const avgSimilarity = sessionsData.reduce((sum, s) => 
-            sum + (s.similarity_scores?.overall_similarity || 0), 0) / sessionsData.length;
-          
-          // Enhanced trend calculation
-          let trend: 'improving' | 'stable' | 'declining' = 'stable';
-          if (recentSessions.length >= 5) {
-            const recent5 = recentSessions.slice(0, 5);
-            const previous5 = sessionsData.slice(5, 10);
-            
-            if (previous5.length >= 3) {
-              const recentAvg = recent5.reduce((sum, s) => 
-                sum + (s.similarity_scores?.overall_similarity || 0), 0) / recent5.length;
-              const previousAvg = previous5.reduce((sum, s) => 
-                sum + (s.similarity_scores?.overall_similarity || 0), 0) / previous5.length;
-              
-              const difference = recentAvg - previousAvg;
-              if (difference > 0.05) trend = 'improving';
-              else if (difference < -0.05) trend = 'declining';
-            }
-          }
-          
-          // Calculate recent anomalies (last 7 days)
-          const weekAgo = new Date();
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          const recentAnomalies = anomaliesData.filter(a => 
-            new Date(a.created_at) > weekAgo
-          ).length;
-          
-          setBehavioralStats({
-            totalSessions: sessionsData.length,
-            successRate: (successfulSessions.length / sessionsData.length) * 100,
-            avgSimilarity: avgSimilarity * 100,
-            recentAnomalies,
-            lastVerification: sessionsData.length > 0 ? new Date(sessionsData[0].created_at) : null,
-            behavioralTrend: trend
-          });
-          
-          console.log('✅ Behavioral stats calculated:', {
-            total: sessionsData.length,
-            successRate: (successfulSessions.length / sessionsData.length) * 100,
-            avgSimilarity: avgSimilarity * 100,
-            trend
-          });
-        } else {
-          setBehavioralStats({
-            totalSessions: 0,
-            successRate: 0,
-            avgSimilarity: 0,
-            recentAnomalies: anomaliesData.length,
-            lastVerification: null,
-            behavioralTrend: 'stable'
-          });
-        }
-      } catch (statsError) {
-        console.error('❌ Error calculating behavioral stats:', statsError);
-      }
-
-      setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
-      setLastDataUpdate(new Date());
-
-    } catch (error) {
-      console.error('❌ Critical error in loadBehavioralData:', error);
-      setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
+      
+    } catch (anomalyError) {
+      console.error('❌ Error loading anomalies:', anomalyError);
       setConnectionStatus('error');
+      anomaliesData = [];
     }
-  };
+
+    setUserAnomalies(anomaliesData);
+
+    // ✅ CRITICAL: Calculate enhanced behavioral stats
+    try {
+      if (sessionsData.length > 0) {
+        const recentSessions = sessionsData.slice(0, 10);
+        const successfulSessions = sessionsData.filter(s => s.is_successful);
+        const avgSimilarity = sessionsData.reduce((sum, s) => 
+          sum + (s.similarity_scores?.overall_similarity || 0), 0) / sessionsData.length;
+        
+        // Enhanced trend calculation
+        let trend: 'improving' | 'stable' | 'declining' = 'stable';
+        if (recentSessions.length >= 5) {
+          const recent5 = recentSessions.slice(0, 5);
+          const previous5 = sessionsData.slice(5, 10);
+          
+          if (previous5.length >= 3) {
+            const recentAvg = recent5.reduce((sum, s) => 
+              sum + (s.similarity_scores?.overall_similarity || 0), 0) / recent5.length;
+            const previousAvg = previous5.reduce((sum, s) => 
+              sum + (s.similarity_scores?.overall_similarity || 0), 0) / previous5.length;
+            
+            const difference = recentAvg - previousAvg;
+            if (difference > 0.05) trend = 'improving';
+            else if (difference < -0.05) trend = 'declining';
+          }
+        }
+        
+        // Calculate recent anomalies (last 7 days)
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const recentAnomalies = anomaliesData.filter(a => 
+          new Date(a.created_at) > weekAgo
+        ).length;
+        
+        setBehavioralStats({
+          totalSessions: sessionsData.length,
+          successRate: (successfulSessions.length / sessionsData.length) * 100,
+          avgSimilarity: avgSimilarity * 100,
+          recentAnomalies,
+          lastVerification: sessionsData.length > 0 ? new Date(sessionsData[0].created_at) : null,
+          behavioralTrend: trend
+        });
+        
+        console.log('✅ Behavioral stats calculated:', {
+          total: sessionsData.length,
+          successRate: (successfulSessions.length / sessionsData.length) * 100,
+          avgSimilarity: avgSimilarity * 100,
+          trend
+        });
+      } else {
+        setBehavioralStats({
+          totalSessions: 0,
+          successRate: 0,
+          avgSimilarity: 0,
+          recentAnomalies: anomaliesData.length,
+          lastVerification: null,
+          behavioralTrend: 'stable'
+        });
+      }
+    } catch (statsError) {
+      console.error('❌ Error calculating behavioral stats:', statsError);
+    }
+
+    setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
+    setLastDataUpdate(new Date());
+
+  } catch (error) {
+    console.error('❌ Critical error in loadBehavioralData:', error);
+    setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
+    setConnectionStatus('error');
+  }
+};
 
   // Enhanced login activity loading with proper error handling
   const loadRecentLoginActivity = async () => {

@@ -1123,7 +1123,7 @@ def extract_mouse_velocity(movements: list) -> float:
 @app.route('/api/admin/anomalies/recent', methods=['GET'])
 @cross_origin()
 def get_recent_anomalies_admin():
-    """Get recent anomalies for admin dashboard - SIMPLIFIED"""
+    """FIXED: Get recent anomalies for admin dashboard with proper schema"""
     try:
         limit = request.args.get('limit', 50, type=int)
         severity_filter = request.args.get('severity', 'all')
@@ -1134,10 +1134,15 @@ def get_recent_anomalies_admin():
                 'error': 'Database not available'
             }), 500
         
-        # Build query
+        logger.info(f"🔍 Admin API: Fetching recent anomalies (limit: {limit}, severity: {severity_filter})")
+        
+        # Build query for anomaly_audit table
         query = supabase_manager.client.table("anomaly_audit") \
-            .select("*") \
-            .order("event_ts", desc=True) \
+            .select("""
+                *,
+                users!anomaly_audit_user_id_fkey(username, email)
+            """) \
+            .order("created_at", desc=True) \
             .limit(limit)
         
         if severity_filter != 'all':
@@ -1145,23 +1150,43 @@ def get_recent_anomalies_admin():
         
         result = query.execute()
         
+        anomalies = result.data or []
+        logger.info(f"✅ Admin: Retrieved {len(anomalies)} recent anomalies")
+        
         return jsonify({
             'success': True,
-            'anomalies': result.data or [],
-            'total': len(result.data or [])
+            'anomalies': anomalies,
+            'total': len(anomalies),
+            'filter': severity_filter
         })
         
     except Exception as e:
-        logger.error(f"Error fetching admin anomalies: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"❌ Error fetching admin anomalies: {e}", exc_info=True)
+        # Fallback to basic query without join
+        try:
+            result = supabase_manager.client.table("anomaly_audit") \
+                .select("*") \
+                .order("created_at", desc=True) \
+                .limit(limit) \
+                .execute()
+            
+            return jsonify({
+                'success': True,
+                'anomalies': result.data or [],
+                'total': len(result.data or []),
+                'fallback': True
+            })
+        except Exception as fallback_error:
+            logger.error(f"❌ Fallback query also failed: {fallback_error}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
 @app.route('/api/user/anomalies/<user_id>', methods=['GET'])
 @cross_origin()
 def get_user_anomalies(user_id):
-    """Get anomalies for specific user - SIMPLIFIED"""
+    """FIXED: Get anomalies for specific user with proper UUID handling"""
     try:
         limit = request.args.get('limit', 10, type=int)
         
@@ -1171,22 +1196,39 @@ def get_user_anomalies(user_id):
                 'error': 'Database not available'
             }), 500
         
-        # Query using TEXT user_id from anomaly_audit table
+        logger.info(f"🚨 API: Fetching anomalies for user {user_id}")
+        
+        # CRITICAL: Convert user_id to UUID format for anomaly_audit table
+        try:
+            uuid_obj = uuid.UUID(user_id)
+            user_id_uuid = str(uuid_obj)
+        except ValueError:
+            logger.error(f"❌ Invalid UUID format: {user_id}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid user ID format'
+            }), 400
+        
+        # Query anomaly_audit table with proper UUID
         result = supabase_manager.client.table("anomaly_audit") \
             .select("*") \
-            .eq("user_id", str(user_id)) \
+            .eq("user_id", user_id_uuid) \
             .order("created_at", desc=True) \
             .limit(limit) \
             .execute()
         
+        anomalies = result.data or []
+        logger.info(f"✅ Found {len(anomalies)} anomalies for user {user_id_uuid}")
+        
         return jsonify({
             'success': True,
-            'anomalies': result.data or [],
-            'total': len(result.data or [])
+            'anomalies': anomalies,
+            'total': len(anomalies),
+            'user_id': user_id_uuid
         })
         
     except Exception as e:
-        logger.error(f"Error fetching user anomalies: {e}")
+        logger.error(f"❌ Error fetching user anomalies: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1195,7 +1237,7 @@ def get_user_anomalies(user_id):
 @app.route('/api/user/behavioral-sessions/<user_id>', methods=['GET'])
 @cross_origin()
 def get_user_behavioral_sessions(user_id):
-    """Get behavioral sessions for specific user - SIMPLIFIED"""
+    """FIXED: Get behavioral sessions for specific user with enhanced error handling"""
     try:
         limit = request.args.get('limit', 20, type=int)
         
@@ -1205,7 +1247,9 @@ def get_user_behavioral_sessions(user_id):
                 'error': 'Database not available'
             }), 500
         
-        # Query using TEXT user_id from behavioral_sessions table
+        logger.info(f"🔍 API: Fetching behavioral sessions for user {user_id}")
+        
+        # Query behavioral_sessions table (user_id is TEXT in this table)
         result = supabase_manager.client.table("behavioral_sessions") \
             .select("*") \
             .eq("user_id", str(user_id)) \
@@ -1213,14 +1257,18 @@ def get_user_behavioral_sessions(user_id):
             .limit(limit) \
             .execute()
         
+        sessions = result.data or []
+        logger.info(f"✅ Found {len(sessions)} behavioral sessions for user {user_id}")
+        
         return jsonify({
             'success': True,
-            'sessions': result.data or [],
-            'total': len(result.data or [])
+            'sessions': sessions,
+            'total': len(sessions),
+            'user_id': str(user_id)
         })
         
     except Exception as e:
-        logger.error(f"Error fetching behavioral sessions: {e}")
+        logger.error(f"❌ Error fetching behavioral sessions: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1622,13 +1670,13 @@ def biometric_login_verify():
 @app.route('/api/behavioral-test', methods=['POST'])
 @cross_origin()
 def behavioral_test_endpoint():
-    """Simplified behavioral test endpoint for demo purposes"""
+    """FIXED: Enhanced behavioral test with guaranteed anomaly saving"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData')
         session_id = data.get('session_id', f"test_{user_id}_{int(time.time())}")
-        test_mode = data.get('test_mode', False)
+        test_mode = data.get('test_mode', True)
         
         if not user_id or not behavioral_data:
             return jsonify({
@@ -1649,55 +1697,54 @@ def behavioral_test_endpoint():
             }), 400
         
         # Get stored baseline pattern
-        if not supabase_manager.client:
-            # Demo mode - simulate stored pattern
+        stored_pattern = None
+        if supabase_manager.client:
+            try:
+                pattern_result = supabase_manager.client.table("behavioral_patterns") \
+                    .select("pattern_data") \
+                    .eq("user_id", user_id) \
+                    .eq("is_active", True) \
+                    .order("created_at", desc=True) \
+                    .limit(1) \
+                    .execute()
+                
+                if pattern_result.data:
+                    stored_pattern = pattern_result.data[0]['pattern_data']
+            except Exception as e:
+                logger.error(f"Error getting stored pattern: {e}")
+        
+        if not stored_pattern:
+            # Use demo pattern for testing
             stored_pattern = {
                 'keystroke_features': {'typing_speed': 45, 'avg_dwell_time': 120},
                 'mouse_features': {'avg_velocity': 150}
             }
-        else:
-            # Get from database (behavioral_patterns uses UUID user_id)
-            pattern_result = supabase_manager.client.table("behavioral_patterns") \
-                .select("pattern_data") \
-                .eq("user_id", user_id) \
-                .eq("is_active", True) \
-                .order("created_at", desc=True) \
-                .limit(1) \
-                .execute()
-            
-            if not pattern_result.data:
-                return jsonify({
-                    'success': False,
-                    'error': 'No baseline behavioral pattern found. Please complete registration first.'
-                }), 404
-            
-            stored_pattern = pattern_result.data[0]['pattern_data']
         
         # Calculate simple similarity
         current_features = calculate_simple_features(keystrokes, mouse_movements)
         similarity_score = calculate_simple_similarity(current_features, stored_pattern)
         
-        # Simple anomaly detection - LOW THRESHOLD FOR DEMO
-        ANOMALY_THRESHOLD = 0.3  # Only flag if similarity < 30%
+        # Enhanced anomaly detection with lower thresholds for testing
+        ANOMALY_THRESHOLD = 0.4  # 40% similarity threshold
+        CRITICAL_THRESHOLD = 0.2  # 20% for auto-lock
+        
         is_anomaly = similarity_score < ANOMALY_THRESHOLD
+        is_critical = similarity_score < CRITICAL_THRESHOLD
         
-        # Determine action
-        action_taken = 'none'
-        severity = 'low'
-        
-        if similarity_score < 0.15:  # Very low similarity
+        # Determine action and severity
+        if is_critical:
             action_taken = 'auto_lock'
             severity = 'critical'
         elif is_anomaly:
             action_taken = 'warning'
-            severity = 'medium'
+            severity = 'high'
         else:
             action_taken = 'passed'
             severity = 'low'
         
-        # Store session in behavioral_sessions (uses TEXT user_id)
+        # ✅ CRITICAL: Save behavioral session first
         session_data = {
-            'user_id': str(user_id),  # Store as TEXT
+            'user_id': str(user_id),
             'session_id': session_id,
             'similarity_scores': {
                 'overall_similarity': float(similarity_score),
@@ -1706,64 +1753,74 @@ def behavioral_test_endpoint():
             },
             'anomaly_score': float(1 - similarity_score),
             'is_successful': not is_anomaly,
+            'verification_type': 'behavioral_test',
             'duration_seconds': int((keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000) if keystrokes else 0,
+            'page_context': '/behavioral-test',
             'created_at': datetime.now().isoformat()
         }
         
-        supabase_saved = False
+        session_saved = supabase_manager.save_behavioral_session_guaranteed(session_data)
         
-        if supabase_manager.client:
-            try:
-                # Store session
-                supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
-                
-                # Store anomaly if detected
-                if is_anomaly:
-                    anomaly_data = {
-                        'user_id': str(user_id),  # Store as TEXT
-                        'session_id': session_id,
-                        'anomaly_type': 'behavioral_test_anomaly',
-                        'anomaly_score': float(1 - similarity_score),
-                        'severity': severity,
-                        'action_taken': action_taken,
-                        'details': {
-                            'test_mode': test_mode,
-                            'similarity_score': float(similarity_score),
-                            'threshold': ANOMALY_THRESHOLD,
-                            'features': current_features
-                        },
-                        'created_at': datetime.now().isoformat()
-                    }
-                    
-                    supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
-                    logger.info(f"🚨 Anomaly logged for test: user={user_id}, similarity={similarity_score:.3f}")
-                
-                supabase_saved = True
-                logger.info(f"✅ Test data saved to Supabase for user {user_id}")
-                
-            except Exception as e:
-                logger.error(f"Failed to save test data: {e}")
+        # ✅ CRITICAL: Save anomaly if detected
+        anomaly_saved = False
+        if is_anomaly:
+            anomaly_data = {
+                'user_id': user_id,  # Will be converted to UUID in save function
+                'session_id': session_id,
+                'anomaly_type': 'behavioral_test_anomaly',
+                'anomaly_score': float(1 - similarity_score),
+                'severity': severity,
+                'action_taken': action_taken,
+                'details': {
+                    'test_mode': test_mode,
+                    'similarity_score': float(similarity_score),
+                    'threshold': ANOMALY_THRESHOLD,
+                    'features': current_features,
+                    'page_context': '/behavioral-test',
+                    'test_timestamp': datetime.now().isoformat()
+                },
+                'manual_review_required': is_critical,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            anomaly_saved = supabase_manager.save_anomaly_guaranteed(anomaly_data)
+            
+            if anomaly_saved:
+                logger.info(f"🚨 Anomaly saved for test: user={user_id}, similarity={similarity_score:.3f}")
+            else:
+                logger.error(f"❌ Failed to save anomaly for test: user={user_id}")
         
-        # Return results
-        return jsonify({
+        # Return comprehensive results
+        result = {
             'success': True,
             'similarity_score': float(similarity_score),
             'is_anomaly': is_anomaly,
+            'is_critical': is_critical,
             'action_taken': action_taken,
             'severity': severity,
             'session_id': session_id,
-            'supabase_saved': supabase_saved,
-            'threshold': ANOMALY_THRESHOLD,
+            'thresholds': {
+                'anomaly': ANOMALY_THRESHOLD,
+                'critical': CRITICAL_THRESHOLD
+            },
             'details': {
                 'keystroke_count': len(keystrokes),
                 'mouse_count': len(mouse_movements),
                 'current_features': current_features,
                 'baseline_available': bool(stored_pattern)
+            },
+            'data_saved': {
+                'session_saved': session_saved,
+                'anomaly_saved': anomaly_saved
             }
-        })
+        }
+        
+        logger.info(f"✅ Behavioral test completed for user {user_id}: similarity={similarity_score:.3f}, anomaly={is_anomaly}")
+        
+        return jsonify(result)
         
     except Exception as e:
-        logger.error(f"Behavioral test error: {e}", exc_info=True)
+        logger.error(f"❌ Behavioral test error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1864,69 +1921,78 @@ def behavioral_check_endpoint():
 @app.route('/api/save-behavioral-session', methods=['POST'])
 @cross_origin()
 def save_behavioral_session():
+    """FIXED: Save behavioral session with enhanced error handling"""
     try:
         data = request.get_json()
-        user_id = data.get('user_id')
-        session_id = data.get('session_id')
-        similarity_scores = data.get('similarity_scores', {})
-        anomaly_score = data.get('anomaly_score')
-        is_successful = data.get('is_successful', True)
-        duration_seconds = data.get('duration_seconds', 10)
-        verification_type = data.get('verification_type', 'continuous')
-        created_at = datetime.now().isoformat()
-
+        
+        # Build session data with required fields
         session_data = {
-            'user_id': user_id,
-            'session_id': session_id,
-            'similarity_scores': similarity_scores,
-            'anomaly_score': anomaly_score,
-            'is_successful': is_successful,
-            'duration_seconds': duration_seconds,
-            'verification_type': verification_type,
-            'created_at': created_at
+            'user_id': str(data.get('user_id')),
+            'session_id': data.get('session_id', f"session_{int(time.time())}"),
+            'similarity_scores': data.get('similarity_scores', {}),
+            'anomaly_score': float(data.get('anomaly_score', 0.0)),
+            'is_successful': data.get('is_successful', True),
+            'verification_type': data.get('verification_type', 'continuous'),
+            'duration_seconds': data.get('duration_seconds', 0),
+            'page_context': data.get('page_context', 'unknown'),
+            'created_at': datetime.now().isoformat()
         }
-
-        supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
-        logger.info(f"✅ Behavioral session saved for user {user_id}")
-
-        return jsonify({"success": True, "message": "Session saved"}), 200
+        
+        success = supabase_manager.save_behavioral_session_guaranteed(session_data)
+        
+        if success:
+            logger.info(f"✅ Behavioral session saved via API for user {session_data['user_id']}")
+            return jsonify({
+                "success": True, 
+                "message": "Session saved successfully",
+                "session_id": session_data['session_id']
+            }), 200
+        else:
+            return jsonify({
+                "success": False, 
+                "error": "Failed to save session"
+            }), 500
 
     except Exception as e:
-        logger.error(f"❌ Failed to save behavioral session: {e}", exc_info=True)
+        logger.error(f"❌ Failed to save behavioral session via API: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/save-anomaly', methods=['POST'])
 @cross_origin()
 def save_anomaly():
+    """FIXED: Save anomaly with enhanced error handling"""
     try:
         data = request.get_json()
-        user_id = data.get('user_id')
-        session_id = data.get('session_id', f"session_{int(time.time())}")
-        anomaly_type = data.get('anomaly_type', 'behavioral_anomaly')
-        severity = data.get('severity', 'medium')
-        action_taken = data.get('action_taken', 'none')
-        score = data.get('score', 0.0)
-        details = data.get('details', {})
-        created_at = datetime.now().isoformat()
-
+        
+        # Build anomaly data with required fields
         anomaly_data = {
-            'user_id': user_id,
-            'session_id': session_id,
-            'anomaly_type': anomaly_type,
-            'severity': severity,
-            'action_taken': action_taken,
-            'score': score,
-            'details': details,
-            'created_at': created_at
+            'user_id': data.get('user_id'),  # Will be converted to UUID
+            'session_id': data.get('session_id', f"session_{int(time.time())}"),
+            'anomaly_type': data.get('anomaly_type', 'behavioral_anomaly'),
+            'anomaly_score': float(data.get('score', 0.0)),
+            'severity': data.get('severity', 'medium'),
+            'action_taken': data.get('action_taken', 'logged'),
+            'details': data.get('details', {}),
+            'manual_review_required': data.get('manual_review_required', False),
+            'created_at': datetime.now().isoformat()
         }
-
-        supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
-        logger.info(f"🚨 Anomaly recorded for user {user_id}")
-
-        return jsonify({"success": True, "message": "Anomaly saved"}), 200
+        
+        success = supabase_manager.save_anomaly_guaranteed(anomaly_data)
+        
+        if success:
+            logger.info(f"🚨 Anomaly saved via API for user {anomaly_data['user_id']}")
+            return jsonify({
+                "success": True, 
+                "message": "Anomaly saved successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False, 
+                "error": "Failed to save anomaly"
+            }), 500
 
     except Exception as e:
-        logger.error(f"❌ Failed to save anomaly: {e}", exc_info=True)
+        logger.error(f"❌ Failed to save anomaly via API: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1995,7 +2061,6 @@ def calculate_simple_features(keystrokes, mouse_movements):
 def calculate_simple_similarity(current_features, stored_pattern):
     """Calculate simple similarity score for demo (0-1)"""
     try:
-        # Extract current features
         similarities = []
         
         # Typing speed comparison

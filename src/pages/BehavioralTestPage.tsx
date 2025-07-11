@@ -1,111 +1,226 @@
-// Enhanced BehavioralTestPage.tsx - Better UI + Proper Data Flow
+// Enhanced BehavioralTestPage.tsx - CRITICAL FIX for anomaly detection and saving
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Activity, 
-  Keyboard, 
-  MousePointer, 
+  Zap, 
+  Clock, 
   CheckCircle, 
-  AlertTriangle,
-  Clock,
+  AlertTriangle, 
+  Play, 
+  Square, 
+  RotateCcw,
+  Activity,
+  Keyboard,
+  MousePointer,
   BarChart3,
-  Zap,
-  Shield,
+  TrendingUp,
   TrendingDown,
-  Database,
-  Edit3,
-  Send
+  Shield,
+  Eye,
+  XCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
+interface KeystrokeEvent {
+  key: string;
+  code: string;
+  timestamp: number;
+  type: 'keydown' | 'keyup';
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+interface MouseEvent {
+  x: number;
+  y: number;
+  timestamp: number;
+  type: 'mousemove' | 'click' | 'scroll';
+  button?: number;
+  deltaY?: number;
+}
+
 interface TestResult {
+  success: boolean;
   similarity_score: number;
   is_anomaly: boolean;
+  is_critical: boolean;
   action_taken: string;
   severity: string;
   session_id: string;
-  supabase_saved: boolean;
-  threshold: number;
-}
-
-interface BehavioralData {
-  keystrokes: any[];
-  mouseMovements: any[];
+  thresholds: {
+    anomaly: number;
+    critical: number;
+  };
+  details: {
+    keystroke_count: number;
+    mouse_count: number;
+    current_features: any;
+    baseline_available: boolean;
+  };
+  data_saved: {
+    session_saved: boolean;
+    anomaly_saved: boolean;
+  };
 }
 
 const BehavioralTestPage: React.FC = () => {
   const { userData } = useAuth();
-  const [isTestRunning, setIsTestRunning] = useState(false);
-  const [countdown, setCountdown] = useState(30);
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [behavioralData, setBehavioralData] = useState<BehavioralData>({
-    keystrokes: [],
-    mouseMovements: []
-  });
-  
-  // Enhanced UI state
+  const [isRecording, setIsRecording] = useState(false);
+  const [testDuration, setTestDuration] = useState(30); // seconds
+  const [currentTime, setCurrentTime] = useState(0);
   const [typedText, setTypedText] = useState('');
-  const [scrollPosition, setScrollPosition] = useState(0);
-  const [testPhase, setTestPhase] = useState<'typing' | 'scrolling' | 'complete'>('typing');
-  
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [testResults, setTestResults] = useState<TestResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [testHistory, setTestHistory] = useState<TestResult[]>([]);
 
-  const REFERENCE_TEXT = "The quick brown fox jumps over the lazy dog. This pangram contains every letter of the alphabet and is commonly used for typing tests. Please type this sentence naturally to establish your baseline behavioral pattern.";
+  // Data collection refs
+  const keystrokesRef = useRef<KeystrokeEvent[]>([]);
+  const mouseEventsRef = useRef<MouseEvent[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingStartRef = useRef<number>(0);
 
-  // Start the enhanced test
-  const startTest = () => {
-    if (!userData?.uid) return;
-    
-    setIsTestRunning(true);
-    setCountdown(30); // Extended to 30 seconds for better data
-    setTestResult(null);
-    setTypedText('');
-    setScrollPosition(0);
-    setTestPhase('typing');
-    setBehavioralData({ keystrokes: [], mouseMovements: [] });
-    
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 16) {
-          // Switch to scrolling phase at 15 seconds
-          if (prev === 16) {
-            setTestPhase('scrolling');
-          }
-        }
-        if (prev <= 1) {
-          finishTest();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
+  // Test prompt
+  const TEST_PROMPT = "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is perfect for testing typing patterns. Please type this text naturally and move your mouse around occasionally.";
 
-  // Enhanced test completion
-  const finishTest = async () => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-    }
-    
-    setIsTestRunning(false);
-    setTestPhase('complete');
-    
-    if (!userData?.uid || behavioralData.keystrokes.length === 0) {
-      alert('Not enough data collected. Please type and move mouse during the test.');
+  // ========== CRITICAL: Enhanced Event Handlers ==========
+
+  const handleKeyEvent = useCallback((event: KeyboardEvent) => {
+    if (!isRecording) return;
+
+    // Skip function keys and navigation keys during test
+    if (event.key.startsWith('F') || 
+        ['Control', 'Alt', 'Shift', 'Meta', 'Tab', 'Escape'].includes(event.key)) {
       return;
     }
 
-    try {
-      console.log('🔍 Sending enhanced behavioral data:', {
-        keystrokeCount: behavioralData.keystrokes.length,
-        mouseCount: behavioralData.mouseMovements.length,
-        typedText: typedText,
-        scrollDistance: scrollPosition
-      });
+    const keystrokeEvent: KeystrokeEvent = {
+      key: event.key,
+      code: event.code,
+      timestamp: Date.now(),
+      type: event.type as 'keydown' | 'keyup',
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey
+    };
 
+    keystrokesRef.current.push(keystrokeEvent);
+    console.log(`🔑 Test keystroke: ${keystrokeEvent.key} (${keystrokeEvent.type})`);
+  }, [isRecording]);
+
+  const handleMouseEvent = useCallback((event: globalThis.MouseEvent) => {
+    if (!isRecording) return;
+
+    let eventType: 'mousemove' | 'click' | 'scroll' = 'mousemove';
+    if (event.type === 'click') eventType = 'click';
+    if (event.type === 'wheel') eventType = 'scroll';
+
+    const mouseEventData: MouseEvent = {
+      x: event.clientX,
+      y: event.clientY,
+      timestamp: Date.now(),
+      type: eventType,
+      button: event.button,
+      deltaY: (event as any).deltaY
+    };
+
+    mouseEventsRef.current.push(mouseEventData);
+  }, [isRecording]);
+
+  // ========== CRITICAL: Test Management ==========
+
+  const startTest = useCallback(() => {
+    if (!userData?.uid) {
+      alert('User not authenticated');
+      return;
+    }
+
+    console.log(`🚀 Starting behavioral test for user ${userData.uid}`);
+    
+    setIsRecording(true);
+    setCurrentTime(0);
+    setTypedText('');
+    setTestResults(null);
+    
+    // Clear previous data
+    keystrokesRef.current = [];
+    mouseEventsRef.current = [];
+    recordingStartRef.current = Date.now();
+
+    // Add event listeners
+    document.addEventListener('keydown', handleKeyEvent, true);
+    document.addEventListener('keyup', handleKeyEvent, true);
+    document.addEventListener('mousemove', handleMouseEvent, true);
+    document.addEventListener('click', handleMouseEvent, true);
+    document.addEventListener('wheel', handleMouseEvent, true);
+
+    // Start timer
+    timerRef.current = setInterval(() => {
+      setCurrentTime(prev => {
+        const newTime = prev + 1;
+        if (newTime >= testDuration) {
+          stopTest();
+          return testDuration;
+        }
+        return newTime;
+      });
+    }, 1000);
+
+    console.log('✅ Behavioral test started');
+  }, [userData?.uid, testDuration, handleKeyEvent, handleMouseEvent]);
+
+  const stopTest = useCallback(async () => {
+    if (!isRecording) return;
+
+    console.log('🛑 Stopping behavioral test');
+    
+    setIsRecording(false);
+
+    // Clear timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // Remove event listeners
+    document.removeEventListener('keydown', handleKeyEvent, true);
+    document.removeEventListener('keyup', handleKeyEvent, true);
+    document.removeEventListener('mousemove', handleMouseEvent, true);
+    document.removeEventListener('click', handleMouseEvent, true);
+    document.removeEventListener('wheel', handleMouseEvent, true);
+
+    // Analyze results
+    await analyzeResults();
+  }, [isRecording, handleKeyEvent, handleMouseEvent]);
+
+  const analyzeResults = async () => {
+    if (!userData?.uid) return;
+
+    setIsAnalyzing(true);
+
+    try {
+      const keystrokes = keystrokesRef.current;
+      const mouseEvents = mouseEventsRef.current;
+
+      console.log(`🔍 Analyzing test results: ${keystrokes.length} keystrokes, ${mouseEvents.length} mouse events`);
+
+      if (keystrokes.length < 5) {
+        alert('Not enough keystroke data collected. Please try again and type more.');
+        setIsAnalyzing(false);
+        return;
+      }
+
+      const behavioralData = {
+        keystrokes,
+        mouseMovements: mouseEvents
+      };
+
+      const sessionId = `test_${userData.uid}_${Date.now()}`;
+
+      console.log(`📡 Sending test data to behavioral-test API`);
+
+      // CRITICAL: Send to behavioral test endpoint
       const response = await fetch('http://localhost:5000/api/behavioral-test', {
         method: 'POST',
         headers: {
@@ -113,476 +228,388 @@ const BehavioralTestPage: React.FC = () => {
         },
         body: JSON.stringify({
           user_id: userData.uid,
-          behavioralData: {
-            ...behavioralData,
-            typedText: typedText,
-            scrollDistance: scrollPosition,
-            testDuration: 30,
-            expectedText: REFERENCE_TEXT
-          },
-          session_id: `test_${userData.uid}_${Date.now()}`,
-          test_mode: true
+          behavioralData,
+          session_id: sessionId,
+          test_mode: true,
+          typed_text: typedText,
+          test_duration: testDuration,
+          page_context: '/behavioral-test'
         })
       });
 
-      const result = await response.json();
-      
-      if (result.success) {
-        setTestResult(result);
-        console.log('✅ Enhanced test completed:', result);
-        
-        // Trigger a refresh of parent data if available
-        if (window.parent && window.parent.postMessage) {
-          window.parent.postMessage({ type: 'BEHAVIORAL_DATA_UPDATED' }, '*');
-        }
-      } else {
-        alert(`Test failed: ${result.error}`);
+      if (!response.ok) {
+        throw new Error(`Test failed: ${response.status} ${response.statusText}`);
       }
+
+      const result: TestResult = await response.json();
       
+      console.log('✅ Behavioral test result:', result);
+
+      setTestResults(result);
+
+      // Add to history
+      setTestHistory(prev => [result, ...prev.slice(0, 9)]); // Keep last 10 results
+
+      // CRITICAL: Trigger real-time update event
+      window.dispatchEvent(new CustomEvent('behavioralDataUpdated', {
+        detail: { userId: userData.uid, result, sessionId }
+      }));
+
+      // Show result notification
+      if (result.is_critical) {
+        alert(`🚨 CRITICAL ANOMALY DETECTED!\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nAction: ${result.action_taken}`);
+      } else if (result.is_anomaly) {
+        alert(`⚠️ Anomaly detected.\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nSeverity: ${result.severity}`);
+      }
+
     } catch (error) {
-      console.error('Test error:', error);
-      alert('Failed to run behavioral test');
+      console.error('❌ Error analyzing test results:', error);
+      alert(`Error analyzing results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  // Enhanced behavioral event capture
-  useEffect(() => {
-    if (!isTestRunning) return;
+  const resetTest = () => {
+    setIsRecording(false);
+    setCurrentTime(0);
+    setTypedText('');
+    setTestResults(null);
+    
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-    const keystrokes: any[] = [];
-    const mouseMovements: any[] = [];
+    // Remove event listeners
+    document.removeEventListener('keydown', handleKeyEvent, true);
+    document.removeEventListener('keyup', handleKeyEvent, true);
+    document.removeEventListener('mousemove', handleMouseEvent, true);
+    document.removeEventListener('click', handleMouseEvent, true);
+    document.removeEventListener('wheel', handleMouseEvent, true);
 
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (!isTestRunning) return;
-      
-      keystrokes.push({
-        key: e.key,
-        code: e.code,
-        timestamp: Date.now(),
-        type: 'keydown',
-        altKey: e.altKey,
-        ctrlKey: e.ctrlKey,
-        shiftKey: e.shiftKey
-      });
-    };
+    keystrokesRef.current = [];
+    mouseEventsRef.current = [];
+  };
 
-    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
-      if (!isTestRunning) return;
-      
-      keystrokes.push({
-        key: e.key,
-        code: e.code,
-        timestamp: Date.now(),
-        type: 'keyup',
-        altKey: e.altKey,
-        ctrlKey: e.ctrlKey,
-        shiftKey: e.shiftKey
-      });
-    };
+  // ========== HELPER FUNCTIONS ==========
 
-    const handleMouseMove = (e: globalThis.MouseEvent) => {
-      if (!isTestRunning) return;
-      
-      // Enhanced mouse tracking with velocity
-      if (mouseMovements.length === 0 || 
-          Date.now() - mouseMovements[mouseMovements.length - 1].timestamp > 50) {
-        
-        const lastMove = mouseMovements[mouseMovements.length - 1];
-        let velocity = 0;
-        if (lastMove) {
-          const dx = e.clientX - lastMove.x;
-          const dy = e.clientY - lastMove.y;
-          const dt = Date.now() - lastMove.timestamp;
-          velocity = Math.sqrt(dx * dx + dy * dy) / dt;
-        }
-        
-        mouseMovements.push({
-          x: e.clientX,
-          y: e.clientY,
-          timestamp: Date.now(),
-          type: 'mousemove',
-          velocity: velocity
-        });
-      }
-    };
+  const getScoreColor = (score: number) => {
+    if (score >= 0.8) return 'text-green-400';
+    if (score >= 0.6) return 'text-yellow-400';
+    return 'text-red-400';
+  };
 
-    const handleClick = (e: globalThis.MouseEvent) => {
-      if (!isTestRunning) return;
-      
-      mouseMovements.push({
-        x: e.clientX,
-        y: e.clientY,
-        timestamp: Date.now(),
-        type: 'click',
-        button: e.button
-      });
-    };
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'text-red-400 bg-red-900/30 border-red-500/30';
+      case 'high': return 'text-orange-400 bg-orange-900/30 border-orange-500/30';
+      case 'medium': return 'text-yellow-400 bg-yellow-900/30 border-yellow-500/30';
+      default: return 'text-blue-400 bg-blue-900/30 border-blue-500/30';
+    }
+  };
 
-    const handleScroll = (e: globalThis.Event) => {
-      if (!isTestRunning || testPhase !== 'scrolling') return;
-      
-      const scrollY = window.scrollY || document.documentElement.scrollTop;
-      setScrollPosition(scrollY);
-      
-      mouseMovements.push({
-        x: 0,
-        y: scrollY,
-        timestamp: Date.now(),
-        type: 'scroll',
-        delta: scrollY - scrollPosition
-      });
-    };
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleClick);
-    window.addEventListener('scroll', handleScroll);
+  // ========== CLEANUP ==========
 
-    // Update behavioral data every 100ms
-    const updateInterval = setInterval(() => {
-      setBehavioralData({
-        keystrokes: [...keystrokes],
-        mouseMovements: [...mouseMovements]
-      });
-    }, 100);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('click', handleClick);
-      window.removeEventListener('scroll', handleScroll);
-      clearInterval(updateInterval);
-    };
-  }, [isTestRunning, testPhase, scrollPosition]);
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-      }
+      resetTest();
     };
   }, []);
 
-  const getPhaseInstruction = () => {
-    switch (testPhase) {
-      case 'typing':
-        return "Phase 1: Type the reference text naturally in the box below";
-      case 'scrolling':
-        return "Phase 2: Scroll up and down in the content area to capture mouse patterns";
-      case 'complete':
-        return "Test completed! Analyzing your behavioral patterns...";
-      default:
-        return "Click start to begin the behavioral analysis test";
-    }
-  };
-
   return (
     <div className="space-y-6">
-      <div className="glass-card rounded-lg p-6">
-        <h3 className="text-xl font-bold text-green-400 mb-4 flex items-center">
-          <Activity className="mr-3 h-6 w-6" />
-          ENHANCED BEHAVIORAL TEST
-        </h3>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-lg p-6"
+      >
+        <h2 className="text-2xl font-bold text-green-400 mb-4 flex items-center">
+          <Zap className="mr-3 h-6 w-6" />
+          BEHAVIORAL AUTHENTICATION TEST
+        </h2>
         
         <p className="text-cyan-400 mb-6">
-          This enhanced test captures comprehensive typing and mouse patterns through structured phases. 
-          Complete both typing and scrolling phases for accurate behavioral analysis.
+          This test captures your typing and mouse behavior patterns to verify your identity. 
+          The system will analyze your behavioral biometrics and detect any anomalies.
         </p>
 
+        {/* Test Configuration */}
+        <div className="mb-6">
+          <label className="block text-cyan-400 text-sm font-bold mb-2">
+            Test Duration (seconds):
+          </label>
+          <input
+            type="number"
+            min="10"
+            max="120"
+            value={testDuration}
+            onChange={(e) => setTestDuration(parseInt(e.target.value))}
+            disabled={isRecording}
+            className="terminal-input w-24 px-3 py-1 rounded"
+          />
+        </div>
+
+        {/* Test Status */}
+        <div className="flex items-center justify-between mb-6 p-4 bg-black/20 rounded">
+          <div className="flex items-center">
+            <div className={`w-3 h-3 rounded-full mr-3 ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></div>
+            <span className="text-cyan-400 font-bold">
+              {isRecording ? 'RECORDING' : isAnalyzing ? 'ANALYZING' : 'READY'}
+            </span>
+          </div>
+          <div className="flex items-center text-green-400">
+            <Clock className="h-4 w-4 mr-2" />
+            <span className="font-mono text-lg">
+              {formatTime(currentTime)} / {formatTime(testDuration)}
+            </span>
+          </div>
+        </div>
+
         {/* Test Controls */}
-        {!isTestRunning && !testResult && (
-          <div className="text-center">
+        <div className="flex space-x-4 mb-6">
+          {!isRecording && !isAnalyzing && (
             <button
               onClick={startTest}
-              className="terminal-button px-6 py-3 rounded font-bold hover-glow"
-              disabled={!userData?.uid}
+              className="terminal-button px-6 py-2 rounded flex items-center"
             >
-              <Zap className="h-5 w-5 mr-2 inline" />
-              START 30-SECOND ENHANCED TEST
+              <Play className="h-4 w-4 mr-2" />
+              START TEST
             </button>
-            {!userData?.uid && (
-              <p className="text-red-400 text-sm mt-2">Please log in to run the test</p>
-            )}
-          </div>
-        )}
+          )}
+          
+          {isRecording && (
+            <button
+              onClick={stopTest}
+              className="bg-red-600/20 text-red-400 border border-red-500/30 px-6 py-2 rounded flex items-center hover:bg-red-600/30"
+            >
+              <Square className="h-4 w-4 mr-2" />
+              STOP TEST
+            </button>
+          )}
+          
+          {!isRecording && !isAnalyzing && (
+            <button
+              onClick={resetTest}
+              className="bg-gray-600/20 text-gray-400 border border-gray-500/30 px-6 py-2 rounded flex items-center hover:bg-gray-600/30"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              RESET
+            </button>
+          )}
+        </div>
 
-        {/* Test Running */}
-        {isTestRunning && (
+        {/* Typing Area */}
+        <div className="mb-6">
+          <label className="block text-cyan-400 text-sm font-bold mb-2">
+            Type the following text naturally:
+          </label>
+          <div className="p-3 bg-gray-900/50 rounded border border-gray-600 mb-2 text-gray-300 text-sm">
+            {TEST_PROMPT}
+          </div>
+          <textarea
+            value={typedText}
+            onChange={(e) => setTypedText(e.target.value)}
+            placeholder="Start typing here..."
+            disabled={!isRecording}
+            className="terminal-input w-full px-3 py-2 rounded h-24 resize-none"
+          />
+        </div>
+
+        {/* Live Stats */}
+        {isRecording && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="space-y-6"
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
           >
-            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-6">
-              <h4 className="text-2xl font-bold text-green-400 mb-2">
-                🧪 TEST IN PROGRESS
-              </h4>
-              <div className="text-6xl font-bold text-cyan-400 mb-4">
-                {countdown}
-              </div>
-              <p className="text-green-400 mb-4">
-                {getPhaseInstruction()}
-              </p>
-              
-              {/* Live Stats */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="glass-card rounded p-3">
-                  <Keyboard className="h-6 w-6 text-cyan-400 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-cyan-400">
-                    {behavioralData.keystrokes.length}
-                  </div>
-                  <div className="text-xs text-gray-400">Keystrokes</div>
-                </div>
-                <div className="glass-card rounded p-3">
-                  <MousePointer className="h-6 w-6 text-blue-400 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-blue-400">
-                    {behavioralData.mouseMovements.length}
-                  </div>
-                  <div className="text-xs text-gray-400">Mouse Events</div>
-                </div>
-                <div className="glass-card rounded p-3">
-                  <Edit3 className="h-6 w-6 text-purple-400 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-purple-400">
-                    {typedText.length}
-                  </div>
-                  <div className="text-xs text-gray-400">Characters</div>
-                </div>
-                <div className="glass-card rounded p-3">
-                  <Activity className="h-6 w-6 text-orange-400 mx-auto mb-2" />
-                  <div className="text-lg font-bold text-orange-400">
-                    {Math.round(scrollPosition)}
-                  </div>
-                  <div className="text-xs text-gray-400">Scroll (px)</div>
-                </div>
-              </div>
+            <div className="text-center p-3 bg-black/20 rounded">
+              <Keyboard className="h-6 w-6 text-blue-400 mx-auto mb-1" />
+              <div className="text-lg font-bold text-blue-400">{keystrokesRef.current.length}</div>
+              <div className="text-xs text-gray-400">Keystrokes</div>
             </div>
-
-            {/* Typing Phase */}
-            {testPhase === 'typing' && (
-              <div className="glass-card rounded-lg p-6">
-                <h5 className="text-lg font-bold text-cyan-400 mb-4">
-                  📝 Phase 1: Typing Analysis
-                </h5>
-                <div className="mb-4 p-4 bg-blue-900/20 border border-blue-500/30 rounded">
-                  <p className="text-blue-300 text-sm mb-2">Reference Text:</p>
-                  <p className="text-white">{REFERENCE_TEXT}</p>
-                </div>
-                <textarea
-                  value={typedText}
-                  onChange={(e) => setTypedText(e.target.value)}
-                  placeholder="Type the reference text above naturally..."
-                  className="w-full h-32 p-4 bg-gray-900 border border-green-500 text-green-400 rounded resize-none focus:outline-none focus:border-cyan-400"
-                  autoFocus
-                />
+            <div className="text-center p-3 bg-black/20 rounded">
+              <MousePointer className="h-6 w-6 text-green-400 mx-auto mb-1" />
+              <div className="text-lg font-bold text-green-400">{mouseEventsRef.current.length}</div>
+              <div className="text-xs text-gray-400">Mouse Events</div>
+            </div>
+            <div className="text-center p-3 bg-black/20 rounded">
+              <Activity className="h-6 w-6 text-cyan-400 mx-auto mb-1" />
+              <div className="text-lg font-bold text-cyan-400">{typedText.length}</div>
+              <div className="text-xs text-gray-400">Characters</div>
+            </div>
+            <div className="text-center p-3 bg-black/20 rounded">
+              <BarChart3 className="h-6 w-6 text-purple-400 mx-auto mb-1" />
+              <div className="text-lg font-bold text-purple-400">
+                {Math.round((typedText.length / (currentTime || 1)) * 60)}
               </div>
-            )}
+              <div className="text-xs text-gray-400">WPM</div>
+            </div>
+          </motion.div>
+        )}
 
-            {/* Scrolling Phase */}
-            {testPhase === 'scrolling' && (
-              <div className="glass-card rounded-lg p-6">
-                <h5 className="text-lg font-bold text-orange-400 mb-4">
-                  🖱️ Phase 2: Mouse & Scroll Analysis
-                </h5>
-                <p className="text-orange-300 mb-4">
-                  Scroll up and down in this content area naturally. Move your mouse around the content.
-                </p>
-                <div 
-                  ref={scrollAreaRef}
-                  className="h-64 overflow-y-auto bg-gray-900 border border-orange-500 rounded p-4"
-                >
-                  <div className="space-y-4 text-gray-300">
-                    <p>This is a scrolling test area. Please scroll up and down naturally.</p>
-                    <p>Your mouse movements and scrolling patterns are being captured.</p>
-                    <p>This helps establish your unique behavioral signature.</p>
-                    <p>Continue scrolling to generate more data points.</p>
-                    <p>The system analyzes velocity, acceleration, and timing patterns.</p>
-                    <p>Each person has a unique way of interacting with content.</p>
-                    <p>This creates a behavioral biometric profile.</p>
-                    <p>Scroll more content to improve accuracy.</p>
-                    <p>Move your mouse around this text area.</p>
-                    <p>Click in different areas as well.</p>
-                    <p>All interactions are recorded for analysis.</p>
-                    <p>This creates a comprehensive behavioral baseline.</p>
-                    <p>Keep scrolling until the timer reaches zero.</p>
-                    <p>Your patterns will be compared in future logins.</p>
-                    <p>This ensures only you can access your account.</p>
-                    <p>Behavioral biometrics are very secure.</p>
-                    <p>They're hard to replicate or steal.</p>
-                    <p>Continue your natural scrolling behavior.</p>
-                    <p>The test will finish automatically.</p>
-                    <p>Thank you for completing the behavioral test!</p>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Analysis Loading */}
+        {isAnalyzing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center p-8"
+          >
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+            <p className="text-cyan-400 font-mono">ANALYZING_BEHAVIORAL_PATTERNS...</p>
           </motion.div>
         )}
 
         {/* Test Results */}
-        {testResult && (
+        {testResults && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className={`border rounded-lg p-6 ${
-              testResult.is_anomaly 
-                ? 'border-red-500 bg-red-900/20' 
-                : 'border-green-500 bg-green-900/20'
-            }`}>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xl font-bold">🔍 ENHANCED TEST RESULTS</h4>
-                {testResult.is_anomaly ? (
-                  <AlertTriangle className="h-8 w-8 text-red-400" />
-                ) : (
-                  <CheckCircle className="h-8 w-8 text-green-400" />
-                )}
+            <h3 className="text-xl font-bold text-green-400 mb-4">TEST RESULTS</h3>
+            
+            {/* Overall Result */}
+            <div className={`p-4 rounded border ${testResults.is_critical ? 'bg-red-900/20 border-red-500/30' : 
+                                                  testResults.is_anomaly ? 'bg-yellow-900/20 border-yellow-500/30' : 
+                                                  'bg-green-900/20 border-green-500/30'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  {testResults.is_critical ? (
+                    <XCircle className="h-6 w-6 text-red-400 mr-2" />
+                  ) : testResults.is_anomaly ? (
+                    <AlertTriangle className="h-6 w-6 text-yellow-400 mr-2" />
+                  ) : (
+                    <CheckCircle className="h-6 w-6 text-green-400 mr-2" />
+                  )}
+                  <span className={`font-bold text-lg ${testResults.is_critical ? 'text-red-400' : 
+                                                        testResults.is_anomaly ? 'text-yellow-400' : 
+                                                        'text-green-400'}`}>
+                    {testResults.is_critical ? 'CRITICAL ANOMALY' : 
+                     testResults.is_anomaly ? 'ANOMALY DETECTED' : 
+                     'VERIFICATION PASSED'}
+                  </span>
+                </div>
+                <span className={`px-3 py-1 rounded text-sm font-bold border ${getSeverityColor(testResults.severity)}`}>
+                  {testResults.severity.toUpperCase()}
+                </span>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <BarChart3 className="h-8 w-8 mx-auto mb-2 text-cyan-400" />
-                  <div className="text-2xl font-bold text-cyan-400">
-                    {(testResult.similarity_score * 100).toFixed(1)}%
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <span className="text-gray-400 text-sm">Similarity Score:</span>
+                  <div className={`text-2xl font-bold ${getScoreColor(testResults.similarity_score)}`}>
+                    {(testResults.similarity_score * 100).toFixed(1)}%
                   </div>
-                  <div className="text-sm text-gray-400">Similarity Score</div>
                 </div>
-
-                <div className="text-center">
-                  <div className={`text-2xl font-bold ${
-                    testResult.is_anomaly ? 'text-red-400' : 'text-green-400'
-                  }`}>
-                    {testResult.is_anomaly ? '⚠️ ANOMALY' : '✅ NORMAL'}
+                <div>
+                  <span className="text-gray-400 text-sm">Action Taken:</span>
+                  <div className="text-cyan-400 font-bold">
+                    {testResults.action_taken.toUpperCase()}
                   </div>
-                  <div className="text-sm text-gray-400">Classification</div>
                 </div>
-
-                <div className="text-center">
-                  <Database className="h-8 w-8 mx-auto mb-2 text-purple-400" />
-                  <div className={`text-2xl font-bold ${
-                    testResult.supabase_saved ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {testResult.supabase_saved ? '✅ SAVED' : '❌ FAILED'}
-                  </div>
-                  <div className="text-sm text-gray-400">Database Status</div>
-                </div>
-
-                <div className="text-center">
-                  <Shield className="h-8 w-8 mx-auto mb-2 text-yellow-400" />
-                  <div className={`text-2xl font-bold ${
-                    testResult.action_taken === 'auto_lock' ? 'text-red-400' :
-                    testResult.action_taken === 'warning' ? 'text-yellow-400' :
-                    'text-green-400'
-                  }`}>
-                    {testResult.action_taken.toUpperCase()}
-                  </div>
-                  <div className="text-sm text-gray-400">Action Taken</div>
-                </div>
-              </div>
-
-              {/* Enhanced Results Info */}
-              <div className="mt-4 pt-4 border-t border-gray-500/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400">Test Duration:</span>
-                    <span className="text-cyan-400 ml-2 font-bold">30 seconds</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Phases Completed:</span>
-                    <span className="text-cyan-400 ml-2 font-bold">Typing + Scrolling</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Data Quality:</span>
-                    <span className="text-cyan-400 ml-2 font-bold">
-                      {behavioralData.keystrokes.length > 50 ? 'High' : 
-                       behavioralData.keystrokes.length > 20 ? 'Medium' : 'Low'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Threshold:</span>
-                    <span className="text-cyan-400 ml-2 font-bold">
-                      {(testResult.threshold * 100).toFixed(0)}%
-                    </span>
+                <div>
+                  <span className="text-gray-400 text-sm">Session ID:</span>
+                  <div className="text-gray-300 font-mono text-xs">
+                    {testResults.session_id.slice(-12)}...
                   </div>
                 </div>
               </div>
-
-              {/* Warning Messages */}
-              {testResult.is_anomaly && (
-                <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded">
-                  <p className="text-red-400 text-sm flex items-center">
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    {testResult.action_taken === 'auto_lock' 
-                      ? '🔒 CRITICAL: Your behavioral pattern differs significantly. In production, account would be locked!'
-                      : '⚠️ WARNING: Your behavioral pattern shows variations. Additional monitoring active.'
-                    }
-                  </p>
-                </div>
-              )}
-
-              {testResult.supabase_saved && (
-                <div className="mt-4 p-3 bg-green-900/30 border border-green-500/30 rounded">
-                  <p className="text-green-400 text-sm flex items-center">
-                    <Database className="h-4 w-4 mr-2" />
-                    ✅ Enhanced results saved to Supabase. Check Admin Dashboard for real-time updates.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Run Another Test */}
-            <div className="text-center">
-              <button
-                onClick={startTest}
-                className="terminal-button px-4 py-2 rounded font-bold hover-glow"
-              >
-                🔄 RUN ANOTHER ENHANCED TEST
-              </button>
+            {/* Detailed Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="glass-card rounded p-4">
+                <h4 className="font-bold text-cyan-400 mb-2">Data Collection</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Keystrokes:</span>
+                    <span className="text-green-400">{testResults.details.keystroke_count}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Mouse Events:</span>
+                    <span className="text-green-400">{testResults.details.mouse_count}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Baseline Available:</span>
+                    <span className={testResults.details.baseline_available ? 'text-green-400' : 'text-red-400'}>
+                      {testResults.details.baseline_available ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card rounded p-4">
+                <h4 className="font-bold text-cyan-400 mb-2">Data Persistence</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Session Saved:</span>
+                    <span className={testResults.data_saved.session_saved ? 'text-green-400' : 'text-red-400'}>
+                      {testResults.data_saved.session_saved ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Anomaly Saved:</span>
+                    <span className={testResults.data_saved.anomaly_saved ? 'text-green-400' : 'text-gray-400'}>
+                      {testResults.is_anomaly ? (testResults.data_saved.anomaly_saved ? 'YES' : 'NO') : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Thresholds:</span>
+                    <span className="text-cyan-400 text-xs">
+                      A:{(testResults.thresholds.anomaly * 100).toFixed(0)}% 
+                      C:{(testResults.thresholds.critical * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
-      </div>
 
-      {/* Enhanced Instructions */}
-      <div className="glass-card rounded-lg p-4">
-        <h4 className="text-green-400 font-bold mb-2">🔍 Enhanced Test Process:</h4>
-        <ul className="text-cyan-300 text-sm space-y-1">
-          <li>• <strong>Phase 1 (0-15s):</strong> Type reference text naturally</li>
-          <li>• <strong>Phase 2 (15-30s):</strong> Scroll and mouse interaction</li>
-          <li>• <strong>Detection:</strong> Analyzes typing speed, mouse velocity, scroll patterns</li>
-          <li>• <strong>Thresholds:</strong> Warning (30%) → Auto-lock (15%)</li>
-          <li>• <strong>Storage:</strong> All results saved to behavioral_sessions table</li>
-          <li>• <strong>Analysis:</strong> Creates comprehensive behavioral fingerprint</li>
-        </ul>
-      </div>
-
-      <style>{`
-        .glass-card {
-          background: rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-
-        .terminal-button {
-          background: linear-gradient(45deg, #059669, #0891b2);
-          color: white;
-          border: 1px solid #10b981;
-          transition: all 0.3s ease;
-        }
-
-        .terminal-button:hover:not(:disabled) {
-          background: linear-gradient(45deg, #0891b2, #059669);
-          box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
-          transform: translateY(-2px);
-        }
-
-        .hover-glow:hover:not(:disabled) {
-          box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
-        }
-      `}</style>
+        {/* Test History */}
+        {testHistory.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8"
+          >
+            <h3 className="text-xl font-bold text-green-400 mb-4">RECENT TEST HISTORY</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {testHistory.map((result, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-black/20 rounded">
+                  <div className="flex items-center">
+                    {result.is_critical ? (
+                      <XCircle className="h-4 w-4 text-red-400 mr-2" />
+                    ) : result.is_anomaly ? (
+                      <AlertTriangle className="h-4 w-4 text-yellow-400 mr-2" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 text-green-400 mr-2" />
+                    )}
+                    <span className="text-cyan-400 text-sm">
+                      Similarity: {(result.similarity_score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-2 py-1 rounded text-xs border ${getSeverityColor(result.severity)}`}>
+                      {result.severity.toUpperCase()}
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      {result.action_taken.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
     </div>
   );
 };
