@@ -81,7 +81,7 @@ const AdminEditAccount = () => {
         .eq('user_id', userData.uid);
 
       if (biometricData) {
-        const types = biometricData.map(item => item.biometric_type);
+        const types = biometricData.map((item: { biometric_type: string }) => item.biometric_type);
         setBiometricStatus({
           face: types.includes('face'),
           keystroke: types.includes('keystroke'),
@@ -142,8 +142,15 @@ const AdminEditAccount = () => {
           .eq('id', userData?.uid);
 
         if (updateError) throw updateError;
-      }
 
+        // Update auth email if changed
+        if (formData.email !== userData?.email) {
+          const { error: authError } = await supabase.auth.updateUser({
+            email: formData.email
+          });
+          if (authError) console.warn('Auth email update failed:', authError);
+        }
+      }
       // Update password if provided
       if (formData.newPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({
@@ -257,10 +264,10 @@ const AdminEditAccount = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                    PHONE_NUMBER
-                  </label>
+                {/* <div>
+                <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
+                  PHONE_NUMBER
+                </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
                     <input
@@ -272,7 +279,7 @@ const AdminEditAccount = () => {
                       placeholder="Enter phone number"
                     />
                   </div>
-                </div>
+                </div> */}
 
                 <div className="border-t border-green-500/30 pt-6">
                   <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE_PASSWORD</h3>

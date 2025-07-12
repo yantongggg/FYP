@@ -21,13 +21,13 @@ const Navbar = () => {
         { path: '/login', label: 'LOGIN', icon: User },
         { path: '/register', label: 'REGISTER', icon: User },
       ];
-    } else if (userData?.role === 'admin') {
-      // Admin - only admin pages
-      return [
-        { path: '/', label: 'HOME', icon: Terminal },
-        { path: '/admin', label: 'ADMIN_PANEL', icon: Shield },
-        { path: '/admin/edit', label: 'SETTINGS', icon: Settings },
-      ];
+      } else if (userData?.role === 'admin') {
+        // Admin - only admin pages
+        return [
+          { path: '/', label: 'HOME', icon: Terminal },
+          { path: '/admin', label: 'ADMIN_PANEL', icon: Shield },
+          { path: '/admin/settings', label: 'SETTINGS', icon: Settings },  // ← FIXED PATH
+        ];
     } else {
       // Regular user - user pages + optional docs
       return [

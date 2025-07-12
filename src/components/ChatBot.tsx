@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageCircle, Send, X, Bot, User, Shield, Activity, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -45,6 +45,7 @@ const ChatBot: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+
   // Behavioral monitoring state
   const [behavioralMonitoring, setBehavioralMonitoring] = useState(true)
   const [chatBehavioralData, setChatBehavioralData] = useState({
@@ -69,9 +70,33 @@ const ChatBot: React.FC = () => {
     scrollToBottom()
   }, [messages])
 
-  // ========== Enhanced Behavioral Monitoring for Chat ==========
+  const [hasError, setHasError] = useState(false);
 
-  const handleChatKeyEvent = useCallback((event: KeyboardEvent) => {
+// Add error boundary
+useEffect(() => {
+  const handleError = (error: any) => {
+    console.error('💬 ChatBot error:', error);
+    setHasError(true);
+    setTimeout(() => setHasError(false), 5000); // Reset after 5s
+  };
+
+  window.addEventListener('error', handleError);
+  return () => window.removeEventListener('error', handleError);
+}, []);
+
+// Add this early return after state declarations
+if (hasError) {
+  return (
+    <motion.button
+      onClick={() => setHasError(false)}
+      className="fixed bottom-4 right-4 w-16 h-16 bg-red-600 text-white rounded-full shadow-lg z-[9999] flex items-center justify-center"
+    >
+      <MessageCircle className="h-6 w-6" />
+    </motion.button>
+  );
+}
+  // ========== Enhanced Behavioral Monitoring for Chat ==========
+  const handleChatKeyEvent = (event: KeyboardEvent) => {
     if (!isOpen || !behavioralMonitoring || !userData?.uid) return
 
     // Only monitor when chat is open and user is typing
@@ -105,9 +130,9 @@ const ChatBot: React.FC = () => {
     }))
 
     console.log(`💬 Chat keystroke: ${keystrokeEvent.key} (${keystrokeEvent.type})`)
-  }, [isOpen, behavioralMonitoring, userData?.uid])
+  }
 
-  const handleChatMouseEvent = useCallback((event: globalThis.MouseEvent) => {
+  const handleChatMouseEvent = (event: globalThis.MouseEvent) => {
     if (!isOpen || !behavioralMonitoring || !userData?.uid) return
 
     // Only monitor mouse events within the chat window
@@ -144,10 +169,10 @@ const ChatBot: React.FC = () => {
       ...prev,
       mouseEvents: [...prev.mouseEvents, mouseEventData].slice(-50) // Keep last 50
     }))
-  }, [isOpen, behavioralMonitoring, userData?.uid])
+  }
 
   // Periodic behavioral check for chat
-  const runChatBehavioralCheck = useCallback(async () => {
+  const runChatBehavioralCheck = async () => {
     if (!userData?.uid || !behavioralMonitoring || keystrokesRef.current.length < 5) return
 
     try {
@@ -255,50 +280,138 @@ const ChatBot: React.FC = () => {
     } catch (error) {
       console.error('❌ Chat behavioral check error:', error)
     }
-  }, [userData?.uid, behavioralMonitoring, chatBehavioralData.startTime])
+  }
 
-  // Setup behavioral monitoring when chat opens
-  useEffect(() => {
-    if (isOpen && userData?.uid && behavioralMonitoring) {
-      console.log('💬 Starting chat behavioral monitoring')
-      
-      // Reset behavioral data
-      keystrokesRef.current = []
-      mouseEventsRef.current = []
-      setChatBehavioralData(prev => ({
-        ...prev,
-        startTime: Date.now(),
-        keystrokes: [],
-        mouseEvents: []
-      }))
-      setBehavioralStatus('normal')
+// FIXED: Setup behavioral monitoring when chat opens
+useEffect(() => {
+  if (!isOpen || !userData?.uid || !behavioralMonitoring) {
+    return;
+  }
 
-      // Add event listeners
-      document.addEventListener('keydown', handleChatKeyEvent, true)
-      document.addEventListener('keyup', handleChatKeyEvent, true)
-      document.addEventListener('mousemove', handleChatMouseEvent, true)
-      document.addEventListener('click', handleChatMouseEvent, true)
-      document.addEventListener('wheel', handleChatMouseEvent, true)
+  console.log('💬 Starting chat behavioral monitoring')
+  
+  // Reset behavioral data
+  keystrokesRef.current = []
+  mouseEventsRef.current = []
+  setChatBehavioralData(prev => ({
+    ...prev,
+    startTime: Date.now(),
+    keystrokes: [],
+    mouseEvents: []
+  }))
+  setBehavioralStatus('normal')
 
-      // Start periodic checks every 30 seconds
-      behavioralIntervalRef.current = setInterval(runChatBehavioralCheck, 30000)
+  // FIXED: Direct event handler functions to avoid re-render loop
+  const keyHandler = (event: KeyboardEvent) => {
+    if (!isOpen || !behavioralMonitoring || !userData?.uid) return
 
-      return () => {
-        console.log('💬 Stopping chat behavioral monitoring')
-        document.removeEventListener('keydown', handleChatKeyEvent, true)
-        document.removeEventListener('keyup', handleChatKeyEvent, true)
-        document.removeEventListener('mousemove', handleChatMouseEvent, true)
-        document.removeEventListener('click', handleChatMouseEvent, true)
-        document.removeEventListener('wheel', handleChatMouseEvent, true)
-        
-        if (behavioralIntervalRef.current) {
-          clearInterval(behavioralIntervalRef.current)
-          behavioralIntervalRef.current = null
-        }
-      }
+    const target = event.target as HTMLElement
+    const isInChatInput = target.closest('.chat-input-area') !== null
+    if (!isInChatInput) return
+
+    if (event.key.startsWith('F') || 
+        ['Control', 'Alt', 'Shift', 'Meta', 'Tab', 'Escape'].includes(event.key)) {
+      return
     }
-  }, [isOpen, userData?.uid, behavioralMonitoring, handleChatKeyEvent, handleChatMouseEvent, runChatBehavioralCheck])
 
+    const keystrokeEvent: KeystrokeEvent = {
+      key: event.key,
+      code: event.code,
+      timestamp: Date.now(),
+      type: event.type as 'keydown' | 'keyup',
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey
+    }
+
+    keystrokesRef.current.push(keystrokeEvent)
+    console.log(`💬 Chat keystroke: ${keystrokeEvent.key}`)
+  };
+
+  const mouseHandler = (event: globalThis.MouseEvent) => {
+    if (!isOpen || !behavioralMonitoring || !userData?.uid) return
+
+    const target = event.target as HTMLElement
+    const isInChatWindow = target.closest('.chat-window') !== null
+    if (!isInChatWindow) return
+
+    let eventType: 'mousemove' | 'click' | 'scroll' = 'mousemove'
+    if (event.type === 'click') eventType = 'click'
+    if (event.type === 'wheel') eventType = 'scroll'
+
+    if (eventType === 'mousemove') {
+      const lastMouse = mouseEventsRef.current[mouseEventsRef.current.length - 1]
+      if (lastMouse && (Date.now() - lastMouse.timestamp) < 200) return
+    }
+
+    const mouseEventData: MouseEvent = {
+      x: event.clientX,
+      y: event.clientY,
+      timestamp: Date.now(),
+      type: eventType,
+      button: event.button,
+      deltaY: (event as any).deltaY
+    }
+
+    mouseEventsRef.current.push(mouseEventData)
+  };
+
+  // Add event listeners
+  document.addEventListener('keydown', keyHandler, true)
+  document.addEventListener('keyup', keyHandler, true)
+  document.addEventListener('mousemove', mouseHandler, true)
+  document.addEventListener('click', mouseHandler, true)
+  document.addEventListener('wheel', mouseHandler, true)
+
+  // SIMPLIFIED: Basic periodic check without complex dependencies
+  const checkInterval = setInterval(async () => {
+    if (keystrokesRef.current.length < 5) return;
+    
+    try {
+      console.log(`💬 Running simplified behavioral check`);
+      // Simplified check without complex callback dependencies
+      const sessionId = `chat_${userData.uid}_${Date.now()}`;
+      const behavioralData = {
+        keystrokes: keystrokesRef.current.slice(-50),
+        mouseMovements: mouseEventsRef.current.slice(-30)
+      };
+
+      const response = await fetch('http://localhost:5000/api/behavioral-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userData.uid,
+          behavioralData,
+          session_id: sessionId,
+          check_type: 'chat_monitoring',
+          page_context: '/chat'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.is_anomaly) {
+          setBehavioralStatus(result.action_taken === 'auto_lock' ? 'anomaly' : 'warning');
+        } else {
+          setBehavioralStatus('normal');
+        }
+        setLastBehavioralCheck(new Date());
+      }
+    } catch (error) {
+      console.error('❌ Chat behavioral check error:', error);
+    }
+  }, 30000);
+
+  return () => {
+    console.log('💬 Stopping chat behavioral monitoring')
+    document.removeEventListener('keydown', keyHandler, true)
+    document.removeEventListener('keyup', keyHandler, true)
+    document.removeEventListener('mousemove', mouseHandler, true)
+    document.removeEventListener('click', mouseHandler, true)
+    document.removeEventListener('wheel', mouseHandler, true)
+    clearInterval(checkInterval);
+  }
+}, [isOpen, userData?.uid, behavioralMonitoring]) // FIXED: Only stable dependencies
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return
 
@@ -421,22 +534,34 @@ const ChatBot: React.FC = () => {
 
   return (
     <>
-      {/* Enhanced Chat Toggle Button with Behavioral Status */}
+    {/* FIXED: Enhanced Chat Toggle Button with Better Positioning */}
+    <motion.div
+      className="fixed bottom-4 right-4 z-[9999]" // Higher z-index
+      style={{ zIndex: 9999 }} // Inline style for extra safety
+    >
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-green-600 to-cyan-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 z-50 flex items-center justify-center neon-glow relative"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
+        className="w-16 h-16 bg-gradient-to-r from-green-600 to-cyan-600 text-white rounded-full shadow-2xl hover:shadow-green-400/50 transition-all duration-300 flex items-center justify-center neon-glow relative border-2 border-green-400/30"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        style={{ 
+          filter: 'drop-shadow(0 0 20px rgba(34, 197, 94, 0.5))',
+          zIndex: 9999 
+        }}
       >
-        {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        {isOpen ? <X className="h-7 w-7" /> : <MessageCircle className="h-7 w-7" />}
         
         {/* Behavioral Status Indicator */}
-        {isOpen && userData?.uid && behavioralMonitoring && (
-          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-black/80 flex items-center justify-center text-xs">
+        {userData?.uid && behavioralMonitoring && (
+          <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-black/90 flex items-center justify-center text-xs border border-green-400/50">
             {getBehavioralStatusIcon()}
           </div>
         )}
+        
+        {/* Pulse animation for attention */}
+        <div className="absolute inset-0 rounded-full bg-green-400/20 animate-ping" />
       </motion.button>
+    </motion.div>
 
       {/* Enhanced Chat Window with Behavioral Monitoring */}
       <AnimatePresence>

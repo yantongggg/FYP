@@ -354,8 +354,8 @@ const AdminDashboard: React.FC = () => {
 
 
       // Login stats
-      const totalLoginAttempts = loginData?.length || 0;
-      const successfulLogins = loginData?.filter((l: { success: boolean }) => l.success).length || 0;
+      const totalLoginAttempts = loginLogs.length || 0;  // Use loginLogs state instead
+      const successfulLogins = loginLogs.filter(l => l.success).length || 0;
       const failedLogins = totalLoginAttempts - successfulLogins;
       const loginSuccessRate = totalLoginAttempts > 0 ? (successfulLogins / totalLoginAttempts) : 0;
 
@@ -1328,14 +1328,14 @@ const AdminDashboard: React.FC = () => {
                         <tbody>
                           {filteredAnomalies.map((anomaly) => (
                             <tr key={anomaly.id} className="border-b border-green-500/10 hover:bg-green-900/10">
-                              <td className="px-4 py-3">
-                                <div className="text-cyan-400 font-mono text-sm">
-                                  {anomaly.users?.username || anomaly.user_id.slice(-8)}...
-                                </div>
-                                <div className="text-gray-400 text-xs">
-                                  {anomaly.users?.email?.split('@')[0] || 'Unknown'}
-                                </div>
-                              </td>
+                            <td className="px-4 py-3">
+                              <div className="text-cyan-400 font-mono text-sm">
+                                {anomaly.users?.username || users.find(u => u.id === anomaly.user_id)?.username || anomaly.user_id.slice(-8) + '...'}
+                              </div>
+                              <div className="text-gray-400 text-xs">
+                                {anomaly.users?.email || users.find(u => u.id === anomaly.user_id)?.email || 'Unknown'}
+                              </div>
+                            </td>
                               <td className="px-4 py-3">
                                 <div className="text-white font-bold text-sm">
                                   {anomaly.anomaly_type.replace(/_/g, ' ').toUpperCase()}
@@ -1467,7 +1467,7 @@ const AdminDashboard: React.FC = () => {
                           <div>
                             <div className="flex items-center text-gray-400 text-sm mb-1">
                               <User className="h-4 w-4 mr-1" />
-                              User: {log.users?.username || 'Unknown'}
+                              User: {log.users?.username || users.find(u => u.id === log.user_id)?.username || 'Unknown'}
                             </div>
                             <div className="flex items-center text-gray-400 text-sm mb-1">
                               <Database className="h-4 w-4 mr-1" />
@@ -1524,73 +1524,139 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* eKYC Tab - Keep existing implementation */}
+            {/* Enhanced eKYC Tab */}
             {activeTab === 'ekyc' && (
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
                   <FileText className="mr-3 h-6 w-6" />
-                  eKYC_DOCUMENT_VERIFICATION ({ekycDocuments.length})
+                  IC_DOCUMENT_VERIFICATION ({ekycDocuments.filter(doc => doc.document_type === 'ic_front').length})
                 </h2>
 
-                {ekycDocuments.length === 0 ? (
+                {ekycDocuments.filter(doc => doc.document_type === 'ic_front').length === 0 ? (
                   <div className="text-center p-8 glass-card rounded-lg">
                     <FileText className="h-12 w-12 text-cyan-400 mx-auto mb-4" />
-                    <p className="text-cyan-400 font-mono">NO_eKYC_DOCUMENTS_SUBMITTED</p>
+                    <p className="text-cyan-400 font-mono">NO_IC_DOCUMENTS_SUBMITTED</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {ekycDocuments.map((doc) => (
-                      <motion.div
-                        key={doc.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="ekyc-card"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center">
-                            <FileText className="h-5 w-5 mr-2 text-blue-400" />
-                            <span className="font-bold text-blue-400 font-mono">
-                              {doc.document_type.toUpperCase().replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`px-2 py-1 rounded text-xs font-bold border ${
-                              doc.verification_status === 'verified' ? 'text-green-400 bg-green-600/20 border-green-500/30' :
-                              doc.verification_status === 'rejected' ? 'text-red-400 bg-red-600/20 border-red-500/30' :
-                              'text-yellow-400 bg-yellow-600/20 border-yellow-500/30'
-                            }`}>
-                              {doc.verification_status.toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
+                    {ekycDocuments
+                      .filter(doc => doc.document_type === 'ic_front')
+                      .map((frontDoc) => {
+                        // Find matching back document
+                        const backDoc = ekycDocuments.find(doc => 
+                          doc.document_type === 'ic_back' && 
+                          doc.user_id === frontDoc.user_id &&
+                          Math.abs(new Date(doc.created_at).getTime() - new Date(frontDoc.created_at).getTime()) < 300000 // Within 5 minutes
+                        );
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                          <div>
-                            <div className="flex items-center text-gray-400 text-sm mb-1">
-                              <User className="h-4 w-4 mr-1" />
-                              User: {doc.users?.username || doc.users?.email || 'Unknown'}
-                            </div>
-                            <div className="flex items-center text-gray-400 text-sm">
-                              <Clock className="h-4 w-4 mr-1" />
-                              Submitted: {formatDate(doc.created_at)}
-                            </div>
-                          </div>
-                          <div>
-                            {doc.document_type === 'ic_front' && (
-                              <div className="flex items-center text-gray-400 text-sm mb-1">
-                                <Shield className="h-4 w-4 mr-1" />
-                                Authenticity: <span className={`ml-1 ${
-                                  (doc.document_authenticity_score || 0) >= 0.35 ? 'text-green-400' : 
-                                  (doc.document_authenticity_score || 0) >= 0.25 ? 'text-yellow-400' : 'text-red-400'
-                                } font-bold`}>
-                                  {((doc.document_authenticity_score || 0) * 100).toFixed(0)}%
+                        return (
+                          <motion.div
+                            key={frontDoc.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="ekyc-card"
+                          >
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center">
+                                <FileText className="h-5 w-5 mr-2 text-blue-400" />
+                                <span className="font-bold text-blue-400 font-mono">IC_UPLOAD</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className={`px-3 py-1 rounded text-sm font-bold border ${
+                                  frontDoc.verification_status === 'verified' ? 'text-green-400 bg-green-600/20 border-green-500/30' :
+                                  frontDoc.verification_status === 'rejected' ? 'text-red-400 bg-red-600/20 border-red-500/30' :
+                                  'text-yellow-400 bg-yellow-600/20 border-yellow-500/30'
+                                }`}>
+                                  {frontDoc.verification_status.toUpperCase()}
                                 </span>
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                              {/* User Info */}
+                              <div className="space-y-2">
+                                <div className="flex items-center text-cyan-400 text-sm">
+                                  <User className="h-4 w-4 mr-2" />
+                                  <span className="font-bold">User: {frontDoc.users?.username || 'Unknown'}</span>
+                                </div>
+                                <div className="flex items-center text-gray-400 text-sm">
+                                  <Clock className="h-4 w-4 mr-2" />
+                                  <span>Submitted: {formatDate(frontDoc.created_at)}</span>
+                                </div>
+                                <div className="flex items-center text-gray-400 text-sm">
+                                  <Shield className="h-4 w-4 mr-2" />
+                                  <span>Score: </span>
+                                  <span className={`ml-1 font-bold ${
+                                    (frontDoc.document_authenticity_score || 0) >= 0.35 ? 'text-green-400' : 
+                                    (frontDoc.document_authenticity_score || 0) >= 0.25 ? 'text-yellow-400' : 'text-red-400'
+                                  }`}>
+                                    {((frontDoc.document_authenticity_score || 0) * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* IC Images */}
+                              <div className="lg:col-span-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                  {/* Front Image */}
+                                  <div className="text-center">
+                                    <p className="text-gray-400 text-xs mb-2 font-mono">FRONT_IMAGE</p>
+                                    {frontDoc.id_document_url ? (
+                                      <img
+                                        src={frontDoc.id_document_url}
+                                        alt="IC Front"
+                                        className="w-full h-32 object-cover rounded border border-green-400/30 cursor-pointer hover:border-green-400 transition-all duration-300"
+                                        onClick={() => window.open(frontDoc.id_document_url, '_blank')}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-32 bg-gray-800 rounded border border-gray-600 flex items-center justify-center">
+                                        <span className="text-gray-500 text-xs">NO_IMAGE</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Back Image */}
+                                  <div className="text-center">
+                                    <p className="text-gray-400 text-xs mb-2 font-mono">BACK_IMAGE</p>
+                                    {backDoc?.id_document_url ? (
+                                      <img
+                                        src={backDoc.id_document_url}
+                                        alt="IC Back"
+                                        className="w-full h-32 object-cover rounded border border-green-400/30 cursor-pointer hover:border-green-400 transition-all duration-300"
+                                        onClick={() => window.open(backDoc.id_document_url, '_blank')}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-32 bg-gray-800 rounded border border-gray-600 flex items-center justify-center">
+                                        <span className="text-gray-500 text-xs">NO_BACK_IMAGE</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="flex justify-center mt-3 space-x-2">
+                                  {frontDoc.id_document_url && (
+                                    <button
+                                      onClick={() => window.open(frontDoc.id_document_url, '_blank')}
+                                      className="px-2 py-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded text-xs font-bold hover:bg-blue-600/30 transition-all duration-300"
+                                    >
+                                      VIEW_FRONT
+                                    </button>
+                                  )}
+                                  {backDoc?.id_document_url && (
+                                    <button
+                                      onClick={() => window.open(backDoc.id_document_url, '_blank')}
+                                      className="px-2 py-1 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded text-xs font-bold hover:bg-purple-600/30 transition-all duration-300"
+                                    >
+                                      VIEW_BACK
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

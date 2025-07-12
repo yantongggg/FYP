@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Activity, AlertTriangle, CheckCircle, Clock, Mouse, Keyboard } from 'lucide-react';
+
 
 interface KeystrokeEvent {
   key: string;

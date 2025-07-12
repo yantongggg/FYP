@@ -49,11 +49,9 @@ const Dashboard = () => {
   );
 };
 
-// Enhanced AppContent with Global Behavioral Monitoring
 function AppContent() {
   const { userData } = useAuth();
 
-  // CRITICAL FIX: Log app initialization and user status
   useEffect(() => {
     console.log('🚀 FIXED App: Enhanced behavioral monitoring app initialized');
     if (userData) {
@@ -70,84 +68,94 @@ function AppContent() {
       <div className="relative z-10">
         <Navbar />
         
-        {/* CRITICAL FIX: Wrap all content with GlobalBehavioralWrapper for comprehensive monitoring */}
-        <GlobalBehavioralWrapper>
-          <motion.main
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/login" element={<Login />} />
-              
-              {/* Public documentation routes (available to all) */}
-              <Route path="/architecture" element={<Architecture />} />
-              <Route path="/database" element={<DatabaseSchema />} />
-              <Route path="/docs" element={<Documentation />} />
-              
-              {/* Enhanced Dashboard redirect with behavioral monitoring */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              
-              {/* Enhanced User routes with behavioral monitoring */}
-              <Route path="/home" element={
+        {/* CRITICAL FIX: Complete Routes section */}
+        <main className="min-h-screen">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Home />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/architecture" element={<Architecture />} />
+            <Route path="/database" element={<DatabaseSchema />} />
+            <Route path="/docs" element={<Documentation />} />
+            
+            {/* Dashboard redirect */}
+            <Route path="/dashboard" element={<Dashboard />} />
+            
+            {/* Protected User Routes */}
+            <Route 
+              path="/home" 
+              element={
                 <ProtectedRoute requiredRole="user">
                   <UserHome />
                 </ProtectedRoute>
-              } />
-              <Route path="/edit-profile" element={
-                <ProtectedRoute requiredRole="user">
+              } 
+            />
+            <Route 
+              path="/edit-profile" 
+              element={
+                <ProtectedRoute>
                   <EditProfile />
                 </ProtectedRoute>
-              } />
-              <Route path="/my-anomalies" element={
-                <ProtectedRoute requiredRole="user">
+              } 
+            />
+            <Route 
+              path="/my-anomalies" 
+              element={
+                <ProtectedRoute>
                   <MyAnomalies />
                 </ProtectedRoute>
-              } />
-              
-              {/* Enhanced Admin routes with behavioral monitoring */}
-              <Route path="/admin" element={
+              } 
+            />
+            
+            {/* Protected Admin Routes - FIXED */}
+            <Route 
+              path="/admin" 
+              element={
                 <ProtectedRoute requiredRole="admin">
                   <AdminDashboard />
                 </ProtectedRoute>
-              } />
-              <Route path="/admin/edit" element={
+              } 
+            />
+            <Route 
+            path="/admin/settings" 
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminEditAccount />
+              </ProtectedRoute>
+            } 
+          />
+            <Route 
+              path="/admin/edit/:userId" 
+              element={
                 <ProtectedRoute requiredRole="admin">
                   <AdminEditAccount />
                 </ProtectedRoute>
-              } />
-              
-              {/* Catch all redirect */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </motion.main>
-        </GlobalBehavioralWrapper>
+              } 
+            />
+            
+            {/* Catch all - redirect to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
         
-        {/* Enhanced AI Chatbot - Available on all pages */}
+        {/* Enhanced AI Chatbot */}
         <ChatBot />
         
-        {/* CRITICAL FIX: Enhanced Debug Information (Development Only) */}
+        {/* FIXED Debug info for development */}
         {process.env.NODE_ENV === 'development' && (
           <div className="fixed top-4 right-4 bg-black/90 backdrop-blur-md text-green-400 text-xs p-2 rounded border border-green-500/30 font-mono z-40">
             <div className="text-green-400 font-bold mb-1">🔧 FIXED DEV MODE</div>
             <div>User: {userData?.username || 'Not logged in'}</div>
             <div>Role: {userData?.role || 'None'}</div>
             <div>Page: {window.location.pathname}</div>
-            <div>Monitoring: {userData ? '✅ Active' : '❌ Inactive'}</div>
+            <div>Monitoring: ❌ Disabled</div>
           </div>
         )}
       </div>
     </div>
   );
 }
-
 // Enhanced Main App Component with Error Boundary
 function App() {
   // CRITICAL FIX: Global error handler for behavioral monitoring

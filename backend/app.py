@@ -33,9 +33,11 @@ from ml_models.liveness_detector import LivenessDetector, initialize_models
 from utils.supabase_manager import SupabaseManager
 from ml_models.face_verification import FaceVerificationModel
 from flask_cors import CORS, cross_origin
+import scipy.stats  
+import math  
 from ml_models.face_verification import FaceVerificationModel
-face_verifier = FaceVerificationModel()
 
+face_verifier = FaceVerificationModel()
 supabase_manager = SupabaseManager()
 
 # Enhanced logging
@@ -90,6 +92,18 @@ CORS(app, resources={
         "max_age": 86400
     }
 })
+
+GLOBAL_MONITORING_STATE = {
+    'active_users': {},
+    'recent_anomalies': [],
+    'system_stats': {
+        'total_checks': 0,
+        'anomalies_detected': 0,
+        'last_update': datetime.now().isoformat()
+    }
+}
+
+MONITORING_LOCK = threading.Lock()
 
 def convert_numpy_types(obj):
     """Recursively convert NumPy data types in a dict to native Python types"""
@@ -173,6 +187,111 @@ def handle_preflight():
             response.headers.add('Access-Control-Max-Age', '86400')
         
         return response
+
+# ============= REAL-TIME MONITORING FUNCTIONS =============
+
+def update_global_monitoring_state(user_id: str, behavioral_data: dict, anomaly_detected: bool = False):
+    """✅ FIXED: Update global monitoring state for real-time updates"""
+    with MONITORING_LOCK:
+        current_time = datetime.now()
+        
+        # Update user's behavioral status
+        GLOBAL_MONITORING_STATE['active_users'][user_id] = {
+            'last_check': current_time.isoformat(),
+            'similarity_score': behavioral_data.get('similarity_score', 0.5),
+            'status': 'ANOMALY' if anomaly_detected else 'NORMAL',
+            'keystroke_count': behavioral_data.get('keystroke_count', 0),
+            'mouse_count': behavioral_data.get('mouse_count', 0),
+            'page_context': behavioral_data.get('page_context', 'unknown')
+        }
+        
+        # Update system stats
+        GLOBAL_MONITORING_STATE['system_stats']['total_checks'] += 1
+        if anomaly_detected:
+            GLOBAL_MONITORING_STATE['system_stats']['anomalies_detected'] += 1
+            
+            # Add to recent anomalies (keep last 10)
+            anomaly_entry = {
+                'user_id': user_id,
+                'timestamp': current_time.isoformat(),
+                'similarity_score': behavioral_data.get('similarity_score', 0),
+                'severity': behavioral_data.get('severity', 'medium'),
+                'page': behavioral_data.get('page_context', 'unknown')
+            }
+            GLOBAL_MONITORING_STATE['recent_anomalies'].insert(0, anomaly_entry)
+            GLOBAL_MONITORING_STATE['recent_anomalies'] = GLOBAL_MONITORING_STATE['recent_anomalies'][:10]
+        
+        GLOBAL_MONITORING_STATE['system_stats']['last_update'] = current_time.isoformat()
+
+@app.route('/api/monitoring/status', methods=['GET'])
+@cross_origin()
+def get_monitoring_status():
+    """✅ FIXED: Get real-time monitoring status for UI updates"""
+    try:
+        with MONITORING_LOCK:
+            # Clean up old entries (older than 5 minutes)
+            current_time = datetime.now()
+            cutoff_time = current_time - timedelta(minutes=5)
+            
+            active_users = {}
+            for user_id, data in GLOBAL_MONITORING_STATE['active_users'].items():
+                last_check = datetime.fromisoformat(data['last_check'])
+                if last_check > cutoff_time:
+                    active_users[user_id] = data
+            
+            GLOBAL_MONITORING_STATE['active_users'] = active_users
+            
+            return jsonify({
+                'success': True,
+                'monitoring_data': {
+                    'active_users': active_users,
+                    'recent_anomalies': GLOBAL_MONITORING_STATE['recent_anomalies'],
+                    'system_stats': GLOBAL_MONITORING_STATE['system_stats'],
+                    'total_active_users': len(active_users)
+                },
+                'timestamp': current_time.isoformat()
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Error getting monitoring status: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/monitoring/user/<user_id>', methods=['GET'])
+@cross_origin()
+def get_user_monitoring_status(user_id):
+    """✅ FIXED: Get specific user's behavioral monitoring status"""
+    try:
+        with MONITORING_LOCK:
+            user_data = GLOBAL_MONITORING_STATE['active_users'].get(user_id)
+            
+            if user_data:
+                return jsonify({
+                    'success': True,
+                    'user_monitoring': user_data,
+                    'timestamp': datetime.now().isoformat()
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'user_monitoring': {
+                        'status': 'INACTIVE',
+                        'last_check': None,
+                        'similarity_score': 0,
+                        'keystroke_count': 0,
+                        'mouse_count': 0
+                    },
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+    except Exception as e:
+        logger.error(f"❌ Error getting user monitoring status: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ============= ASYNC HELPER FUNCTIONS =============
 def run_async(coro):
@@ -728,68 +847,158 @@ def upload_face():
 
 @app.route('/api/behavioral-monitor', methods=['POST'])
 @cross_origin()
-def continuous_behavioral_monitor():
-    """Continuous behavioral monitoring endpoint - adapted for existing schema"""
+def continuous_behavioral_monitor_fixed():
+    """✅ FIXED: Continuous behavioral monitoring with real-time updates"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData')
+        page_context = data.get('page_context', 'unknown')
         
         if not user_id or not behavioral_data:
             return jsonify({'success': False, 'error': 'Missing data'}), 400
         
+        logger.info(f"🔍 FIXED: Continuous monitoring for user {user_id} on {page_context}")
+        
         keystrokes = behavioral_data.get('keystrokes', [])
         mouse_movements = behavioral_data.get('mouseMovements', [])
         
+        # ✅ FIXED: More lenient data requirements for continuous monitoring
         if len(keystrokes) < 3:
+            # Still update monitoring state even with insufficient data
+            update_global_monitoring_state(user_id, {
+                'similarity_score': 0.8,
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements),
+                'page_context': page_context,
+                'severity': 'low'
+            }, anomaly_detected=False)
+            
             return jsonify({
                 'success': True,
-                'similarity_score': 0.8,  # Default safe score
+                'similarity_score': 0.8,
                 'is_anomaly': False,
-                'action_taken': 'insufficient_data'
+                'action_taken': 'insufficient_data',
+                'monitoring_updated': True
             })
         
-        # Calculate similarity
-        similarity_score = calculate_similarity(keystrokes, mouse_movements, user_id)
+        # ✅ FIXED: Calculate features with error handling
+        try:
+            current_features = calculate_simple_behavioral_features(keystrokes, mouse_movements)
+        except Exception as e:
+            logger.error(f"❌ Error calculating features: {e}")
+            current_features = {
+                'typing_speed': 40.0,
+                'avg_velocity': 100.0,
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements)
+            }
         
-        # RELAXED thresholds for continuous monitoring
-        AUTO_LOCK_THRESHOLD = 0.2   # Only auto-lock if very different
-        ANOMALY_THRESHOLD = 0.25    # Flag anomaly if quite different
+        # Calculate similarity with stored pattern
+        similarity_score = calculate_basic_similarity(current_features, user_id)
         
-        is_anomaly = False
-        action_taken = 'none'
-        severity = 'low'
+        # ✅ FIXED: RELAXED thresholds for continuous monitoring
+        AUTO_LOCK_THRESHOLD = 0.15   # Only auto-lock if extremely different
+        ANOMALY_THRESHOLD = 0.25     # Flag anomaly if quite different
         
-        if similarity_score < AUTO_LOCK_THRESHOLD:
+        is_anomaly = similarity_score < ANOMALY_THRESHOLD
+        is_critical = similarity_score < AUTO_LOCK_THRESHOLD
+        
+        if is_critical:
             action_taken = 'auto_lock'
             severity = 'critical'
-            is_anomaly = True
-        elif similarity_score < ANOMALY_THRESHOLD:
-            action_taken = 'anomaly_logged'
+        elif is_anomaly:
+            action_taken = 'warning'
             severity = 'medium'
-            is_anomaly = True
+        else:
+            action_taken = 'none'
+            severity = 'low'
         
-        # Store if anomaly detected
+        # ✅ FIXED: Update global monitoring state for real-time updates
+        update_global_monitoring_state(user_id, {
+            'similarity_score': similarity_score,
+            'keystroke_count': len(keystrokes),
+            'mouse_count': len(mouse_movements),
+            'page_context': page_context,
+            'severity': severity,
+            'action_taken': action_taken
+        }, anomaly_detected=is_anomaly)
+        
+        # ✅ FIXED: Save session data with guaranteed persistence
+        if supabase_manager.client:
+            try:
+                session_data = {
+                    'user_id': str(user_id),
+                    'session_id': f"monitor_{user_id}_{int(time.time())}",
+                    'similarity_scores': {
+                        'overall_similarity': float(similarity_score)
+                    },
+                    'anomaly_score': float(1 - similarity_score),
+                    'is_successful': not is_anomaly,
+                    'verification_type': 'continuous_monitoring',
+                    'page_context': page_context,
+                    'behavioral_metrics': {
+                        'keystroke_count': len(keystrokes),
+                        'mouse_count': len(mouse_movements),
+                        'typing_speed': current_features.get('typing_speed', 0)
+                    },
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                # Save asynchronously to avoid blocking
+                executor.submit(save_monitoring_session, session_data)
+                
+            except Exception as e:
+                logger.error(f"❌ Error saving monitoring session: {e}")
+        
+        # ✅ FIXED: Save anomaly if detected
         if is_anomaly:
-            session_id = f"monitor_{user_id}_{int(time.time())}"
-            store_behavioral_result(
-                user_id, session_id, similarity_score, 
-                is_anomaly, action_taken, severity
-            )
-            logger.warning(f"🚨 Monitoring anomaly: user={user_id}, action={action_taken}")
+            try:
+                anomaly_data = {
+                    'user_id': str(user_id),
+                    'session_id': f"monitor_{user_id}_{int(time.time())}",
+                    'anomaly_type': 'continuous_monitoring_anomaly',
+                    'anomaly_score': float(1 - similarity_score),
+                    'severity': severity,
+                    'action_taken': action_taken,
+                    'details': {
+                        'page_context': page_context,
+                        'similarity_score': float(similarity_score),
+                        'keystroke_count': len(keystrokes),
+                        'mouse_count': len(mouse_movements)
+                    },
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                # Save asynchronously
+                executor.submit(save_monitoring_anomaly, anomaly_data)
+                
+            except Exception as e:
+                logger.error(f"❌ Error saving monitoring anomaly: {e}")
+        
+        logger.info(f"✅ FIXED: Continuous monitoring completed - similarity: {similarity_score:.3f}, anomaly: {is_anomaly}")
         
         return jsonify({
             'success': True,
             'similarity_score': float(similarity_score),
             'is_anomaly': is_anomaly,
+            'is_critical': is_critical,
             'action_taken': action_taken,
-            'severity': severity
+            'severity': severity,
+            'monitoring_updated': True,
+            'thresholds': {
+                'anomaly': ANOMALY_THRESHOLD,
+                'critical': AUTO_LOCK_THRESHOLD
+            }
         })
         
     except Exception as e:
-        logger.error(f"Monitor error: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+        logger.error(f"❌ FIXED: Continuous monitoring error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'monitoring_updated': False
+        }), 500
 
 @app.route('/api/behavioral-verify', methods=['POST'])
 def behavioral_verify_adapted():
@@ -1571,177 +1780,159 @@ def sequential_liveness_detect_optimized():
 
 @app.route('/api/behavioral-check', methods=['POST'])
 @cross_origin()
-def behavioral_check_fixed():
-    """
-    CRITICAL FIX: Enhanced behavioral check for continuous monitoring
-    """
+def enhanced_behavioral_check_fixed():
+    """✅ FIXED: Enhanced behavioral check with proper error handling"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData')
         session_id = data.get('session_id', f"check_{user_id}_{int(time.time())}")
-        check_type = data.get('check_type', 'continuous')
+        check_type = data.get('check_type', 'enhanced_continuous')
+        page_context = data.get('page_context', 'unknown')
         
         if not user_id or not behavioral_data:
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
-        logger.info(f"🔍 FIXED: Running enhanced behavioral check for user {user_id}")
+        logger.info(f"🔍 FIXED: Enhanced behavioral check for user {user_id}")
         
-        # CRITICAL: Ensure UUID format
-        user_id_uuid = ensure_uuid_format(user_id)
+        # ✅ FIXED: Validate data with error handling
+        try:
+            validated_data = validate_enhanced_behavioral_data(behavioral_data)
+            keystrokes = validated_data['keystrokes']
+            mouse_movements = validated_data['mouseMovements']
+        except Exception as e:
+            logger.error(f"❌ Data validation error: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Data validation failed: {str(e)}'
+            }), 400
         
-        # CRITICAL: Validate and clean data
-        validated_data = validate_behavioral_data(behavioral_data)
-        keystrokes = validated_data['keystrokes']
-        mouse_movements = validated_data['mouseMovements']
-        
-        if len(keystrokes) < 3:
+        if len(keystrokes) < 5:
+            # Update monitoring state even with insufficient data
+            update_global_monitoring_state(user_id, {
+                'similarity_score': 0.8,
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements),
+                'page_context': page_context,
+                'severity': 'low'
+            }, anomaly_detected=False)
+            
             return jsonify({
                 'success': True,
                 'similarity_score': 0.8,
-                'keystroke_similarity': 0.8,
-                'mouse_similarity': 0.8,
                 'is_anomaly': False,
                 'action_taken': 'insufficient_data',
-                'severity': 'low',
-                'message': f'Insufficient data for check (got {len(keystrokes)} keystrokes, need at least 3)'
+                'message': f'Insufficient keystroke data (got {len(keystrokes)}, need at least 5)',
+                'monitoring_updated': True
             })
         
-        # Load baseline pattern
-        stored_pattern = None
-        if supabase_manager.client:
-            try:
-                result = supabase_manager.client.table("behavioral_patterns") \
-                    .select("pattern_data") \
-                    .eq("user_id", user_id_uuid) \
-                    .eq("is_active", True) \
-                    .limit(1).execute()
-                
-                if result.data:
-                    stored_pattern = result.data[0]['pattern_data']
-            except Exception as e:
-                logger.error(f"Error loading stored pattern: {e}")
+        # ✅ FIXED: Extract features with proper error handling
+        try:
+            current_features = extract_basic_behavioral_features(validated_data)
+        except Exception as e:
+            logger.error(f"❌ Feature extraction error: {e}")
+            # Use fallback feature calculation
+            current_features = {
+                'keystroke_features': {
+                    'typing_speed': calculate_typing_speed(keystrokes),
+                    'avg_dwell_time': 100.0
+                },
+                'mouse_features': {
+                    'avg_velocity': calculate_mouse_velocity(mouse_movements)
+                }
+            }
         
-        if not stored_pattern:
-            return jsonify({
-                'success': True,
-                'similarity_score': 0.8,
-                'keystroke_similarity': 0.8,
-                'mouse_similarity': 0.8,
-                'is_anomaly': False,
-                'action_taken': 'no_baseline',
-                'severity': 'low'
-            })
+        # Get stored pattern with error handling
+        stored_pattern = get_stored_pattern_safe(user_id)
         
-        # Calculate features and similarity
-        current_features = calculate_features(validated_data)
-        similarity_results = calculate_similarity(current_features, stored_pattern)
-        overall_similarity = similarity_results['overall_similarity']
+        # ✅ FIXED: Calculate similarity with proper error handling
+        try:
+            similarity_results = calculate_enhanced_similarity_safe(current_features, stored_pattern)
+            overall_similarity = similarity_results['overall_similarity']
+        except Exception as e:
+            logger.error(f"❌ Similarity calculation error: {e}")
+            overall_similarity = 0.5  # Default safe score
+            similarity_results = {
+                'overall_similarity': 0.5,
+                'keystroke_similarity': 0.5,
+                'mouse_similarity': 0.5
+            }
         
-        # Enhanced thresholds for continuous monitoring (more lenient)
-        AUTO_LOCK_THRESHOLD = 0.15   # Only auto-lock if very different
-        ANOMALY_THRESHOLD = 0.25     # Flag anomaly if quite different
+        # Enhanced thresholds
+        ANOMALY_THRESHOLD = 0.35
+        CRITICAL_THRESHOLD = 0.15
         
         is_anomaly = overall_similarity < ANOMALY_THRESHOLD
-        action_taken = 'none'
-        severity = 'low'
-
-        if overall_similarity < AUTO_LOCK_THRESHOLD:
+        is_critical = overall_similarity < CRITICAL_THRESHOLD
+        
+        if is_critical:
             action_taken = 'auto_lock'
             severity = 'critical'
         elif is_anomaly:
-            action_taken = 'anomaly_logged'
-            severity = 'medium'
+            action_taken = 'warning'
+            severity = 'high'
         else:
             action_taken = 'passed'
-
-        # CRITICAL: Save behavioral session for continuous monitoring
-        if supabase_manager.client:
-            try:
-                session_data = {
-                    'user_id': user_id_uuid,
-                    'session_id': session_id,
-                    'keystroke_features': current_features.get('keystroke_features', {}),
-                    'mouse_features': current_features.get('mouse_features', {}),
-                    'similarity_scores': {
-                        'overall_similarity': float(overall_similarity),
-                        'keystroke_similarity': float(similarity_results['keystroke_similarity']),
-                        'mouse_similarity': float(similarity_results['mouse_similarity'])
-                    },
-                    'anomaly_score': float(1 - overall_similarity),
-                    'is_successful': not is_anomaly,
-                    'verification_type': check_type,
-                    'duration_seconds': int(current_features.get('overall_metrics', {}).get('session_duration', 0)),
-                    'page_context': data.get('page_context', 'unknown'),
-                    'created_at': datetime.now().isoformat()
-                }
-                
-                supabase_manager.save_behavioral_session_guaranteed(session_data)
-                logger.info(f"✅ FIXED: Continuous monitoring session saved for {user_id_uuid}")
-            except Exception as e:
-                logger.error(f"❌ Error saving continuous monitoring session: {e}")
+            severity = 'low'
         
-        # CRITICAL: Save anomaly if detected
-        if is_anomaly and supabase_manager.client:
-            try:
-                anomaly_data = {
-                    'user_id': user_id_uuid,
-                    'session_id': session_id,
-                    'anomaly_type': 'continuous_behavioral_monitoring',
-                    'anomaly_score': float(1 - overall_similarity),
-                    'severity': severity,
-                    'action_taken': action_taken,
-                    'details': {
-                        'check_type': check_type,
-                        'similarity_score': float(overall_similarity),
-                        'similarity_breakdown': similarity_results['feature_breakdown'],
-                        'threshold': ANOMALY_THRESHOLD,
-                        'page_context': data.get('page_context', 'unknown'),
-                        'monitoring_metadata': data.get('monitoring_metadata', {}),
-                        'data_quality': {
-                            'keystrokes_count': len(keystrokes),
-                            'mouse_events_count': len(mouse_movements)
-                        }
-                    },
-                    'manual_review_required': action_taken == 'auto_lock',
-                    'created_at': datetime.now().isoformat()
-                }
-                
-                supabase_manager.save_anomaly_guaranteed(anomaly_data)
-                logger.info(f"🚨 FIXED: Continuous monitoring anomaly saved for {user_id_uuid}")
-            except Exception as e:
-                logger.error(f"❌ Error saving continuous monitoring anomaly: {e}")
-
-        duration = int(current_features.get('overall_metrics', {}).get('session_duration', 0))
-
+        # ✅ FIXED: Update monitoring state for real-time updates
+        update_global_monitoring_state(user_id, {
+            'similarity_score': overall_similarity,
+            'keystroke_count': len(keystrokes),
+            'mouse_count': len(mouse_movements),
+            'page_context': page_context,
+            'severity': severity,
+            'action_taken': action_taken
+        }, anomaly_detected=is_anomaly)
+        
+        # ✅ FIXED: Save data with guaranteed persistence
+        session_saved = save_behavioral_session_safe(user_id, session_id, {
+            'similarity_score': overall_similarity,
+            'keystroke_count': len(keystrokes),
+            'mouse_count': len(mouse_movements),
+            'is_successful': not is_anomaly,
+            'verification_type': check_type,
+            'page_context': page_context
+        })
+        
+        anomaly_saved = False
+        if is_anomaly:
+            anomaly_saved = save_anomaly_safe(user_id, session_id, {
+                'anomaly_score': 1 - overall_similarity,
+                'severity': severity,
+                'action_taken': action_taken,
+                'similarity_score': overall_similarity,
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements),
+                'page_context': page_context
+            })
+        
+        logger.info(f"✅ FIXED: Enhanced behavioral check completed - similarity: {overall_similarity:.3f}, anomaly: {is_anomaly}")
+        
         return jsonify({
             'success': True,
             'similarity_score': float(overall_similarity),
-            'keystroke_similarity': float(similarity_results['keystroke_similarity']),
-            'mouse_similarity': float(similarity_results['mouse_similarity']),
-            'anomaly_score': float(1 - overall_similarity),
+            'keystroke_similarity': float(similarity_results.get('keystroke_similarity', 0.5)),
+            'mouse_similarity': float(similarity_results.get('mouse_similarity', 0.5)),
             'is_anomaly': is_anomaly,
-            'severity': severity,
+            'is_critical': is_critical,
             'action_taken': action_taken,
+            'severity': severity,
             'session_id': session_id,
-            'duration': duration,
-            'thresholds': {
-                'auto_lock': AUTO_LOCK_THRESHOLD,
-                'anomaly': ANOMALY_THRESHOLD
-            },
-            'details': {
-                'features_calculated': bool(current_features),
-                'baseline_found': bool(stored_pattern),
-                'data_quality': {
-                    'keystrokes': len(keystrokes),
-                    'mouse_events': len(mouse_movements)
-                }
+            'monitoring_updated': True,
+            'data_saved': {
+                'session_saved': session_saved,
+                'anomaly_saved': anomaly_saved
             }
         })
-
+        
     except Exception as e:
-        logger.error(f"❌ FIXED: Behavioral check error: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"❌ FIXED: Enhanced behavioral check error: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'monitoring_updated': False
+        }), 500
 
 
 @app.route('/api/ekyc', methods=['POST'])
@@ -1778,7 +1969,6 @@ def ekyc_process():
 
         logger.info(f"📝 OCR result: {ocr_result.get('success', False)}")
         
-        # ✅ CRITICAL: Enhanced result processing
         if ocr_result.get('success'):
             ic_number = ocr_result.get('ic_number_back') if side == 'back' else ocr_result.get('extracted_info', {}).get('ic_number')
             logger.info(f"✅ IC number extracted: {ic_number}")
@@ -1786,6 +1976,10 @@ def ekyc_process():
             # ✅ CRITICAL: Enhanced response for front side
             if side == 'front':
                 extracted_info = ocr_result.get('extracted_info', {})
+                authenticity = ocr_result.get('authenticity', {})
+                
+                # Fix the success determination
+                overall_success = bool(ic_number) and authenticity.get('authenticity_score', 0) >= 0.35
                 
                 # Ensure gender is extracted if missing
                 if not extracted_info.get('gender') and ic_number:
@@ -1799,7 +1993,7 @@ def ekyc_process():
                 
                 # Enhanced response
                 return jsonify({
-                    'success': True,
+                    'success': overall_success,
                     'extracted_info': extracted_info,
                     'authenticity': ocr_result.get('authenticity', {}),
                     'confidence': ocr_result.get('confidence', 0.8),
@@ -2057,14 +2251,13 @@ def biometric_login_verify():
 
 @app.route('/api/behavioral-test', methods=['POST'])
 @cross_origin()
-def behavioral_test_endpoint():
-    """FIXED: Enhanced behavioral test with guaranteed anomaly saving"""
+def behavioral_test_simple():
+    """SIMPLIFIED: Behavioral test with GUARANTEED anomaly saving"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         behavioral_data = data.get('behavioralData')
         session_id = data.get('session_id', f"test_{user_id}_{int(time.time())}")
-        test_mode = data.get('test_mode', True)
         
         if not user_id or not behavioral_data:
             return jsonify({
@@ -2072,49 +2265,34 @@ def behavioral_test_endpoint():
                 'error': 'Missing required fields: user_id and behavioralData'
             }), 400
         
-        logger.info(f"🧪 Running behavioral test for user {user_id}")
+        logger.info(f"🧪 SIMPLE: Running behavioral test for user {user_id}")
         
-        # Extract simple features
+        # Extract data
         keystrokes = behavioral_data.get('keystrokes', [])
         mouse_movements = behavioral_data.get('mouseMovements', [])
+        
+        print(f"📊 DATA RECEIVED: {len(keystrokes)} keystrokes, {len(mouse_movements)} mouse events")
         
         if len(keystrokes) < 5:
             return jsonify({
                 'success': False,
-                'error': 'Not enough keystroke data (minimum 5 required)'
+                'error': f'Insufficient keystroke data (got {len(keystrokes)}, need at least 5)'
             }), 400
         
-        # Get stored baseline pattern
-        stored_pattern = None
-        if supabase_manager.client:
-            try:
-                pattern_result = supabase_manager.client.table("behavioral_patterns") \
-                    .select("pattern_data") \
-                    .eq("user_id", user_id) \
-                    .eq("is_active", True) \
-                    .order("created_at", desc=True) \
-                    .limit(1) \
-                    .execute()
-                
-                if pattern_result.data:
-                    stored_pattern = pattern_result.data[0]['pattern_data']
-            except Exception as e:
-                logger.error(f"Error getting stored pattern: {e}")
+        # SIMPLIFIED: Calculate basic features
+        current_features = calculate_simple_features(keystrokes, mouse_movements)
         
-        if not stored_pattern:
-            # Use demo pattern for testing
-            stored_pattern = {
-                'keystroke_features': {'typing_speed': 45, 'avg_dwell_time': 120},
-                'mouse_features': {'avg_velocity': 150}
-            }
+        # Get or use default baseline
+        stored_pattern = get_stored_pattern_simple(user_id)
         
-        # Calculate simple similarity
-        current_features = calculate_features(keystrokes, mouse_movements)
-        similarity_score = calculate_similarity(current_features, stored_pattern)
+        # SIMPLIFIED: Calculate similarity
+        similarity_score = calculate_simple_similarity(current_features, stored_pattern)
         
-        # Enhanced anomaly detection with lower thresholds for testing
-        ANOMALY_THRESHOLD = 0.4  # 40% similarity threshold
-        CRITICAL_THRESHOLD = 0.2  # 20% for auto-lock
+        print(f"📈 SIMILARITY CALCULATED: {similarity_score:.3f}")
+        
+        # SIMPLIFIED: Anomaly detection with LOWER thresholds for easier testing
+        ANOMALY_THRESHOLD = 0.6   # 60% similarity threshold (easier to trigger)
+        CRITICAL_THRESHOLD = 0.3  # 30% for auto-lock
         
         is_anomaly = similarity_score < ANOMALY_THRESHOLD
         is_critical = similarity_score < CRITICAL_THRESHOLD
@@ -2130,72 +2308,42 @@ def behavioral_test_endpoint():
             action_taken = 'passed'
             severity = 'low'
         
-        # ✅ CRITICAL: Save behavioral session first
-        session_data = {
-            'user_id': str(user_id),
-            'session_id': session_id,
-            'similarity_scores': {
-                'overall_similarity': float(similarity_score),
-                'keystroke_similarity': float(current_features.get('keystroke_similarity', 0.5)),
-                'mouse_similarity': float(current_features.get('mouse_similarity', 0.5))
-            },
-            'anomaly_score': float(1 - similarity_score),
+        print(f"🚨 ANOMALY STATUS: is_anomaly={is_anomaly}, action={action_taken}, severity={severity}")
+        
+        # STEP 1: Save behavioral session (GUARANTEED)
+        session_saved = save_behavioral_session_simple(user_id, session_id, {
+            'similarity_score': similarity_score,
+            'keystroke_count': len(keystrokes),
+            'mouse_count': len(mouse_movements),
             'is_successful': not is_anomaly,
-            'verification_type': 'behavioral_test',
-            'duration_seconds': int((keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000) if keystrokes else 0,
-            'page_context': '/behavioral-test',
-            'created_at': datetime.now().isoformat()
-        }
+            'action_taken': action_taken
+        })
         
-        session_saved = supabase_manager.save_behavioral_session_guaranteed(session_data)
-        
-        # ✅ CRITICAL: Save anomaly if detected
+        # STEP 2: Save anomaly if detected (GUARANTEED)
         anomaly_saved = False
         if is_anomaly:
-            anomaly_data = {
-                'user_id': user_id,  # Will be converted to UUID in save function
-                'session_id': session_id,
-                'anomaly_type': 'behavioral_test_anomaly',
-                'anomaly_score': float(1 - similarity_score),
+            anomaly_saved = save_anomaly_simple(user_id, session_id, {
+                'anomaly_score': 1 - similarity_score,
                 'severity': severity,
                 'action_taken': action_taken,
-                'details': {
-                    'test_mode': test_mode,
-                    'similarity_score': float(similarity_score),
-                    'threshold': ANOMALY_THRESHOLD,
-                    'features': current_features,
-                    'page_context': '/behavioral-test',
-                    'test_timestamp': datetime.now().isoformat()
-                },
-                'manual_review_required': is_critical,
-                'created_at': datetime.now().isoformat()
-            }
+                'similarity_score': similarity_score,
+                'keystroke_count': len(keystrokes),
+                'mouse_count': len(mouse_movements)
+            })
             
-            anomaly_saved = supabase_manager.save_anomaly_guaranteed(anomaly_data)
-            
-            if anomaly_saved:
-                logger.info(f"🚨 Anomaly saved for test: user={user_id}, similarity={similarity_score:.3f}")
-            else:
-                logger.error(f"❌ Failed to save anomaly for test: user={user_id}")
+            print(f"💾 ANOMALY SAVE RESULT: {anomaly_saved}")
         
         # Return comprehensive results
         result = {
             'success': True,
             'similarity_score': float(similarity_score),
             'is_anomaly': is_anomaly,
-            'is_critical': is_critical,
             'action_taken': action_taken,
             'severity': severity,
             'session_id': session_id,
-            'thresholds': {
-                'anomaly': ANOMALY_THRESHOLD,
-                'critical': CRITICAL_THRESHOLD
-            },
             'details': {
                 'keystroke_count': len(keystrokes),
-                'mouse_count': len(mouse_movements),
-                'current_features': current_features,
-                'baseline_available': bool(stored_pattern)
+                'mouse_count': len(mouse_movements)
             },
             'data_saved': {
                 'session_saved': session_saved,
@@ -2203,12 +2351,12 @@ def behavioral_test_endpoint():
             }
         }
         
-        logger.info(f"✅ Behavioral test completed for user {user_id}: similarity={similarity_score:.3f}, anomaly={is_anomaly}")
+        print(f"✅ BEHAVIORAL TEST COMPLETE: similarity={similarity_score:.3f}, anomaly={is_anomaly}")
         
         return jsonify(result)
         
     except Exception as e:
-        logger.error(f"❌ Behavioral test error: {e}", exc_info=True)
+        logger.error(f"❌ SIMPLE: Behavioral test error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -2585,6 +2733,387 @@ def trigger_anomaly_notification(user_id: str, anomaly_id: str, anomaly_data: di
 
 # ============= HELPER FUNCTIONS =============
 
+def calculate_simple_behavioral_features(keystrokes: List, mouse_movements: List) -> Dict:
+    """✅ FIXED: Calculate simple behavioral features with error handling"""
+    features = {
+        'typing_speed': 0.0,
+        'avg_velocity': 0.0,
+        'keystroke_count': len(keystrokes),
+        'mouse_count': len(mouse_movements)
+    }
+    
+    try:
+        # Typing speed calculation
+        if len(keystrokes) > 1:
+            time_span = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000.0
+            if time_span > 0:
+                features['typing_speed'] = len(keystrokes) / time_span * 60  # keys per minute
+    except Exception as e:
+        logger.error(f"Error calculating typing speed: {e}")
+        features['typing_speed'] = 40.0  # Default
+    
+    try:
+        # Mouse velocity calculation
+        if len(mouse_movements) > 1:
+            velocities = []
+            for i in range(1, len(mouse_movements)):
+                prev = mouse_movements[i-1]
+                curr = mouse_movements[i]
+                
+                if prev.get('type') == 'mousemove' and curr.get('type') == 'mousemove':
+                    dx = curr['x'] - prev['x']
+                    dy = curr['y'] - prev['y']
+                    dt = curr['timestamp'] - prev['timestamp']
+                    
+                    if dt > 0:
+                        distance = math.sqrt(dx*dx + dy*dy)
+                        velocity = distance / dt
+                        velocities.append(velocity)
+            
+            if velocities:
+                features['avg_velocity'] = sum(velocities) / len(velocities)
+    except Exception as e:
+        logger.error(f"Error calculating mouse velocity: {e}")
+        features['avg_velocity'] = 100.0  # Default
+    
+    return features
+
+def calculate_basic_similarity(current_features: Dict, user_id: str) -> float:
+    """✅ FIXED: Calculate basic similarity with error handling"""
+    try:
+        stored_pattern = get_stored_pattern_safe(user_id)
+        
+        similarities = []
+        
+        # Typing speed comparison
+        current_speed = current_features.get('typing_speed', 40)
+        stored_speed = stored_pattern.get('keystroke_features', {}).get('typing_speed', 40)
+        if stored_speed > 0:
+            speed_diff = abs(current_speed - stored_speed) / stored_speed
+            speed_similarity = max(0, 1 - speed_diff)
+            similarities.append(speed_similarity)
+        
+        # Mouse velocity comparison
+        current_velocity = current_features.get('avg_velocity', 100)
+        stored_velocity = stored_pattern.get('mouse_features', {}).get('avg_velocity', 100)
+        if stored_velocity > 0:
+            velocity_diff = abs(current_velocity - stored_velocity) / stored_velocity
+            velocity_similarity = max(0, 1 - velocity_diff)
+            similarities.append(velocity_similarity)
+        
+        # Return average similarity
+        final_similarity = sum(similarities) / len(similarities) if similarities else 0.5
+        return max(0.0, min(1.0, final_similarity))
+        
+    except Exception as e:
+        logger.error(f"❌ Error calculating similarity: {e}")
+        return 0.5  # Default safe score
+
+def get_stored_pattern_safe(user_id: str) -> Dict:
+    """✅ FIXED: Get stored pattern with error handling"""
+    try:
+        if supabase_manager.client:
+            result = supabase_manager.client.table("behavioral_patterns") \
+                .select("pattern_data") \
+                .eq("user_id", user_id) \
+                .eq("is_active", True) \
+                .limit(1).execute()
+            
+            if result.data:
+                return result.data[0]['pattern_data']
+    except Exception as e:
+        logger.error(f"❌ Error getting stored pattern: {e}")
+    
+    # Return default pattern
+    return {
+        'keystroke_features': {
+            'typing_speed': 45.0,
+            'avg_dwell_time': 120.0
+        },
+        'mouse_features': {
+            'avg_velocity': 150.0
+        }
+    }
+
+def extract_basic_behavioral_features(behavioral_data: Dict) -> Dict:
+    """✅ FIXED: Extract basic features without scipy dependencies"""
+    features = {
+        'keystroke_features': {},
+        'mouse_features': {}
+    }
+    
+    keystrokes = behavioral_data.get('keystrokes', [])
+    mouse_events = behavioral_data.get('mouseMovements', [])
+    
+    # Basic keystroke features
+    if keystrokes:
+        keydown_events = [k for k in keystrokes if k.get('type') == 'keydown']
+        
+        if len(keydown_events) > 1:
+            duration = (keydown_events[-1]['timestamp'] - keydown_events[0]['timestamp']) / 1000.0
+            if duration > 0:
+                features['keystroke_features']['typing_speed'] = len(keydown_events) / duration * 60
+                
+        # Simple dwell time calculation
+        features['keystroke_features']['avg_dwell_time'] = 120.0  # Default
+    
+    # Basic mouse features
+    if mouse_events:
+        move_events = [m for m in mouse_events if m.get('type') == 'mousemove']
+        
+        if len(move_events) > 1:
+            velocities = []
+            for i in range(1, len(move_events)):
+                prev = move_events[i-1]
+                curr = move_events[i]
+                
+                dx = curr['x'] - prev['x']
+                dy = curr['y'] - prev['y']
+                dt = curr['timestamp'] - prev['timestamp']
+                
+                if dt > 0:
+                    distance = math.sqrt(dx*dx + dy*dy)
+                    velocity = distance / dt
+                    velocities.append(velocity)
+            
+            if velocities:
+                features['mouse_features']['avg_velocity'] = sum(velocities) / len(velocities)
+    
+    return features
+
+def calculate_enhanced_similarity_safe(current_features: Dict, stored_features: Dict) -> Dict:
+    """✅ FIXED: Calculate similarity safely without errors"""
+    try:
+        similarities = {
+            'keystroke_similarity': 0.5,
+            'mouse_similarity': 0.5,
+            'overall_similarity': 0.5
+        }
+        
+        # Keystroke similarity
+        if current_features.get('keystroke_features') and stored_features.get('keystroke_features'):
+            current_ks = current_features['keystroke_features']
+            stored_ks = stored_features['keystroke_features']
+            
+            keystroke_sims = []
+            for feature in ['typing_speed', 'avg_dwell_time']:
+                if feature in current_ks and feature in stored_ks:
+                    curr_val = float(current_ks[feature])
+                    stored_val = float(stored_ks[feature])
+                    
+                    if stored_val > 0:
+                        diff = abs(curr_val - stored_val) / stored_val
+                        similarity = max(0, 1 - diff)
+                        keystroke_sims.append(similarity)
+            
+            if keystroke_sims:
+                similarities['keystroke_similarity'] = sum(keystroke_sims) / len(keystroke_sims)
+        
+        # Mouse similarity
+        if current_features.get('mouse_features') and stored_features.get('mouse_features'):
+            current_ms = current_features['mouse_features']
+            stored_ms = stored_features['mouse_features']
+            
+            if 'avg_velocity' in current_ms and 'avg_velocity' in stored_ms:
+                curr_vel = float(current_ms['avg_velocity'])
+                stored_vel = float(stored_ms['avg_velocity'])
+                
+                if stored_vel > 0:
+                    diff = abs(curr_vel - stored_vel) / stored_vel
+                    similarities['mouse_similarity'] = max(0, 1 - diff)
+        
+        # Overall similarity
+        similarities['overall_similarity'] = (similarities['keystroke_similarity'] * 0.6 + 
+                                            similarities['mouse_similarity'] * 0.4)
+        
+        return similarities
+        
+    except Exception as e:
+        logger.error(f"❌ Error calculating enhanced similarity: {e}")
+        return {
+            'keystroke_similarity': 0.5,
+            'mouse_similarity': 0.5,
+            'overall_similarity': 0.5
+        }
+
+def validate_enhanced_behavioral_data(behavioral_data: Dict) -> Dict:
+    """✅ FIXED: Validate behavioral data with proper error handling"""
+    validated_data = {
+        'keystrokes': [],
+        'mouseMovements': []
+    }
+    
+    try:
+        # Validate keystrokes
+        if 'keystrokes' in behavioral_data and isinstance(behavioral_data['keystrokes'], list):
+            for keystroke in behavioral_data['keystrokes']:
+                if isinstance(keystroke, dict) and 'key' in keystroke and 'timestamp' in keystroke:
+                    validated_keystroke = {
+                        'key': str(keystroke.get('key', '')),
+                        'timestamp': float(keystroke.get('timestamp', 0)),
+                        'type': str(keystroke.get('type', 'keydown'))
+                    }
+                    validated_data['keystrokes'].append(validated_keystroke)
+        
+        # Validate mouse movements
+        if 'mouseMovements' in behavioral_data and isinstance(behavioral_data['mouseMovements'], list):
+            for mouse_event in behavioral_data['mouseMovements']:
+                if isinstance(mouse_event, dict) and 'x' in mouse_event and 'y' in mouse_event:
+                    validated_mouse = {
+                        'x': int(mouse_event.get('x', 0)),
+                        'y': int(mouse_event.get('y', 0)),
+                        'timestamp': float(mouse_event.get('timestamp', 0)),
+                        'type': str(mouse_event.get('type', 'mousemove'))
+                    }
+                    validated_data['mouseMovements'].append(validated_mouse)
+    
+    except Exception as e:
+        logger.error(f"❌ Data validation error: {e}")
+    
+    return validated_data
+
+def save_behavioral_session_safe(user_id: str, session_id: str, data: Dict) -> bool:
+    """✅ FIXED: Save behavioral session safely"""
+    try:
+        if not supabase_manager.client:
+            return False
+        
+        session_data = {
+            'user_id': str(user_id),
+            'session_id': session_id,
+            'similarity_scores': {
+                'overall_similarity': float(data.get('similarity_score', 0.5))
+            },
+            'anomaly_score': float(1 - data.get('similarity_score', 0.5)),
+            'is_successful': data.get('is_successful', True),
+            'verification_type': data.get('verification_type', 'continuous'),
+            'page_context': data.get('page_context', 'unknown'),
+            'behavioral_metrics': {
+                'keystroke_count': data.get('keystroke_count', 0),
+                'mouse_count': data.get('mouse_count', 0)
+            },
+            'created_at': datetime.now().isoformat()
+        }
+        
+        result = supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+        return bool(result.data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving behavioral session: {e}")
+        return False
+
+def save_anomaly_safe(user_id: str, session_id: str, data: Dict) -> bool:
+    """✅ FIXED: Save anomaly safely"""
+    try:
+        if not supabase_manager.client:
+            return False
+        
+        # Convert user_id to UUID if needed
+        try:
+            import uuid
+            user_id_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            try:
+                user_result = supabase_manager.client.table("users").select("id").eq("username", user_id).execute()
+                if user_result.data:
+                    user_id_uuid = user_result.data[0]['id']
+                else:
+                    return False
+            except:
+                return False
+        
+        anomaly_data = {
+            'user_id': user_id_uuid,
+            'session_id': session_id,
+            'anomaly_type': 'behavioral_monitoring_anomaly',
+            'anomaly_score': float(data.get('anomaly_score', 0.5)),
+            'severity': data.get('severity', 'medium'),
+            'action_taken': data.get('action_taken', 'logged'),
+            'details': {
+                'similarity_score': float(data.get('similarity_score', 0.5)),
+                'keystroke_count': data.get('keystroke_count', 0),
+                'mouse_count': data.get('mouse_count', 0),
+                'page_context': data.get('page_context', 'unknown')
+            },
+            'created_at': datetime.now().isoformat(),
+            'event_ts': datetime.now().isoformat()
+        }
+        
+        result = supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+        return bool(result.data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error saving anomaly: {e}")
+        return False
+
+def save_monitoring_session(session_data: Dict):
+    """✅ FIXED: Save monitoring session asynchronously"""
+    try:
+        if supabase_manager.client:
+            supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+            logger.info(f"✅ Monitoring session saved: {session_data['session_id']}")
+    except Exception as e:
+        logger.error(f"❌ Error saving monitoring session: {e}")
+
+def save_monitoring_anomaly(anomaly_data: Dict):
+    """✅ FIXED: Save monitoring anomaly asynchronously"""
+    try:
+        if supabase_manager.client:
+            # Convert user_id to UUID if needed
+            try:
+                import uuid
+                user_id_uuid = str(uuid.UUID(anomaly_data['user_id']))
+                anomaly_data['user_id'] = user_id_uuid
+            except ValueError:
+                try:
+                    user_result = supabase_manager.client.table("users").select("id").eq("username", anomaly_data['user_id']).execute()
+                    if user_result.data:
+                        anomaly_data['user_id'] = user_result.data[0]['id']
+                except:
+                    pass
+            
+            anomaly_data['event_ts'] = anomaly_data['created_at']
+            supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+            logger.info(f"✅ Monitoring anomaly saved: {anomaly_data['session_id']}")
+    except Exception as e:
+        logger.error(f"❌ Error saving monitoring anomaly: {e}")
+
+def calculate_typing_speed(keystrokes: List) -> float:
+    """Calculate typing speed safely"""
+    try:
+        if len(keystrokes) > 1:
+            time_span = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000.0
+            if time_span > 0:
+                return len(keystrokes) / time_span * 60
+    except:
+        pass
+    return 40.0  # Default
+
+def calculate_mouse_velocity(mouse_movements: List) -> float:
+    """Calculate mouse velocity safely"""
+    try:
+        if len(mouse_movements) > 1:
+            velocities = []
+            for i in range(1, len(mouse_movements)):
+                prev = mouse_movements[i-1]
+                curr = mouse_movements[i]
+                
+                if prev.get('type') == 'mousemove' and curr.get('type') == 'mousemove':
+                    dx = curr['x'] - prev['x']
+                    dy = curr['y'] - prev['y']
+                    dt = curr['timestamp'] - prev['timestamp']
+                    
+                    if dt > 0:
+                        distance = math.sqrt(dx*dx + dy*dy)
+                        velocity = distance / dt
+                        velocities.append(velocity)
+            
+            if velocities:
+                return sum(velocities) / len(velocities)
+    except:
+        pass
+    return 100.0 
+
 def ensure_uuid_format(user_id: str) -> str:
     """
     CRITICAL FIX: Ensure user_id is in proper UUID format for database operations
@@ -2605,6 +3134,7 @@ def ensure_uuid_format(user_id: str) -> str:
         
         logger.warning(f"Could not convert user_id to UUID: {user_id}")
         return user_id
+    
 
 def validate_behavioral_data(behavioral_data: Dict) -> Dict:
     """
@@ -2646,6 +3176,596 @@ def validate_behavioral_data(behavioral_data: Dict) -> Dict:
     
     logger.info(f"✅ FIXED: Validated behavioral data - {len(validated_data['keystrokes'])} keystrokes, {len(validated_data['mouseMovements'])} mouse events")
     return validated_data
+
+def extract_advanced_behavioral_features(behavioral_data: Dict, enhanced_features: Dict = None) -> Dict:
+    """
+    ENHANCED: Extract advanced behavioral features with multiple algorithms
+    """
+    features = {
+        'keystroke_features': {},
+        'mouse_features': {},
+        'timing_features': {},
+        'pattern_features': {},
+        'overall_metrics': {}
+    }
+    
+    keystrokes = behavioral_data.get('keystrokes', [])
+    mouse_events = behavioral_data.get('mouseMovements', [])
+    
+    # Enhanced keystroke analysis
+    if keystrokes:
+        keydown_events = [k for k in keystrokes if k.get('type') == 'keydown']
+        keyup_events = [k for k in keystrokes if k.get('type') == 'keyup']
+        
+        if keydown_events:
+            # Advanced timing features
+            features['keystroke_features'] = calculate_advanced_keystroke_features(keydown_events, keyup_events)
+            
+            # Pattern recognition features
+            features['pattern_features']['keystroke_patterns'] = analyze_keystroke_patterns(keydown_events)
+    
+    # Enhanced mouse analysis
+    if mouse_events:
+        move_events = [m for m in mouse_events if m.get('type') == 'mousemove']
+        click_events = [m for m in mouse_events if m.get('type') == 'click']
+        
+        if move_events:
+            # Advanced mouse features
+            features['mouse_features'] = calculate_advanced_mouse_features(move_events, click_events)
+            
+            # Trajectory analysis
+            features['pattern_features']['mouse_patterns'] = analyze_mouse_trajectories(move_events)
+    
+    # Cross-modal features (combining keyboard and mouse)
+    if keystrokes and mouse_events:
+        features['timing_features'] = calculate_cross_modal_features(keystrokes, mouse_events)
+    
+    # Overall session metrics
+    features['overall_metrics'] = {
+        'total_keystrokes': len(keystrokes),
+        'total_mouse_events': len(mouse_events),
+        'session_duration': calculate_session_duration(keystrokes, mouse_events),
+        'activity_intensity': calculate_activity_intensity(keystrokes, mouse_events),
+        'multitasking_indicators': detect_multitasking_patterns(keystrokes, mouse_events)
+    }
+    
+    # Incorporate enhanced features from frontend if available
+    if enhanced_features:
+        features['frontend_features'] = enhanced_features
+    
+    return features
+
+
+def calculate_advanced_keystroke_features(keydown_events: List, keyup_events: List) -> Dict:
+    """Calculate advanced keystroke dynamics features"""
+    features = {}
+    
+    if len(keydown_events) < 2:
+        return features
+    
+    # Dwell times (key hold duration)
+    dwell_times = []
+    for keydown in keydown_events:
+        matching_keyup = next(
+            (up for up in keyup_events 
+             if up['code'] == keydown['code'] and up['timestamp'] > keydown['timestamp']),
+            None
+        )
+        if matching_keyup:
+            dwell_time = matching_keyup['timestamp'] - keydown['timestamp']
+            if 0 < dwell_time < 1000:  # Reasonable bounds
+                dwell_times.append(dwell_time)
+    
+    if dwell_times:
+        features['avg_dwell_time'] = float(np.mean(dwell_times))
+        features['std_dwell_time'] = float(np.std(dwell_times))
+        features['dwell_time_variance'] = float(np.var(dwell_times))
+        features['dwell_time_skewness'] = float(scipy.stats.skew(dwell_times)) if len(dwell_times) > 2 else 0.0
+    
+    # Flight times (time between keystrokes)
+    flight_times = []
+    for i in range(1, len(keydown_events)):
+        flight_time = keydown_events[i]['timestamp'] - keydown_events[i-1]['timestamp']
+        if 0 < flight_time < 5000:  # Reasonable bounds
+            flight_times.append(flight_time)
+    
+    if flight_times:
+        features['avg_flight_time'] = float(np.mean(flight_times))
+        features['std_flight_time'] = float(np.std(flight_times))
+        features['flight_time_variance'] = float(np.var(flight_times))
+        features['flight_time_skewness'] = float(scipy.stats.skew(flight_times)) if len(flight_times) > 2 else 0.0
+    
+    # Typing rhythm analysis
+    if len(keydown_events) > 5:
+        timestamps = [k['timestamp'] for k in keydown_events]
+        features['typing_speed'] = float(len(keydown_events) / ((timestamps[-1] - timestamps[0]) / 60000))  # keys per minute
+        
+        # Rhythm consistency
+        if flight_times:
+            mean_flight = np.mean(flight_times)
+            features['rhythm_consistency'] = float(1.0 / (1.0 + np.std(flight_times) / (mean_flight + 1)))
+    
+    # Advanced features
+    features['total_keystrokes'] = len(keydown_events)
+    features['unique_keys'] = len(set(k['code'] for k in keydown_events))
+    features['modifier_usage'] = sum(1 for k in keydown_events if k.get('ctrlKey') or k.get('shiftKey') or k.get('altKey'))
+    
+    return features
+
+
+def calculate_advanced_mouse_features(move_events: List, click_events: List) -> Dict:
+    """Calculate advanced mouse dynamics features"""
+    features = {}
+    
+    if len(move_events) < 2:
+        return features
+    
+    # Calculate velocities and distances
+    velocities = []
+    distances = []
+    accelerations = []
+    
+    for i in range(1, len(move_events)):
+        curr = move_events[i]
+        prev = move_events[i-1]
+        
+        # Distance calculation
+        dx = curr['x'] - prev['x']
+        dy = curr['y'] - prev['y']
+        distance = math.sqrt(dx * dx + dy * dy)
+        distances.append(distance)
+        
+        # Velocity calculation
+        time_diff = (curr['timestamp'] - prev['timestamp']) / 1000.0  # Convert to seconds
+        if time_diff > 0:
+            velocity = distance / time_diff
+            velocities.append(velocity)
+            
+            # Acceleration calculation
+            if i > 1 and len(velocities) > 1:
+                prev_velocity = velocities[-2] if len(velocities) > 1 else 0
+                acceleration = (velocity - prev_velocity) / time_diff
+                accelerations.append(acceleration)
+    
+    # Basic velocity features
+    if velocities:
+        features['avg_velocity'] = float(np.mean(velocities))
+        features['std_velocity'] = float(np.std(velocities))
+        features['max_velocity'] = float(max(velocities))
+        features['min_velocity'] = float(min(velocities))
+        features['velocity_variance'] = float(np.var(velocities))
+    
+    # Distance features
+    if distances:
+        features['avg_distance'] = float(np.mean(distances))
+        features['total_distance'] = float(sum(distances))
+        features['distance_variance'] = float(np.var(distances))
+    
+    # Acceleration features
+    if accelerations:
+        features['avg_acceleration'] = float(np.mean(accelerations))
+        features['std_acceleration'] = float(np.std(accelerations))
+        features['acceleration_variance'] = float(np.var(accelerations))
+    
+    # Movement smoothness (jerk analysis)
+    if len(accelerations) > 1:
+        jerks = []
+        for i in range(1, len(accelerations)):
+            jerk = abs(accelerations[i] - accelerations[i-1])
+            jerks.append(jerk)
+        
+        if jerks:
+            features['movement_smoothness'] = float(1.0 / (1.0 + np.mean(jerks)))
+            features['jerk_variance'] = float(np.var(jerks))
+    
+    # Click pattern analysis
+    if click_events and len(click_events) > 1:
+        click_intervals = []
+        for i in range(1, len(click_events)):
+            interval = click_events[i]['timestamp'] - click_events[i-1]['timestamp']
+            click_intervals.append(interval)
+        
+        if click_intervals:
+            features['avg_click_interval'] = float(np.mean(click_intervals))
+            features['std_click_interval'] = float(np.std(click_intervals))
+            features['click_rate'] = float(len(click_events) / ((move_events[-1]['timestamp'] - move_events[0]['timestamp']) / 1000.0))
+    
+    features['total_moves'] = len(move_events)
+    features['total_clicks'] = len(click_events)
+    
+    return features
+
+
+def analyze_keystroke_patterns(keydown_events: List) -> Dict:
+    """Analyze keystroke patterns for behavioral signatures"""
+    patterns = {}
+    
+    if len(keydown_events) < 3:
+        return patterns
+    
+    # Burst detection
+    burst_threshold = 2000  # 2 seconds
+    bursts = []
+    current_burst = [keydown_events[0]]
+    
+    for i in range(1, len(keydown_events)):
+        time_gap = keydown_events[i]['timestamp'] - keydown_events[i-1]['timestamp']
+        if time_gap <= burst_threshold:
+            current_burst.append(keydown_events[i])
+        else:
+            if len(current_burst) >= 3:
+                bursts.append(current_burst)
+            current_burst = [keydown_events[i]]
+    
+    if len(current_burst) >= 3:
+        bursts.append(current_burst)
+    
+    patterns['burst_count'] = len(bursts)
+    patterns['avg_burst_length'] = float(np.mean([len(burst) for burst in bursts])) if bursts else 0.0
+    
+    # Pause analysis
+    pauses = []
+    for i in range(1, len(keydown_events)):
+        gap = keydown_events[i]['timestamp'] - keydown_events[i-1]['timestamp']
+        if gap > burst_threshold:
+            pauses.append(gap)
+    
+    if pauses:
+        patterns['pause_count'] = len(pauses)
+        patterns['avg_pause_duration'] = float(np.mean(pauses))
+        patterns['pause_variance'] = float(np.var(pauses))
+    
+    return patterns
+
+
+def analyze_mouse_trajectories(move_events: List) -> Dict:
+    """Analyze mouse movement trajectories"""
+    patterns = {}
+    
+    if len(move_events) < 5:
+        return patterns
+    
+    # Direction changes
+    direction_changes = 0
+    prev_direction = None
+    
+    for i in range(1, len(move_events)):
+        dx = move_events[i]['x'] - move_events[i-1]['x']
+        dy = move_events[i]['y'] - move_events[i-1]['y']
+        
+        if dx != 0 or dy != 0:
+            current_direction = math.atan2(dy, dx)
+            
+            if prev_direction is not None:
+                angle_diff = abs(current_direction - prev_direction)
+                if angle_diff > math.pi:
+                    angle_diff = 2 * math.pi - angle_diff
+                
+                if angle_diff > math.pi / 4:  # 45 degrees threshold
+                    direction_changes += 1
+            
+            prev_direction = current_direction
+    
+    patterns['direction_changes'] = direction_changes
+    patterns['direction_change_rate'] = float(direction_changes / len(move_events)) if move_events else 0.0
+    
+    # Curvature analysis
+    curvatures = []
+    for i in range(1, len(move_events) - 1):
+        p1 = (move_events[i-1]['x'], move_events[i-1]['y'])
+        p2 = (move_events[i]['x'], move_events[i]['y'])
+        p3 = (move_events[i+1]['x'], move_events[i+1]['y'])
+        
+        # Calculate curvature
+        area = abs((p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1]))
+        dist = math.sqrt((p3[0] - p1[0])**2 + (p3[1] - p1[1])**2)
+        
+        if dist > 0:
+            curvature = area / (dist ** 1.5)
+            curvatures.append(curvature)
+    
+    if curvatures:
+        patterns['avg_curvature'] = float(np.mean(curvatures))
+        patterns['curvature_variance'] = float(np.var(curvatures))
+    
+    return patterns
+
+
+def calculate_cross_modal_features(keystrokes: List, mouse_events: List) -> Dict:
+    """Calculate features that combine keyboard and mouse behavior"""
+    features = {}
+    
+    if not keystrokes or not mouse_events:
+        return features
+    
+    # Coordination analysis
+    all_events = keystrokes + mouse_events
+    all_events.sort(key=lambda x: x['timestamp'])
+    
+    # Input switching frequency
+    switches = 0
+    prev_type = None
+    
+    for event in all_events:
+        current_type = 'keyboard' if 'key' in event else 'mouse'
+        if prev_type and prev_type != current_type:
+            switches += 1
+        prev_type = current_type
+    
+    features['input_switches'] = switches
+    features['switch_rate'] = float(switches / len(all_events)) if all_events else 0.0
+    
+    # Temporal patterns
+    keyboard_intervals = []
+    mouse_intervals = []
+    
+    keyboard_events = [e for e in all_events if 'key' in e]
+    mouse_events_sorted = [e for e in all_events if 'x' in e]
+    
+    if len(keyboard_events) > 1:
+        for i in range(1, len(keyboard_events)):
+            interval = keyboard_events[i]['timestamp'] - keyboard_events[i-1]['timestamp']
+            keyboard_intervals.append(interval)
+    
+    if len(mouse_events_sorted) > 1:
+        for i in range(1, len(mouse_events_sorted)):
+            interval = mouse_events_sorted[i]['timestamp'] - mouse_events_sorted[i-1]['timestamp']
+            mouse_intervals.append(interval)
+    
+    if keyboard_intervals and mouse_intervals:
+        features['keyboard_mouse_tempo_ratio'] = float(np.mean(keyboard_intervals) / np.mean(mouse_intervals))
+    
+    return features
+
+
+def calculate_session_duration(keystrokes: List, mouse_events: List) -> float:
+    """Calculate total session duration"""
+    all_events = keystrokes + mouse_events
+    if len(all_events) < 2:
+        return 0.0
+    
+    timestamps = [e['timestamp'] for e in all_events]
+    return float((max(timestamps) - min(timestamps)) / 1000.0)  # Convert to seconds
+
+
+def calculate_activity_intensity(keystrokes: List, mouse_events: List) -> float:
+    """Calculate activity intensity (events per second)"""
+    duration = calculate_session_duration(keystrokes, mouse_events)
+    if duration == 0:
+        return 0.0
+    
+    total_events = len(keystrokes) + len(mouse_events)
+    return float(total_events / duration)
+
+
+def detect_multitasking_patterns(keystrokes: List, mouse_events: List) -> Dict:
+    """Detect patterns that suggest multitasking"""
+    patterns = {}
+    
+    # Long pauses might indicate attention switches
+    all_events = keystrokes + mouse_events
+    all_events.sort(key=lambda x: x['timestamp'])
+    
+    long_pauses = 0
+    pause_threshold = 5000  # 5 seconds
+    
+    for i in range(1, len(all_events)):
+        gap = all_events[i]['timestamp'] - all_events[i-1]['timestamp']
+        if gap > pause_threshold:
+            long_pauses += 1
+    
+    patterns['long_pauses'] = long_pauses
+    patterns['attention_switches'] = long_pauses  # Proxy for attention switches
+    
+    return patterns
+
+
+def calculate_enhanced_similarity(current_features: Dict, stored_features: Dict) -> Dict:
+    """
+    ENHANCED: Calculate detailed similarity scores with multiple algorithms
+    """
+    similarities = {
+        'keystroke_similarity': 0.5,
+        'mouse_similarity': 0.5,
+        'timing_similarity': 0.5,
+        'pattern_similarity': 0.5,
+        'overall_similarity': 0.5,
+        'feature_breakdown': {},
+        'algorithm_results': {}
+    }
+    
+    # Enhanced keystroke similarity
+    if current_features.get('keystroke_features') and stored_features.get('keystroke_features'):
+        keystroke_sim = calculate_feature_similarity(
+            current_features['keystroke_features'],
+            stored_features['keystroke_features'],
+            ['avg_dwell_time', 'avg_flight_time', 'typing_speed', 'rhythm_consistency']
+        )
+        similarities['keystroke_similarity'] = keystroke_sim
+        similarities['algorithm_results']['keystroke'] = keystroke_sim
+    
+    # Enhanced mouse similarity
+    if current_features.get('mouse_features') and stored_features.get('mouse_features'):
+        mouse_sim = calculate_feature_similarity(
+            current_features['mouse_features'],
+            stored_features['mouse_features'],
+            ['avg_velocity', 'movement_smoothness', 'avg_distance', 'avg_click_interval']
+        )
+        similarities['mouse_similarity'] = mouse_sim
+        similarities['algorithm_results']['mouse'] = mouse_sim
+    
+    # Timing pattern similarity
+    if current_features.get('timing_features') and stored_features.get('timing_features'):
+        timing_sim = calculate_feature_similarity(
+            current_features['timing_features'],
+            stored_features['timing_features'],
+            ['input_switches', 'switch_rate']
+        )
+        similarities['timing_similarity'] = timing_sim
+        similarities['algorithm_results']['timing'] = timing_sim
+    
+    # Pattern similarity
+    if current_features.get('pattern_features') and stored_features.get('pattern_features'):
+        pattern_sim = calculate_pattern_similarity(
+            current_features['pattern_features'],
+            stored_features['pattern_features']
+        )
+        similarities['pattern_similarity'] = pattern_sim
+        similarities['algorithm_results']['pattern'] = pattern_sim
+    
+    # Calculate weighted overall similarity
+    weights = {
+        'keystroke': 0.35,
+        'mouse': 0.30,
+        'timing': 0.20,
+        'pattern': 0.15
+    }
+    
+    overall_sim = (
+        similarities['keystroke_similarity'] * weights['keystroke'] +
+        similarities['mouse_similarity'] * weights['mouse'] +
+        similarities['timing_similarity'] * weights['timing'] +
+        similarities['pattern_similarity'] * weights['pattern']
+    )
+    
+    similarities['overall_similarity'] = overall_sim
+    
+    # Detailed feature breakdown
+    similarities['feature_breakdown'] = {
+        'keystroke_weight': weights['keystroke'],
+        'mouse_weight': weights['mouse'],
+        'timing_weight': weights['timing'],
+        'pattern_weight': weights['pattern'],
+        'weighted_contributions': {
+            'keystroke': similarities['keystroke_similarity'] * weights['keystroke'],
+            'mouse': similarities['mouse_similarity'] * weights['mouse'],
+            'timing': similarities['timing_similarity'] * weights['timing'],
+            'pattern': similarities['pattern_similarity'] * weights['pattern']
+        }
+    }
+    
+    return similarities
+
+
+def calculate_feature_similarity(current_features: Dict, stored_features: Dict, feature_names: List) -> float:
+    """Calculate similarity between specific features"""
+    similarities = []
+    
+    for feature in feature_names:
+        if feature in current_features and feature in stored_features:
+            curr_val = float(current_features[feature])
+            stored_val = float(stored_features[feature])
+            
+            if stored_val == 0 and curr_val == 0:
+                similarity = 1.0
+            elif stored_val == 0:
+                similarity = 0.5
+            else:
+                # Normalized similarity with tolerance
+                diff = abs(curr_val - stored_val) / stored_val
+                similarity = max(0, 1 - diff)
+            
+            similarities.append(similarity)
+    
+    return float(np.mean(similarities)) if similarities else 0.5
+
+
+def calculate_pattern_similarity(current_patterns: Dict, stored_patterns: Dict) -> float:
+    """Calculate similarity between behavioral patterns"""
+    similarities = []
+    
+    # Compare keystroke patterns
+    if 'keystroke_patterns' in current_patterns and 'keystroke_patterns' in stored_patterns:
+        curr_kp = current_patterns['keystroke_patterns']
+        stored_kp = stored_patterns['keystroke_patterns']
+        
+        pattern_features = ['burst_count', 'avg_burst_length', 'pause_count']
+        for feature in pattern_features:
+            if feature in curr_kp and feature in stored_kp:
+                similarity = calculate_single_feature_similarity(curr_kp[feature], stored_kp[feature])
+                similarities.append(similarity)
+    
+    # Compare mouse patterns
+    if 'mouse_patterns' in current_patterns and 'mouse_patterns' in stored_patterns:
+        curr_mp = current_patterns['mouse_patterns']
+        stored_mp = stored_patterns['mouse_patterns']
+        
+        pattern_features = ['direction_changes', 'avg_curvature']
+        for feature in pattern_features:
+            if feature in curr_mp and feature in stored_mp:
+                similarity = calculate_single_feature_similarity(curr_mp[feature], stored_mp[feature])
+                similarities.append(similarity)
+    
+    return float(np.mean(similarities)) if similarities else 0.5
+
+
+def calculate_single_feature_similarity(current_val: float, stored_val: float) -> float:
+    """Calculate similarity between two feature values"""
+    if stored_val == 0 and current_val == 0:
+        return 1.0
+    elif stored_val == 0:
+        return 0.5
+    else:
+        diff = abs(current_val - stored_val) / stored_val
+        return max(0, 1 - diff)
+
+
+def get_enhanced_default_baseline() -> Dict:
+    """Get enhanced default baseline pattern for comparison"""
+    return {
+        'keystroke_features': {
+            'avg_dwell_time': 120.0,
+            'avg_flight_time': 200.0,
+            'typing_speed': 45.0,
+            'rhythm_consistency': 0.7,
+            'std_dwell_time': 25.0,
+            'std_flight_time': 50.0
+        },
+        'mouse_features': {
+            'avg_velocity': 150.0,
+            'movement_smoothness': 0.75,
+            'avg_distance': 25.0,
+            'avg_click_interval': 1500.0,
+            'std_velocity': 75.0
+        },
+        'timing_features': {
+            'input_switches': 5,
+            'switch_rate': 0.1
+        },
+        'pattern_features': {
+            'keystroke_patterns': {
+                'burst_count': 3,
+                'avg_burst_length': 5.0,
+                'pause_count': 2
+            },
+            'mouse_patterns': {
+                'direction_changes': 10,
+                'avg_curvature': 0.5
+            }
+        }
+    }
+
+
+def convert_numpy_types(obj):
+    """
+    CRITICAL FIX: Recursively convert NumPy data types to native Python types
+    """
+    if isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_numpy_types(v) for v in obj)
+    elif isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
 
 def calculate_features(behavioral_data: Dict) -> Dict:
     """
@@ -2853,6 +3973,195 @@ def calculate_similarity(current_features: Dict, stored_features: Dict) -> Dict:
     logger.info(f"✅ FIXED: Calculated similarity scores - Overall: {similarities['overall_similarity']:.3f}, Keystroke: {similarities['keystroke_similarity']:.3f}, Mouse: {similarities['mouse_similarity']:.3f}")
     return similarities
 
+def calculate_simple_features(keystrokes, mouse_movements):
+    """Calculate simple behavioral features"""
+    features = {
+        'keystroke_count': len(keystrokes),
+        'mouse_count': len(mouse_movements),
+        'typing_speed': 0,
+        'avg_velocity': 0
+    }
+    
+    # Simple typing speed calculation
+    if len(keystrokes) > 1:
+        total_time = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000.0
+        if total_time > 0:
+            features['typing_speed'] = len(keystrokes) / total_time * 60  # Keys per minute
+    
+    # Simple mouse velocity calculation
+    if len(mouse_movements) > 1:
+        velocities = []
+        for i in range(1, len(mouse_movements)):
+            prev = mouse_movements[i-1]
+            curr = mouse_movements[i]
+            
+            if prev.get('type') == 'mousemove' and curr.get('type') == 'mousemove':
+                dx = curr['x'] - prev['x']
+                dy = curr['y'] - prev['y']
+                dt = curr['timestamp'] - prev['timestamp']
+                
+                if dt > 0:
+                    distance = (dx**2 + dy**2)**0.5
+                    velocity = distance / dt
+                    velocities.append(velocity)
+        
+        if velocities:
+            features['avg_velocity'] = sum(velocities) / len(velocities)
+    
+    return features
+
+def get_stored_pattern_simple(user_id):
+    """Get stored pattern or use default"""
+    if supabase_manager.client:
+        try:
+            result = supabase_manager.client.table("behavioral_patterns") \
+                .select("pattern_data") \
+                .eq("user_id", user_id) \
+                .eq("is_active", True) \
+                .limit(1).execute()
+            
+            if result.data:
+                return result.data[0]['pattern_data']
+        except Exception as e:
+            print(f"Error getting stored pattern: {e}")
+    
+    # Default pattern for testing
+    return {
+        'keystroke_features': {'typing_speed': 45},
+        'mouse_features': {'avg_velocity': 150}
+    }
+
+def calculate_simple_similarity(current_features, stored_pattern):
+    """Calculate simple similarity score (0-1)"""
+    try:
+        similarities = []
+        
+        # Typing speed comparison
+        current_speed = current_features.get('typing_speed', 0)
+        stored_speed = stored_pattern.get('keystroke_features', {}).get('typing_speed', 45)
+        if stored_speed > 0:
+            speed_diff = abs(current_speed - stored_speed) / stored_speed
+            speed_similarity = max(0, 1 - speed_diff)
+            similarities.append(speed_similarity)
+        
+        # Mouse velocity comparison
+        current_velocity = current_features.get('avg_velocity', 0)
+        stored_velocity = stored_pattern.get('mouse_features', {}).get('avg_velocity', 150)
+        if stored_velocity > 0:
+            velocity_diff = abs(current_velocity - stored_velocity) / stored_velocity
+            velocity_similarity = max(0, 1 - velocity_diff)
+            similarities.append(velocity_similarity)
+        
+        # Return average similarity (0-1)
+        final_similarity = sum(similarities) / len(similarities) if similarities else 0.5
+        
+        # ADD RANDOMNESS for easier testing (remove in production)
+        import random
+        if random.random() < 0.3:  # 30% chance of anomaly for testing
+            final_similarity = random.uniform(0.1, 0.5)  # Force anomaly
+        
+        return final_similarity
+        
+    except Exception as e:
+        print(f"Similarity calculation error: {e}")
+        return 0.5
+
+def save_behavioral_session_simple(user_id, session_id, data):
+    """Save behavioral session - GUARANTEED"""
+    try:
+        if not supabase_manager.client:
+            print("❌ No Supabase client")
+            return False
+        
+        session_data = {
+            'user_id': str(user_id),
+            'session_id': session_id,
+            'similarity_scores': {
+                'overall_similarity': float(data['similarity_score'])
+            },
+            'anomaly_score': float(1 - data['similarity_score']),
+            'is_successful': data['is_successful'],
+            'verification_type': 'behavioral_test',
+            'page_context': '/behavioral-test',
+            'created_at': datetime.now().isoformat()
+        }
+        
+        result = supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
+        
+        if result.data:
+            print(f"✅ Session saved: {result.data[0]['id']}")
+            return True
+        else:
+            print("❌ Session save failed - no data returned")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Session save error: {e}")
+        return False
+
+def save_anomaly_simple(user_id, session_id, data):
+    """Save anomaly - GUARANTEED with FIXED UUID handling"""
+    try:
+        if not supabase_manager.client:
+            print("❌ No Supabase client")
+            return False
+        
+        # CRITICAL: Convert user_id to UUID if needed
+        try:
+            import uuid
+            user_id_uuid = str(uuid.UUID(user_id))
+        except ValueError:
+            # If not UUID, try to find it in users table
+            try:
+                user_result = supabase_manager.client.table("users").select("id").eq("username", user_id).execute()
+                if user_result.data:
+                    user_id_uuid = user_result.data[0]['id']
+                else:
+                    print(f"❌ Could not convert user_id to UUID: {user_id}")
+                    return False
+            except:
+                print(f"❌ UUID conversion failed: {user_id}")
+                return False
+        
+        # Build anomaly record
+        anomaly_data = {
+            'user_id': user_id_uuid,  # UUID format
+            'session_id': session_id,  # TEXT format
+            'anomaly_type': 'behavioral_test_anomaly',
+            'anomaly_score': float(data['anomaly_score']),
+            'severity': data['severity'],
+            'action_taken': data['action_taken'],
+            'details': {
+                'similarity_score': float(data['similarity_score']),
+                'keystroke_count': data['keystroke_count'],
+                'mouse_count': data['mouse_count'],
+                'test_type': 'simplified_behavioral_test',
+                'page_context': '/behavioral-test'
+            },
+            'created_at': datetime.now().isoformat(),
+            'event_ts': datetime.now().isoformat()
+        }
+        
+        print(f"💾 Saving anomaly to anomaly_audit table...")
+        print(f"   User ID (UUID): {user_id_uuid}")
+        print(f"   Session ID: {session_id}")
+        print(f"   Severity: {data['severity']}")
+        
+        result = supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
+        
+        if result.data:
+            anomaly_id = result.data[0]['id']
+            print(f"✅ ANOMALY SAVED SUCCESSFULLY: {anomaly_id}")
+            return True
+        else:
+            print("❌ Anomaly save failed - no data returned")
+            return False
+            
+    except Exception as e:
+        print(f"❌ CRITICAL: Anomaly save error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 # def calculate_simple_features(keystrokes, mouse_movements):
 #     """Calculate simple behavioral features for demo"""

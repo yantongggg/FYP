@@ -86,7 +86,7 @@ const EditProfile = () => {
         .eq('user_id', userData.uid);
 
       if (biometricData) {
-        const types = biometricData.map(item => item.biometric_type);
+         const types = biometricData.map((item: { biometric_type: string }) => item.biometric_type);
         setBiometricStatus({
           face: types.includes('face'),
           keystroke: types.includes('keystroke'),
@@ -304,8 +304,7 @@ const EditProfile = () => {
                   />
                 </div>
               </div>
-
-              <div>
+              {/* <div>
                 <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
                   PHONE_NUMBER
                 </label>
@@ -320,7 +319,7 @@ const EditProfile = () => {
                     placeholder="Enter phone number"
                   />
                 </div>
-              </div>
+              </div> */}
 
               <div className="border-t border-green-500/30 pt-6">
                 <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE_PASSWORD</h3>
@@ -432,13 +431,11 @@ const EditProfile = () => {
                     </button>
                   </div>
                   
-                  <BiometricCapture
-                    onFaceCapture={(data) => handleBiometricCapture(data)}
-                    onLivenessCapture={(data) => handleBiometricCapture(data)}
-                    onKeystrokeCapture={(data) => handleBiometricCapture(data)}
-                    onScrollCapture={(data) => handleBiometricCapture(data)}
-                    mode="authentication"
-                  />
+                <BiometricCapture
+                  onFaceCapture={(data: any) => handleBiometricCapture(data)}
+                  onLivenessCapture={(data: any) => handleBiometricCapture(data)}
+                  mode="authentication"
+                />
                 </div>
               ) : (
                 <>
