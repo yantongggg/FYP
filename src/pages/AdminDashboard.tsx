@@ -1,4 +1,3 @@
-// Enhanced AdminDashboard.tsx with Fixed Data Loading and Real-time Analytics
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -20,7 +19,12 @@ import {
   ChevronDown,
   ChevronUp,
   BarChart3,
-  TrendingDown
+  TrendingDown,
+  Edit,        
+  UserX,       
+  UserCheck,   
+  X,          
+  Save         
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -34,6 +38,9 @@ interface User {
   status: 'active' | 'suspended' | 'pending';
   trust_score: number;
   is_biometric_enrolled: boolean;
+  is_active: boolean;                    
+  biometric_enrolled: boolean;          
+  behavioral_enrolled: boolean;          
   last_login: string;
   created_at: string;
   total_biometric_records: number;
@@ -43,6 +50,16 @@ interface User {
   total_login_attempts: number;
   successful_login_attempts: number;
   unresolved_anomalies: number;
+}
+
+// ✅ ADD: EditingUser interface
+interface EditingUser {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  trust_score: number;
+  is_active: boolean;
 }
 
 interface BiometricEvent {
@@ -116,6 +133,16 @@ interface LoginAudit {
 const AdminDashboard: React.FC = () => {
   const { userData } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);         
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [editingUser, setEditingUser] = useState<EditingUser | null>(null); 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUserData, setEditingUserData] = useState({
+    username: '',
+    email: '',
+    status: 'active',
+    role: 'user'
+  });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userBiometricData, setUserBiometricData] = useState<BiometricEvent[]>([]);
   const [anomalies, setAnomalies] = useState<any[]>([]);
@@ -142,6 +169,8 @@ const AdminDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');              // ✅ ADD THIS
+  const [updating, setUpdating] = useState(false);                 // ✅ ADD THIS
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'biometrics' | 'anomalies' | 'logins' | 'ekyc'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('created_at');
@@ -150,6 +179,194 @@ const AdminDashboard: React.FC = () => {
   const [actionUser, setActionUser] = useState<User | null>(null);
   const [actionType, setActionType] = useState('');
   const [anomalyFilter, setAnomalyFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+
+  // ✅ ADD: Missing functions
+  const handleEditUser = (user: User) => {
+    setEditingUser({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      trust_score: user.trust_score,
+      is_active: user.is_active
+    });
+    setError('');
+    setSuccess('');
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser || updating) return;
+
+    setUpdating(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      console.log('👑 Updating user:', editingUser.id);
+
+      const response = await fetch('http://localhost:5000/api/admin/update-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editingUser)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccess('User updated successfully');
+        setEditingUser(null);
+        loadUsers(); // Reload users to get updated data
+      } else {
+        setError(result.error || 'Update failed');
+      }
+    } catch (err) {
+      console.error('❌ User update error:', err);
+      setError('Network error. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      setError('');
+      setSuccess('');
+
+      const response = await fetch('http://localhost:5000/api/admin/toggle-user-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          is_active: !currentStatus
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccess(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
+        loadUsers();
+      } else {
+        setError(result.error || 'Status update failed');
+      }
+    } catch (err) {
+      console.error('❌ User status toggle error:', err);
+      setError('Network error');
+    }
+  };
+
+  const handleResetBiometric = async (userId: string) => {
+    if (!confirm('Are you sure you want to reset this user\'s biometric data? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+
+      const response = await fetch('http://localhost:5000/api/admin/reset-biometric', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          admin_id: userData?.uid
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSuccess('Biometric data reset successfully');
+        loadUsers();
+      } else {
+        setError(result.error || 'Reset failed');
+      }
+    } catch (err) {
+      console.error('❌ Biometric reset error:', err);
+      setError('Network error');
+    }
+  };
+
+  // ✅ ADD: Filter and sort users
+  useEffect(() => {
+    let filtered = allUsers;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter((user: User) =>
+        user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortField) {
+        case 'username':
+          aValue = a.username || '';
+          bValue = b.username || '';
+          break;
+        case 'trust_score':
+          aValue = a.trust_score || 0;
+          bValue = b.trust_score || 0;
+          break;
+        case 'created_at':
+        default:
+          aValue = new Date(a.created_at || 0).getTime();
+          bValue = new Date(b.created_at || 0).getTime();
+          break;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    setFilteredUsers(filtered);
+  }, [allUsers, searchTerm, sortField, sortDirection]);
+
+  const handleSaveUserChanges = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: selectedUser.id,
+          username: editingUserData.username,
+          email: editingUserData.email,
+          status: editingUserData.status,
+          role: editingUserData.role,
+          admin_id: userData?.uid
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Refresh users list
+        loadUsers();
+        setShowEditModal(false);
+        setSelectedUser(null);
+      } else {
+        alert(`Update failed: ${result.error}`);
+      }
+    } catch (error) {
+      alert('Network error while updating user');
+    }
+  };
 
   // Helper functions
   const getSeverityColor = (severity: string) => {
@@ -292,7 +509,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Enhanced user loading
   const loadUsers = async () => {
     try {
       console.log('👥 Loading users data');
@@ -305,10 +521,20 @@ const AdminDashboard: React.FC = () => {
       if (error) throw error;
       
       if (usersData) {
-        setUsers(usersData);
+        // ✅ FIX: Map data to ensure all required properties exist
+        const processedUsers = usersData.map((user: any) => ({
+          ...user,
+          is_active: user.is_active !== false, // Default to true if undefined
+          biometric_enrolled: user.is_biometric_enrolled || false,
+          behavioral_enrolled: false, // You can load this from behavioral_patterns table
+          trust_score: user.trust_score || 85
+        }));
+
+        setUsers(processedUsers);
+        setAllUsers(processedUsers); 
         
         // Load additional biometric stats for each user
-        await calculateEnhancedStats(usersData);
+        await calculateEnhancedStats(processedUsers);
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -318,7 +544,7 @@ const AdminDashboard: React.FC = () => {
   // Calculate enhanced statistics
   const calculateEnhancedStats = async (usersData: User[]) => {
     try {
-      console.log('📊 Calculating enhanced statistics');
+      console.log('Calculating enhanced statistics');
 
       // Load biometric data stats
       const { data: biometricData } = await supabase
@@ -600,17 +826,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    if (!searchTerm) return true;
-    
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      user.username?.toLowerCase().includes(searchLower) ||
-      user.email?.toLowerCase().includes(searchLower) ||
-      user.role?.toLowerCase().includes(searchLower) ||
-      user.status?.toLowerCase().includes(searchLower)
-    );
-  });
 
   const handleUserAction = (user: User, action: string) => {
     setActionUser(user);
@@ -759,7 +974,7 @@ const AdminDashboard: React.FC = () => {
       <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-400 mx-auto mb-4"></div>
-          <p className="text-green-400 font-mono">LOADING_ADMIN_DASHBOARD...</p>
+          <p className="text-green-400 font-mono">LOADING ADMIN DASHBOARD...</p>
         </div>
       </div>
     );
@@ -804,8 +1019,8 @@ const AdminDashboard: React.FC = () => {
         >
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-4xl font-bold text-green-400 mb-2 glitch-text">ADMIN_CONTROL_PANEL</h1>
-              <p className="text-cyan-400 font-mono">REAL-TIME_MONITORING // USER_MANAGEMENT // SECURITY_ANALYTICS</p>
+              <h1 className="text-4xl font-bold text-green-400 mb-2 glitch-text">ADMIN CONTROL PANEL</h1>
+              <p className="text-cyan-400 font-mono">REAL-TIME MONITORING // USER MANAGEMENT // SECURITY ANALYTICS</p>
             </div>
             <button
               onClick={loadAdminData}
@@ -821,14 +1036,14 @@ const AdminDashboard: React.FC = () => {
         {/* Enhanced Statistics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
-            title="TOTAL_USERS"
+            title="TOTAL USERS"
             value={stats.totalUsers}
             icon={<Users className="h-6 w-6 text-green-400" />}
             color="from-blue-500 to-blue-600"
             trend={`${stats.activeUsers} ACTIVE | ${stats.suspendedUsers} SUSPENDED`}
           />
           <StatCard
-            title="BIOMETRIC_ENROLLED"
+            title="BIOMETRIC ENROLLED"
             value={`${stats.totalUsers > 0 ? ((stats.enrolledUsers / stats.totalUsers) * 100).toFixed(1) : 0}%`}
             icon={<Shield className="h-6 w-6 text-blue-400" />}
             color="from-green-500 to-green-600"
@@ -836,14 +1051,14 @@ const AdminDashboard: React.FC = () => {
             subtitle={`${stats.totalBiometricCaptures} total captures`}
           />
           <StatCard
-            title="LOGIN_SUCCESS_RATE"
+            title="LOGIN SUCCESS RATE"
             value={`${(stats.successRate * 100).toFixed(1)}%`}
             icon={<TrendingUp className="h-6 w-6 text-purple-400" />}
             color="from-purple-500 to-purple-600"
             trend={`${stats.successfulLogins}/${stats.totalLoginAttempts} ATTEMPTS`}
           />
           <StatCard
-            title="SECURITY_ALERTS"
+            title="SECURITY ALERTS"
             value={stats.anomalyCount}
             icon={<AlertTriangle className="h-6 w-6 text-yellow-400" />}
             color="from-red-500 to-red-600"
@@ -890,10 +1105,10 @@ const AdminDashboard: React.FC = () => {
                 {/* Enhanced System Health */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="glass-card rounded-lg p-6">
-                    <h3 className="text-lg font-bold text-green-400 mb-4">SYSTEM_HEALTH</h3>
+                    <h3 className="text-lg font-bold text-green-400 mb-4">SYSTEM HEALTH</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">AVG_QUALITY_SCORE</span>
+                        <span className="text-cyan-400 font-mono">AVG QUALITY SCORE</span>
                         <div className="flex items-center">
                           <div className="w-24 bg-gray-700 rounded-full h-2 mr-2">
                             <div 
@@ -905,7 +1120,7 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">LOGIN_SUCCESS_RATE</span>
+                        <span className="text-cyan-400 font-mono">LOGIN SUCCESS RATE</span>
                         <div className="flex items-center">
                           <div className="w-24 bg-gray-700 rounded-full h-2 mr-2">
                             <div 
@@ -917,39 +1132,39 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">TOTAL_CAPTURES</span>
+                        <span className="text-cyan-400 font-mono">TOTAL CAPTURES</span>
                         <span className="font-bold text-green-400">{stats.totalBiometricCaptures.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">BEHAVIORAL_SESSIONS</span>
+                        <span className="text-cyan-400 font-mono">BEHAVIORAL SESSIONS</span>
                         <span className="font-bold text-purple-400">{behavioralSessions.length.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="glass-card rounded-lg p-6">
-                    <h3 className="text-lg font-bold text-green-400 mb-4">SECURITY_METRICS</h3>
+                    <h3 className="text-lg font-bold text-green-400 mb-4">SECURITY METRICS</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">TOTAL_ANOMALIES</span>
+                        <span className="text-cyan-400 font-mono">TOTAL ANOMALIES</span>
                         <span className="bg-yellow-600/20 text-yellow-400 border border-yellow-500/30 px-2 py-1 rounded text-sm font-bold">
                           {stats.anomalyCount}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">CRITICAL_ALERTS</span>
+                        <span className="text-cyan-400 font-mono">CRITICAL ALERTS</span>
                         <span className="bg-red-600/20 text-red-400 border border-red-500/30 px-2 py-1 rounded text-sm font-bold">
                           {stats.criticalAnomalies}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">AUTO_LOCK_EVENTS</span>
+                        <span className="text-cyan-400 font-mono">AUTO LOCK EVENTS</span>
                         <span className="bg-orange-600/20 text-orange-400 border border-orange-500/30 px-2 py-1 rounded text-sm font-bold">
                           {stats.autoLockEvents}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-cyan-400 font-mono">LAST_24H_ALERTS</span>
+                        <span className="text-cyan-400 font-mono">LAST 24H ALERTS</span>
                         <span className="bg-purple-600/20 text-purple-400 border border-purple-500/30 px-2 py-1 rounded text-sm font-bold">
                           {stats.last24hAnomalies}
                         </span>
@@ -1011,9 +1226,9 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Users Tab - Keep existing implementation */}
             {activeTab === 'users' && (
               <div className="space-y-6">
+                {/* Search and Controls Section */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div className="relative w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
@@ -1060,21 +1275,69 @@ const AdminDashboard: React.FC = () => {
                         sortDirection === 'asc' ? <ChevronUp className="ml-1 h-3 w-3" /> : <ChevronDown className="ml-1 h-3 w-3" />
                       )}
                     </button>
+                    <button
+                      onClick={loadUsers}
+                      disabled={loading}
+                      className="terminal-button px-3 py-1 rounded text-sm flex items-center bg-cyan-600/20 border border-cyan-500/30"
+                    >
+                      <RefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                      REFRESH
+                    </button>
                   </div>
                 </div>
 
+                {/* Status Messages */}
+                {error && (
+                  <div className="p-4 bg-red-900/30 border border-red-500/30 rounded text-red-400 font-mono">
+                    ERROR: {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="p-4 bg-green-900/30 border border-green-500/30 rounded text-green-400 font-mono">
+                    SUCCESS: {success}
+                  </div>
+                )}
+
+                {/* Users Statistics Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="glass-card rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-400">{allUsers.length}</div>
+                    <div className="text-sm text-cyan-400 font-mono">TOTAL USERS</div>
+                  </div>
+                  <div className="glass-card rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-400">
+                      {allUsers.filter(u => u.is_active !== false).length}
+                    </div>
+                    <div className="text-sm text-cyan-400 font-mono">ACTIVE USERS</div>
+                  </div>
+                  <div className="glass-card rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-cyan-400">
+                      {allUsers.filter(u => u.biometric_enrolled).length}
+                    </div>
+                    <div className="text-sm text-cyan-400 font-mono">BIOMETRIC ENROLLED</div>
+                  </div>
+                  <div className="glass-card rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {allUsers.filter(u => u.role === 'admin').length}
+                    </div>
+                    <div className="text-sm text-cyan-400 font-mono">ADMIN USERS</div>
+                  </div>
+                </div>
+
+                {/* Users Table */}
                 <div className="glass-card rounded-lg overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="bg-black/30 border-b border-green-500/30">
-                          <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">USERNAME</th>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">USER</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">EMAIL</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">ROLE</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">STATUS</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">TRUST_SCORE</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">BIOMETRIC</th>
-                          <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">LAST_LOGIN</th>
+                          <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">LAST LOGIN</th>
                           <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">ACTIONS</th>
                         </tr>
                       </thead>
@@ -1085,7 +1348,7 @@ const AdminDashboard: React.FC = () => {
                               {loading ? (
                                 <div className="flex justify-center items-center">
                                   <RefreshCw className="animate-spin h-5 w-5 mr-2" />
-                                  LOADING_USER_DATA...
+                                  LOADING USER_DATA...
                                 </div>
                               ) : (
                                 searchTerm ? 'NO_MATCHING_USERS_FOUND' : 'NO_USERS_IN_DATABASE'
@@ -1095,6 +1358,7 @@ const AdminDashboard: React.FC = () => {
                         ) : (
                           filteredUsers.map((user) => (
                             <tr key={user.id} className="border-b border-green-500/10 hover:bg-green-900/10">
+                              {/* User Info Column */}
                               <td className="px-4 py-3">
                                 <div className="flex items-center">
                                   <div className="flex-shrink-0 h-10 w-10">
@@ -1103,75 +1367,152 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                   </div>
                                   <div className="ml-4">
-                                    <div className="text-sm font-medium text-white">{user.full_name || user.username}</div>
-                                    <div className="text-sm text-gray-400">{user.email}</div>
+                                    <div className="text-sm font-medium text-white">{user.username || 'N/A'}</div>
+                                    <div className="text-xs text-gray-400">
+                                      Created: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}
+                                    </div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-white">{user.email}</td>
+
+                              {/* Email Column */}
+                              <td className="px-4 py-3">
+                                <div className="text-white text-sm">{user.email}</div>
+                              </td>
+
+                              {/* Role Column */}
                               <td className="px-4 py-3">
                                 <span className={`px-2 py-1 rounded text-xs font-bold border ${getRoleColor(user.role)}`}>
-                                  {user.role?.toUpperCase()}
+                                  {user.role?.toUpperCase() || 'USER'}
                                 </span>
                               </td>
+
+                              {/* Status Column */}
                               <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded text-xs font-bold border ${getStatusColor(user.status)}`}>
-                                  {user.status?.toUpperCase()}
+                                <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                                  user.is_active !== false 
+                                    ? 'text-green-400 bg-green-900/30 border-green-500/30' 
+                                    : 'text-red-400 bg-red-900/30 border-red-500/30'
+                                }`}>
+                                  {user.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
                                 </span>
                               </td>
+
+                              {/* Trust Score Column */}
                               <td className="px-4 py-3">
                                 <div className="flex items-center">
                                   <div className="w-16 bg-gray-700 rounded-full h-2.5 mr-2">
                                     <div 
-                                      className="bg-green-400 h-2.5 rounded-full" 
-                                      style={{ width: `${user.trust_score || 0}%` }}
+                                      className={`h-2.5 rounded-full ${
+                                        (user.trust_score || 85) >= 80 ? 'bg-green-400' :
+                                        (user.trust_score || 85) >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                                      }`}
+                                      style={{ width: `${user.trust_score || 85}%` }}
                                     ></div>
                                   </div>
-                                  <span className="text-white">{user.trust_score || 0}%</span>
+                                  <span className={`text-sm font-bold ${
+                                    (user.trust_score || 85) >= 80 ? 'text-green-400' :
+                                    (user.trust_score || 85) >= 60 ? 'text-yellow-400' : 'text-red-400'
+                                  }`}>
+                                    {user.trust_score || 85}%
+                                  </span>
                                 </div>
                               </td>
+
+                              {/* Biometric Column */}
                               <td className="px-4 py-3">
-                                <div className="flex items-center">
-                                  {user.is_biometric_enrolled ? (
-                                    <span className="text-green-400 flex items-center">
-                                      <Shield className="h-4 w-4 mr-1" />
-                                      ENROLLED
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-500 flex items-center">
-                                      <AlertTriangle className="h-4 w-4 mr-1" />
-                                      NOT_ENROLLED
-                                    </span>
-                                  )}
+                                <div className="flex flex-col space-y-1">
+                                  <div className="flex items-center">
+                                    {user.biometric_enrolled ? (
+                                      <span className="text-green-400 flex items-center text-xs">
+                                        <Shield className="h-3 w-3 mr-1" />
+                                        FACE: ✓
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500 flex items-center text-xs">
+                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                        FACE: ✗
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center">
+                                    {user.behavioral_enrolled ? (
+                                      <span className="text-green-400 flex items-center text-xs">
+                                        <Activity className="h-3 w-3 mr-1" />
+                                        BEHAV: ✓
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-500 flex items-center text-xs">
+                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                        BEHAV: ✗
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-white">{formatDate(user.last_login)}</td>
+
+                              {/* Last Login Column */}
                               <td className="px-4 py-3">
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedUser(user);
-                                      fetchUserBiometricData(user.id);
-                                    }}
-                                    className="px-3 py-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded text-xs font-bold hover:bg-blue-600/30 transition-all duration-300 hover-glow"
-                                  >
-                                    VIEW_DETAILS
-                                  </button>
-                                  {user.status === 'active' ? (
+                                <div className="text-white text-sm">
+                                  {user.last_login ? formatDate(user.last_login) : 'Never'}
+                                </div>
+                              </td>
+
+                              {/* Actions Column */}
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col space-y-1">
+                                  <div className="flex space-x-1">
                                     <button
-                                      onClick={() => handleUserAction(user, 'suspend')}
-                                      className="px-3 py-1 bg-red-600/20 text-red-400 border border-red-500/30 rounded text-xs font-bold hover:bg-red-600/30 transition-all duration-300 hover-glow"
+                                      onClick={() => handleEditUser(user)}
+                                      className="px-2 py-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded text-xs font-bold hover:bg-blue-600/30 transition-all duration-300 hover-glow flex items-center"
+                                      title="Edit User"
                                     >
-                                      SUSPEND
+                                      <Edit className="h-3 w-3 mr-1" />
+                                      EDIT
                                     </button>
-                                  ) : (
                                     <button
-                                      onClick={() => handleUserAction(user, 'reactivate')}
-                                      className="px-3 py-1 bg-green-600/20 text-green-400 border border-green-500/30 rounded text-xs font-bold hover:bg-green-600/30 transition-all duration-300 hover-glow"
+                                      onClick={() => handleToggleUserStatus(user.id, user.is_active)}
+                                      className={`px-2 py-1 rounded text-xs font-bold transition-all duration-300 hover-glow flex items-center ${
+                                        user.is_active !== false 
+                                          ? 'bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30' 
+                                          : 'bg-green-600/20 text-green-400 border border-green-500/30 hover:bg-green-600/30'
+                                      }`}
+                                      title={user.is_active !== false ? 'Deactivate User' : 'Activate User'}
                                     >
-                                      REACTIVATE
+                                      {user.is_active !== false ? (
+                                        <>
+                                          <UserX className="h-3 w-3 mr-1" />
+                                          DEACTIVATE
+                                        </>
+                                      ) : (
+                                        <>
+                                          <UserCheck className="h-3 w-3 mr-1" />
+                                          ACTIVATE
+                                        </>
+                                      )}
                                     </button>
-                                  )}
+                                  </div>
+                                  <div className="flex space-x-1">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedUser(user);
+                                        fetchUserBiometricData && fetchUserBiometricData(user.id);
+                                      }}
+                                      className="px-2 py-1 bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 rounded text-xs font-bold hover:bg-cyan-600/30 transition-all duration-300 hover-glow flex items-center"
+                                      title="View Details"
+                                    >
+                                      <Eye className="h-3 w-3 mr-1" />
+                                      DETAILS
+                                    </button>
+                                    <button
+                                      onClick={() => handleResetBiometric(user.id)}
+                                      className="px-2 py-1 bg-yellow-600/20 text-yellow-400 border border-yellow-500/30 rounded text-xs font-bold hover:bg-yellow-600/30 transition-all duration-300 hover-glow flex items-center"
+                                      title="Reset Biometric"
+                                    >
+                                      <RefreshCw className="h-3 w-3 mr-1" />
+                                      RESET
+                                    </button>
+                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -1181,6 +1522,135 @@ const AdminDashboard: React.FC = () => {
                     </table>
                   </div>
                 </div>
+
+                {/* Pagination (if needed) */}
+                {filteredUsers.length > 0 && (
+                  <div className="flex justify-between items-center mt-4">
+                    <div className="text-sm text-gray-400 font-mono">
+                      Showing {filteredUsers.length} of {allUsers.length} users
+                    </div>
+                    <div className="text-sm text-cyan-400 font-mono">
+                      Last updated: {new Date().toLocaleTimeString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Edit User Modal - Add this OUTSIDE the users tab but inside your component */}
+            {editingUser && (
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="glass-card rounded-lg p-6 w-full max-w-md mx-4 border border-green-500/30"
+                >
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-green-400 font-mono">EDIT_USER</h3>
+                    <button
+                      onClick={() => setEditingUser(null)}
+                      className="text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-cyan-400 font-mono mb-2 text-sm">USERNAME</label>
+                      <input
+                        type="text"
+                        value={editingUser.username}
+                        onChange={(e) => setEditingUser(prev => prev ? {...prev, username: e.target.value} : null)}
+                        className="w-full px-4 py-3 bg-black/30 border border-cyan-500/30 rounded text-white focus:border-cyan-400 transition-colors font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-cyan-400 font-mono mb-2 text-sm">EMAIL</label>
+                      <input
+                        type="email"
+                        value={editingUser.email}
+                        onChange={(e) => setEditingUser(prev => prev ? {...prev, email: e.target.value} : null)}
+                        className="w-full px-4 py-3 bg-black/30 border border-cyan-500/30 rounded text-white focus:border-cyan-400 transition-colors font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-cyan-400 font-mono mb-2 text-sm">ROLE</label>
+                      <select
+                        value={editingUser.role}
+                        onChange={(e) => setEditingUser(prev => prev ? {...prev, role: e.target.value} : null)}
+                        className="w-full px-4 py-3 bg-black/30 border border-cyan-500/30 rounded text-white focus:border-cyan-400 transition-colors font-mono"
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-cyan-400 font-mono mb-2 text-sm">TRUST_SCORE</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={editingUser.trust_score}
+                        onChange={(e) => setEditingUser(prev => prev ? {...prev, trust_score: parseInt(e.target.value) || 0} : null)}
+                        className="w-full px-4 py-3 bg-black/30 border border-cyan-500/30 rounded text-white focus:border-cyan-400 transition-colors font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="is_active"
+                        checked={editingUser.is_active}
+                        onChange={(e) => setEditingUser(prev => prev ? {...prev, is_active: e.target.checked} : null)}
+                        className="rounded border-cyan-500/30 bg-black/30 text-cyan-400"
+                      />
+                      <label htmlFor="is_active" className="text-cyan-400 font-mono text-sm">
+                        ACCOUNT_ACTIVE
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4 mt-6">
+                    <button
+                      onClick={handleUpdateUser}
+                      disabled={updating}
+                      className="flex-1 py-3 px-6 bg-green-600/20 text-green-400 border border-green-500/30 rounded font-bold hover:bg-green-600/30 transition-all duration-300 disabled:opacity-50 font-mono"
+                    >
+                      {updating ? (
+                        <>
+                          <RefreshCw className="h-5 w-5 mr-2 inline animate-spin" />
+                          UPDATING...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-5 w-5 mr-2 inline" />
+                          UPDATE_USER
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setEditingUser(null)}
+                      className="px-6 py-3 bg-gray-600/20 text-gray-400 border border-gray-500/30 rounded font-bold hover:bg-gray-600/30 transition-all duration-300 font-mono"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+
+                  {/* Biometric Re-enrollment Notice */}
+                  <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                    <p className="text-yellow-400 text-sm font-mono">
+                      ℹ️ BIOMETRIC_RE_ENROLLMENT_REQUIRED?
+                    </p>
+                    <p className="text-gray-400 text-xs mt-1">
+                      If user needs biometric or behavioral pattern updates, they should contact administrator
+                    </p>
+                  </div>
+                </motion.div>
               </div>
             )}
 
@@ -1195,22 +1665,22 @@ const AdminDashboard: React.FC = () => {
                   <div className="text-center p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                     <Database className="h-8 w-8 text-blue-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-blue-400">{stats.totalBiometricCaptures}</p>
-                    <p className="text-sm text-cyan-400 font-mono">TOTAL_CAPTURES</p>
+                    <p className="text-sm text-cyan-400 font-mono">TOTAL CAPTURES</p>
                   </div>
                   <div className="text-center p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
                     <Eye className="h-8 w-8 text-green-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-green-400">{(stats.averageQualityScore * 100).toFixed(1)}%</p>
-                    <p className="text-sm text-cyan-400 font-mono">AVG_QUALITY</p>
+                    <p className="text-sm text-cyan-400 font-mono">AVG QUALITY</p>
                   </div>
                   <div className="text-center p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
                     <Shield className="h-8 w-8 text-purple-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-purple-400">{(stats.averageLivenessScore * 100).toFixed(1)}%</p>
-                    <p className="text-sm text-cyan-400 font-mono">AVG_LIVENESS</p>
+                    <p className="text-sm text-cyan-400 font-mono">AVG LIVENESS</p>
                   </div>
                   <div className="text-center p-4 bg-orange-900/20 border border-orange-500/30 rounded-lg">
                     <TrendingUp className="h-8 w-8 text-orange-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-orange-400">{behavioralSessions.length}</p>
-                    <p className="text-sm text-cyan-400 font-mono">BEHAVIORAL_SESSIONS</p>
+                    <p className="text-sm text-cyan-400 font-mono">BEHAVIORAL SESSIONS</p>
                   </div>
                 </div>
                 
@@ -1317,7 +1787,7 @@ const AdminDashboard: React.FC = () => {
                         <thead>
                           <tr className="bg-black/30 border-b border-green-500/30">
                             <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">USER</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">ANOMALY_TYPE</th>
+                            <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">ANOMALY TYPE</th>
                             <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">SEVERITY</th>
                             <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">SCORE</th>
                             <th className="px-4 py-3 text-left text-sm font-bold text-green-400 font-mono">ACTION</th>
@@ -1413,29 +1883,29 @@ const AdminDashboard: React.FC = () => {
                   <div className="text-center p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
                     <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-green-400">{stats.successfulLogins}</p>
-                    <p className="text-sm text-cyan-400 font-mono">SUCCESSFUL_LOGINS</p>
+                    <p className="text-sm text-cyan-400 font-mono">SUCCESSFUL LOGINS</p>
                   </div>
                   <div className="text-center p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
                     <XCircle className="h-8 w-8 text-red-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-red-400">{stats.failedLogins}</p>
-                    <p className="text-sm text-cyan-400 font-mono">FAILED_ATTEMPTS</p>
+                    <p className="text-sm text-cyan-400 font-mono">FAILED ATTEMPTS</p>
                   </div>
                   <div className="text-center p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                     <BarChart3 className="h-8 w-8 text-blue-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-blue-400">{(stats.successRate * 100).toFixed(1)}%</p>
-                    <p className="text-sm text-cyan-400 font-mono">SUCCESS_RATE</p>
+                    <p className="text-sm text-cyan-400 font-mono">SUCCESS RATE</p>
                   </div>
                   <div className="text-center p-4 bg-purple-900/20 border border-purple-500/30 rounded-lg">
                     <Activity className="h-8 w-8 text-purple-400 mx-auto mb-2" />
                     <p className="text-2xl font-bold text-purple-400">{stats.totalLoginAttempts}</p>
-                    <p className="text-sm text-cyan-400 font-mono">TOTAL_ATTEMPTS</p>
+                    <p className="text-sm text-cyan-400 font-mono">TOTAL ATTEMPTS</p>
                   </div>
                 </div>
 
                 {loginLogs.length === 0 ? (
                   <div className="text-center p-8 glass-card rounded-lg">
                     <Clock className="h-12 w-12 text-cyan-400 mx-auto mb-4" />
-                    <p className="text-cyan-400 font-mono">NO_LOGIN_ACTIVITY_RECORDED</p>
+                    <p className="text-cyan-400 font-mono">NO LOGIN ACTIVITY RECORDED</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1454,7 +1924,7 @@ const AdminDashboard: React.FC = () => {
                               <XCircle className="h-5 w-5 text-red-400 mr-2" />
                             )}
                             <span className={`font-bold ${log.success ? 'text-green-400' : 'text-red-400'} font-mono`}>
-                              {log.success ? 'SUCCESSFUL_LOGIN' : 'FAILED_ATTEMPT'}
+                              {log.success ? 'SUCCESSFUL LOGIN' : 'FAILED ATTEMPT'}
                             </span>
                           </div>
                           <div className="flex items-center text-cyan-400 text-sm">
@@ -1529,13 +1999,13 @@ const AdminDashboard: React.FC = () => {
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
                   <FileText className="mr-3 h-6 w-6" />
-                  IC_DOCUMENT_VERIFICATION ({ekycDocuments.filter(doc => doc.document_type === 'ic_front').length})
+                  IC DOCUMENT VERIFICATION ({ekycDocuments.filter(doc => doc.document_type === 'ic_front').length})
                 </h2>
 
                 {ekycDocuments.filter(doc => doc.document_type === 'ic_front').length === 0 ? (
                   <div className="text-center p-8 glass-card rounded-lg">
                     <FileText className="h-12 w-12 text-cyan-400 mx-auto mb-4" />
-                    <p className="text-cyan-400 font-mono">NO_IC_DOCUMENTS_SUBMITTED</p>
+                    <p className="text-cyan-400 font-mono">NO IC DOCUMENTS SUBMITTED</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1559,7 +2029,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center">
                                 <FileText className="h-5 w-5 mr-2 text-blue-400" />
-                                <span className="font-bold text-blue-400 font-mono">IC_UPLOAD</span>
+                                <span className="font-bold text-blue-400 font-mono">IC UPLOAD</span>
                               </div>
                               <div className="flex items-center">
                                 <span className={`px-3 py-1 rounded text-sm font-bold border ${
@@ -1600,7 +2070,7 @@ const AdminDashboard: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-4">
                                   {/* Front Image */}
                                   <div className="text-center">
-                                    <p className="text-gray-400 text-xs mb-2 font-mono">FRONT_IMAGE</p>
+                                    <p className="text-gray-400 text-xs mb-2 font-mono">FRONT IMAGE</p>
                                     {frontDoc.id_document_url ? (
                                       <img
                                         src={frontDoc.id_document_url}
@@ -1610,14 +2080,14 @@ const AdminDashboard: React.FC = () => {
                                       />
                                     ) : (
                                       <div className="w-full h-32 bg-gray-800 rounded border border-gray-600 flex items-center justify-center">
-                                        <span className="text-gray-500 text-xs">NO_IMAGE</span>
+                                        <span className="text-gray-500 text-xs">NO IMAGE</span>
                                       </div>
                                     )}
                                   </div>
 
                                   {/* Back Image */}
                                   <div className="text-center">
-                                    <p className="text-gray-400 text-xs mb-2 font-mono">BACK_IMAGE</p>
+                                    <p className="text-gray-400 text-xs mb-2 font-mono">BACK IMAGE</p>
                                     {backDoc?.id_document_url ? (
                                       <img
                                         src={backDoc.id_document_url}
@@ -1640,7 +2110,7 @@ const AdminDashboard: React.FC = () => {
                                       onClick={() => window.open(frontDoc.id_document_url, '_blank')}
                                       className="px-2 py-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded text-xs font-bold hover:bg-blue-600/30 transition-all duration-300"
                                     >
-                                      VIEW_FRONT
+                                      FRONT
                                     </button>
                                   )}
                                   {backDoc?.id_document_url && (
@@ -1648,7 +2118,7 @@ const AdminDashboard: React.FC = () => {
                                       onClick={() => window.open(backDoc.id_document_url, '_blank')}
                                       className="px-2 py-1 bg-purple-600/20 text-purple-400 border border-purple-500/30 rounded text-xs font-bold hover:bg-purple-600/30 transition-all duration-300"
                                     >
-                                      VIEW_BACK
+                                      BACK
                                     </button>
                                   )}
                                 </div>

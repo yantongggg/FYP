@@ -530,11 +530,25 @@ def login_user():
             logger.error(f"Password verification error: {pwd_error}")
             return jsonify({'success': False, 'error': 'Authentication error'}), 401
 
-        # Step 3: Check if biometric is enrolled
+        # ✅ Step 3: Admin bypass biometric
+        if user.get('role') == 'admin':
+            logger.info(f"🔓 Admin {user['email']} bypassing biometric verification for demo")
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', True, 'admin_bypass', ip_address
+            ))
+            return jsonify({
+                'success': True,
+                'user_id': user['id'],
+                'email': user['email'],
+                'username': user.get('username', ''),
+                'role': user.get('role', 'admin'),
+                'message': 'Admin login successful without biometric'
+            })
+
+        # Step 4: Check if biometric is enrolled
         if user.get('is_biometric_enrolled'):
             logger.info(f"🔐 User {user['id']} has biometric enrolled - face verification required")
             
-            # Log successful password verification
             run_async(supabase_manager.log_login_attempt(
                 email, 'password', True, None, ip_address
             ))
@@ -546,9 +560,9 @@ def login_user():
                 'full_name': user.get('username', ''),
                 'email': user['email'],
                 'message': 'Face verification required'
-            }), 200  # Use 200 but success=false to indicate next step needed
+            }), 200
 
-        # Step 4: Complete login without biometric
+        # Step 5: Normal user without biometric
         run_async(supabase_manager.log_login_attempt(
             email, 'password', True, None, ip_address
         ))
@@ -844,6 +858,264 @@ def upload_face():
     except Exception as e:
         logger.error(f"/api/upload-face error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/update-profile', methods=['POST'])
+@cross_origin()
+def update_profile():
+    """Update user profile (username, email, password)"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        username = data.get('username')
+        email = data.get('email')
+        new_password = data.get('new_password')
+        
+        logger.info(f"🔄 Updating profile for user {user_id}")
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID required'}), 400
+        
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+        
+        # Check if user exists
+        user_check = supabase_manager.client.table("users") \
+            .select("id, username, email, password_hash") \
+            .eq("id", user_id) \
+            .execute()
+        
+        if not user_check.data:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        
+        user_data = user_check.data[0]
+
+        # Check for duplicate username/email (excluding current user)
+        if username:
+            existing_username = supabase_manager.client.table("users") \
+                .select("id") \
+                .eq("username", username) \
+                .neq("id", user_id) \
+                .execute()
+            
+            if existing_username.data:
+                return jsonify({'success': False, 'error': 'Username already taken'}), 400
+        
+        if email:
+            existing_email = supabase_manager.client.table("users") \
+                .select("id") \
+                .eq("email", email) \
+                .neq("id", user_id) \
+                .execute()
+            
+            if existing_email.data:
+                return jsonify({'success': False, 'error': 'Email already registered'}), 400
+        
+        # Prepare update data
+        update_data = {}
+        
+        if username and username.strip():
+            update_data['username'] = username.strip()
+            
+        if email and email.strip():
+            update_data['email'] = email.strip()
+
+        # If changing password, validate current password first
+        if new_password:
+            if not data.get('current_password'):
+                return jsonify({'success': False, 'error': 'Current password required'}), 400
+            
+            # Validate current password
+            if not bcrypt.checkpw(data['current_password'].encode('utf-8'), user_data['password_hash'].encode('utf-8')):
+                return jsonify({'success': False, 'error': 'Current password is incorrect'}), 401
+
+        if new_password:
+            password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            update_data['password_hash'] = password_hash
+        
+        if not update_data:
+            return jsonify({'success': False, 'error': 'No data to update'}), 400
+        
+        
+        # Update user record
+        result = supabase_manager.client.table("users") \
+            .update(update_data) \
+            .eq("id", user_id) \
+            .execute()
+        
+        if result.data:
+            logger.info(f"✅ Profile updated for user {user_id}: {list(update_data.keys())}")
+            
+            # Log the profile update for audit
+            try:
+                import asyncio
+                asyncio.create_task(supabase_manager.log_login_attempt(
+                    update_data.get('email', 'unknown'), 
+                    'profile_update', 
+                    True, 
+                    f"Updated: {', '.join(update_data.keys())}", 
+                    request.remote_addr
+                ))
+            except:
+                pass  # Don't fail if logging fails
+            
+            return jsonify({
+                'success': True,
+                'message': 'Profile updated successfully',
+                'updated_fields': list(update_data.keys())
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Update failed'}), 500
+            
+    except Exception as e:
+        logger.error(f"Profile update error: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': 'Update failed'}), 500
+
+@app.route('/api/admin/users', methods=['GET'])
+@cross_origin()
+def admin_get_users():
+    """Get all users for admin dashboard"""
+    try:
+        logger.info("Admin fetching all users")
+        
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+        
+        # Get all users with basic info
+        result = supabase_manager.client.table("users") \
+            .select("id, username, email, role, trust_score, is_active, created_at, last_login") \
+            .order("created_at", desc=True) \
+            .execute()
+        
+        users = []
+        for user in result.data:
+            # Check biometric enrollment
+            bio_check = supabase_manager.client.table("biometric_data") \
+                .select("id") \
+                .eq("user_id", user['id']) \
+                .limit(1) \
+                .execute()
+            
+            behavioral_check = supabase_manager.client.table("behavioral_patterns") \
+                .select("id") \
+                .eq("user_id", user['id']) \
+                .eq("is_active", True) \
+                .limit(1) \
+                .execute()
+            
+            users.append({
+                **user,
+                'biometric_enrolled': len(bio_check.data) > 0,
+                'behavioral_enrolled': len(behavioral_check.data) > 0,
+                'trust_score': user.get('trust_score', 85)
+            })
+        
+        logger.info(f"✅ Loaded {len(users)} users for admin")
+        
+        return jsonify({
+            'success': True,
+            'users': users
+        })
+        
+    except Exception as e:
+        logger.error(f"Admin users endpoint error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load users'}), 500
+
+@app.route('/api/admin/update-user', methods=['POST'])
+@cross_origin()
+def admin_update_user():
+    """Admin endpoint to update any user's profile"""
+    try:
+        data = request.get_json()
+        user_id = data.get('id')  # Note: using 'id' to match frontend
+        username = data.get('username')
+        email = data.get('email')
+        role = data.get('role')
+        trust_score = data.get('trust_score')
+        is_active = data.get('is_active')
+        
+        logger.info(f"🛡️ Admin updating user {user_id}")
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID required'}), 400
+        
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+        
+        # Prepare update data
+        update_data = {}
+        
+        if username:
+            update_data['username'] = username.strip()
+        if email:
+            update_data['email'] = email.strip()
+        if role:
+            update_data['role'] = role
+        if trust_score is not None:
+            update_data['trust_score'] = trust_score
+        if is_active is not None:
+            update_data['is_active'] = is_active
+            
+        update_data['updated_at'] = datetime.now().isoformat()
+        
+        # Update user
+        result = supabase_manager.client.table("users") \
+            .update(update_data) \
+            .eq("id", user_id) \
+            .execute()
+        
+        if result.data:
+            logger.info(f"✅ Admin updated user {user_id}: {list(update_data.keys())}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'User updated successfully',
+                'user': result.data[0]
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Update failed'}), 500
+            
+    except Exception as e:
+        logger.error(f"Admin user update error: {e}")
+        return jsonify({'success': False, 'error': 'Update failed'}), 500
+
+@app.route('/api/admin/toggle-user-status', methods=['POST'])
+@cross_origin()
+def admin_toggle_user_status():
+    """Toggle user active status"""
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        is_active = data.get('is_active')
+        
+        logger.info(f"🛡️ Admin toggling user status: {user_id} -> {is_active}")
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'User ID required'}), 400
+        
+        # Update user status
+        result = supabase_manager.client.table("users") \
+            .update({
+                'is_active': is_active,
+                'updated_at': datetime.now().isoformat()
+            }) \
+            .eq("id", user_id) \
+            .execute()
+        
+        if result.data:
+            status_text = "activated" if is_active else "deactivated"
+            logger.info(f"✅ User {user_id} {status_text}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'User {status_text} successfully',
+                'user': result.data[0]
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Status update failed'}), 500
+            
+    except Exception as e:
+        logger.error(f"User status toggle error: {e}")
+        return jsonify({'success': False, 'error': 'Status update failed'}), 500
 
 @app.route('/api/behavioral-monitor', methods=['POST'])
 @cross_origin()

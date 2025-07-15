@@ -8,7 +8,6 @@ interface UserData {
   email: string;
   username: string;
   role: 'admin' | 'user';
-  phone?: string;
   trust_score?: number;
   status?: string;
   createdAt: Date;
@@ -74,6 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuthState();
   }, []);
 
+  
   const checkAuthState = async () => {
     try {
       setLoading(true);
@@ -302,7 +302,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('users')
           .update({
             username: updates.username,
-            phone: updates.phone,
             trust_score: updates.trust_score,
             status: updates.status
           })

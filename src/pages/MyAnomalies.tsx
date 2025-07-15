@@ -513,7 +513,7 @@ const MyAnomalies = () => {
       <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-400 mx-auto mb-4"></div>
-          <p className="text-green-400 font-mono">LOADING_DATA...</p>
+          <p className="text-green-400 font-mono">LOADING DATA...</p>
         </div>
       </div>
     );

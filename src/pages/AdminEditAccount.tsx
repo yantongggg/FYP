@@ -4,7 +4,6 @@ import {
   User, 
   Mail, 
   Lock, 
-  Phone, 
   Shield, 
   Eye, 
   EyeOff, 
@@ -31,7 +30,6 @@ const AdminEditAccount = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    phone: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -50,7 +48,6 @@ const AdminEditAccount = () => {
         ...prev,
         username: userData.username || '',
         email: userData.email || '',
-        phone: userData.phone || ''
       }));
     }
     
@@ -133,7 +130,6 @@ const AdminEditAccount = () => {
       const updates: any = {};
       if (formData.username !== userData?.username) updates.username = formData.username;
       if (formData.email !== userData?.email) updates.email = formData.email;
-      if (formData.phone !== userData?.phone) updates.phone = formData.phone;
 
       if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase

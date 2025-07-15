@@ -4,7 +4,6 @@ import {
   User, 
   Mail, 
   Lock, 
-  Phone, 
   Shield, 
   Eye, 
   EyeOff, 
@@ -12,7 +11,6 @@ import {
   AlertCircle, 
   CheckCircle,
   Settings,
-  Smartphone,
   Key,
   RefreshCw,
   Camera,
@@ -34,7 +32,6 @@ const EditProfile = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    phone: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -46,8 +43,8 @@ const EditProfile = () => {
     behavioral: false
   });
 
-  const [showBiometricCapture, setShowBiometricCapture] = useState(false);
-  const [biometricType, setBiometricType] = useState<'face' | 'keystroke' | 'scroll'>('face');
+  // const [showBiometricCapture, setShowBiometricCapture] = useState(false);
+  // const [biometricType, setBiometricType] = useState<'face' | 'keystroke' | 'scroll'>('face');
 
   useEffect(() => {
     if (userData) {
@@ -55,7 +52,6 @@ const EditProfile = () => {
         ...prev,
         username: userData.username || '',
         email: userData.email || '',
-        phone: userData.phone || ''
       }));
     }
     
@@ -63,15 +59,26 @@ const EditProfile = () => {
     loadBiometricStatus();
   }, [userData]);
 
+  useEffect(() => {
+    if (userData?.uid && message?.text === 'Auth session missing!') {
+      setMessage(null);
+    }
+  }, [userData?.uid, message]);
+
   const loadBiometricStatus = async () => {
     try {
-      if (!userData?.uid) return;
+      if (!userData?.uid) {
+        console.log('❌ No userData.uid found');
+        return;
+      }
+
+      console.log('🔍 Checking biometric status for user:', userData.uid);
 
       // Check if this is a demo user (non-UUID format)
       const isDemoUser = userData.uid === 'admin-demo' || userData.uid === 'user-demo' || !userData.uid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      
+    
       if (isDemoUser) {
-        // Set default biometric status for demo users
+        console.log('✅ Demo user detected, setting all biometrics to true');
         setBiometricStatus({
           face: true,
           keystroke: true,
@@ -80,21 +87,32 @@ const EditProfile = () => {
         return;
       }
 
-      const { data: biometricData } = await supabase
+      const { data: biometricData, error } = await supabase
         .from('biometric_data')
-        .select('biometric_type')
+        .select('biometric_type, user_id, created_at')
         .eq('user_id', userData.uid);
 
+      console.log('📊 Biometric query result:', { biometricData, error });
+
       if (biometricData) {
-         const types = biometricData.map((item: { biometric_type: string }) => item.biometric_type);
+        const types = biometricData.map((item: { biometric_type: string }) => item.biometric_type);
+        console.log('🎯 Found biometric types:', types);
+        
         setBiometricStatus({
           face: types.includes('face'),
           keystroke: types.includes('keystroke'),
-          behavioral: types.includes('mouse') || types.includes('scroll')
+          behavioral: types.includes('mouse') || types.includes('scroll') || types.includes('behavioral')
+        });
+        console.log("🌟 Final biometricStatus:", biometricStatus);
+        
+        console.log('✅ Biometric status set:', {
+          face: types.includes('face'),
+          keystroke: types.includes('keystroke'),
+          behavioral: types.includes('mouse') || types.includes('scroll') || types.includes('behavioral')
         });
       }
     } catch (error) {
-      console.error('Error loading biometric status:', error);
+      console.error('❌ Error loading biometric status:', error);
     }
   };
 
@@ -110,79 +128,130 @@ const EditProfile = () => {
     setMessage(null);
 
     try {
+      if (!userData?.uid) {
+        setMessage({ type: 'error', text: 'Authentication session expired. Please login again.' });
+        setLoading(false);
+        return;
+      }
+
       // Check if this is a demo user
       const isDemoUser = userData?.uid === 'admin-demo' || userData?.uid === 'user-demo' || !userData?.uid?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      
+    
       if (isDemoUser) {
-        // For demo users, just show success message without actual database update
         setMessage({ type: 'success', text: 'Demo profile updated successfully (simulation)' });
         setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
         setLoading(false);
         return;
       }
 
-      // Validate passwords if changing
+      // Enhanced validation
       if (formData.newPassword) {
         if (formData.newPassword !== formData.confirmPassword) {
-          throw new Error('New passwords do not match');
+          setMessage({ type: 'error', text: 'New passwords do not match. Please check and try again.' });
+          setLoading(false);
+          return;
         }
         if (formData.newPassword.length < 6) {
-          throw new Error('New password must be at least 6 characters');
+          setMessage({ type: 'error', text: 'New password must be at least 6 characters long.' });
+          setLoading(false);
+          return;
         }
         if (!formData.currentPassword) {
-          throw new Error('Current password is required to change password');
+          setMessage({ type: 'error', text: 'Current password is required to change password.' });
+          setLoading(false);
+          return;
         }
       }
 
-      // Update profile information
-      const updates: any = {};
-      if (formData.username !== userData?.username) updates.username = formData.username;
-      if (formData.email !== userData?.email) updates.email = formData.email;
-      if (formData.phone !== userData?.phone) updates.phone = formData.phone;
+      // Show progress message
+      setMessage({ type: 'success', text: 'Updating profile...' });
 
-      if (Object.keys(updates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('users')
-          .update(updates)
-          .eq('id', userData?.uid);
+      // 🔧 UNIFIED API CALL - handles both profile and password updates
+      const updatePayload: any = {
+        user_id: userData.uid,
+        username: formData.username,
+        email: formData.email
+      };
 
-        if (updateError) throw updateError;
-      }
-
-      // Update password if provided
+      // Only include password fields if changing password
       if (formData.newPassword) {
-        const { error: passwordError } = await supabase.auth.updateUser({
-          password: formData.newPassword
-        });
-
-        if (passwordError) throw passwordError;
+        updatePayload.current_password = formData.currentPassword;
+        updatePayload.new_password = formData.newPassword;
       }
 
-      setMessage({ type: 'success', text: 'Profile updated successfully' });
-      setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
+      const response = await fetch('http://localhost:5000/api/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatePayload)
+      });
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        setMessage({ type: 'error', text: `Update failed: ${result.error}` });
+        setLoading(false);
+        return;
+      }
+
+      // Determine what was updated
+      const updatedFields = result.updated_fields || [];
+      let successMessage = '';
+      
+      if (updatedFields.includes('password_hash') && updatedFields.length > 1) {
+        successMessage = '✅ Profile information and password updated successfully!';
+      } else if (updatedFields.includes('password_hash')) {
+        successMessage = '✅ Password updated successfully!';
+      } else if (updatedFields.length > 0) {
+        successMessage = '✅ Profile information updated successfully!';
+      } else {
+        successMessage = 'ℹ️ No changes were made to your profile.';
+      }
+
+      setMessage({ type: 'success', text: successMessage });
+
+      // Clear password fields after successful update
+      if (formData.newPassword) {
+        setFormData(prev => ({ 
+          ...prev, 
+          currentPassword: '', 
+          newPassword: '', 
+          confirmPassword: '' 
+        }));
+      }
+
+      // Clear the success message after 5 seconds
+      setTimeout(() => {
+        setMessage(null);
+      }, 5000);
+
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to update profile' });
+      console.error('Unexpected error during profile update:', error);
+      setMessage({ 
+        type: 'error', 
+        text: `Update failed: ${error.message || 'Network error. Please try again.'}` 
+      });
     } finally {
       setLoading(false);
     }
   };
+  // const handleBiometricReenroll = (type: 'face' | 'keystroke' | 'scroll') => {
+  //   setBiometricType(type);
+  //   setShowBiometricCapture(true);
+  // };
 
-  const handleBiometricReenroll = (type: 'face' | 'keystroke' | 'scroll') => {
-    setBiometricType(type);
-    setShowBiometricCapture(true);
-  };
-
-  const handleBiometricCapture = (data: any) => {
-    // In a real implementation, this would send the data to the server
-    setMessage({ type: 'success', text: `${biometricType} data captured successfully` });
-    setShowBiometricCapture(false);
+  // const handleBiometricCapture = (data: any) => {
+  //   // In a real implementation, this would send the data to the server
+  //   setMessage({ type: 'success', text: `${biometricType} data captured successfully` });
+  //   setShowBiometricCapture(false);
     
-    // Update local state
-    setBiometricStatus(prev => ({
-      ...prev,
-      [biometricType]: true
-    }));
-  };
+  //   // Update local state
+  //   setBiometricStatus(prev => ({
+  //     ...prev,
+  //     [biometricType]: true
+  //   }));
+  // };
 
   const handleEKYCCapture = (data: any) => {
     setMessage({ type: 'success', text: 'eKYC documents uploaded successfully' });
@@ -210,19 +279,21 @@ const EditProfile = () => {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`mb-6 p-4 rounded-lg border ${
+              className={`mb-6 p-4 rounded-lg border-2 ${
                 message.type === 'success'
-                  ? 'bg-green-600/20 border-green-500/30 text-green-400'
-                  : 'bg-red-600/20 border-red-500/30 text-red-400'
+                  ? 'bg-green-600/20 border-green-500/50 text-green-400'
+                  : 'bg-red-600/20 border-red-500/50 text-red-400'
               }`}
             >
               <div className="flex items-center">
                 {message.type === 'success' ? (
-                  <CheckCircle className="h-5 w-5 mr-2" />
+                  <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 mr-2" />
+                  <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
                 )}
-                <span style={{ fontFamily: 'IBM Plex Mono' }}>{message.text}</span>
+                <span style={{ fontFamily: 'IBM Plex Mono' }} className="font-medium">
+                  {message.text}
+                </span>
               </div>
             </motion.div>
           )}
@@ -415,92 +486,72 @@ const EditProfile = () => {
           {/* Biometrics Tab */}
           {activeTab === 'biometrics' && (
             <div className="space-y-6">
-              {showBiometricCapture ? (
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-green-400">
-                      {biometricType === 'face' ? 'FACIAL_RECOGNITION' : 
-                       biometricType === 'keystroke' ? 'KEYSTROKE_DYNAMICS' : 'SCROLL_BEHAVIOR'}
-                    </h3>
-                    <button
-                      onClick={() => setShowBiometricCapture(false)}
-                      className="terminal-button px-3 py-2 rounded text-sm"
-                    >
-                      <X className="h-4 w-4 mr-1 inline" />
-                      CANCEL
-                    </button>
-                  </div>
-                  
-                <BiometricCapture
-                  onFaceCapture={(data: any) => handleBiometricCapture(data)}
-                  onLivenessCapture={(data: any) => handleBiometricCapture(data)}
-                  mode="authentication"
-                />
-                </div>
-              ) : (
-                <>
-                  <h2 className="text-xl font-bold text-green-400 mb-6 flex items-center">
-                    <Camera className="mr-3 h-6 w-6" />
-                    BIOMETRIC_SETTINGS
-                  </h2>
+              <h2 className="text-xl font-bold text-green-400 mb-6 flex items-center">
+                <Camera className="mr-3 h-6 w-6" />
+                BIOMETRIC_SETTINGS
+              </h2>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
-                      <div>
-                        <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
-                          FACIAL_RECOGNITION
-                        </h3>
-                        <p className="text-gray-400 text-sm">
-                          {biometricStatus.face ? 'Enrolled' : 'Not enrolled'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleBiometricReenroll('face')}
-                        className="terminal-button px-4 py-2 rounded text-sm font-bold"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-1 inline" />
-                        RE-ENROLL
-                      </button>
+              <div className="p-4 bg-yellow-900/30 border border-yellow-500/30 rounded-lg mb-6">
+                <p className="text-yellow-400 font-mono text-sm mb-2">
+                  ⚠️ SECURITY_NOTICE
+                </p>
+                <p className="text-gray-300 font-mono text-sm">
+                  Biometric re-enrollment requires administrator approval for security reasons.
+                  Contact your system administrator to update biometric data.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {biometricStatus.face && (
+                  <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
+                    <div>
+                      <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
+                        BIOMETRIC ENROLLMENT
+                      </h3>
+                      <p className="text-gray-400 text-sm">
+                        ✅ Enrolled and Active
+                      </p>
                     </div>
-
-                    <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
-                      <div>
-                        <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
-                          KEYSTROKE_DYNAMICS
-                        </h3>
-                        <p className="text-gray-400 text-sm">
-                          {biometricStatus.keystroke ? 'Enrolled' : 'Not enrolled'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleBiometricReenroll('keystroke')}
-                        className="terminal-button px-4 py-2 rounded text-sm font-bold"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-1 inline" />
-                        RE-ENROLL
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
-                      <div>
-                        <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
-                          SCROLL_BEHAVIOR
-                        </h3>
-                        <p className="text-gray-400 text-sm">
-                          {biometricStatus.behavioral ? 'Enrolled' : 'Not enrolled'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleBiometricReenroll('scroll')}
-                        className="terminal-button px-4 py-2 rounded text-sm font-bold"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-1 inline" />
-                        RE-ENROLL
-                      </button>
+                    <div className="text-green-400 font-mono text-sm">
+                      ACTIVE
                     </div>
                   </div>
-                </>
-              )}
+                )}
+
+                {biometricStatus.keystroke && (
+                  <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
+                    <div>
+                      <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
+                        KEYSTROKE_DYNAMICS
+                      </h3>
+                      <p className="text-gray-400 text-sm">
+                        ✅ Enrolled and Active
+                      </p>
+                    </div>
+                    <div className="text-green-400 font-mono text-sm">
+                      ACTIVE
+                    </div>
+                  </div>
+                )}
+
+                {biometricStatus.behavioral && (
+                  <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
+                    <div>
+                      <h3 className="text-cyan-400 font-bold" style={{ fontFamily: 'IBM Plex Mono' }}>
+                        SCROLL_BEHAVIOR
+                      </h3>
+                      <p className="text-gray-400 text-sm">
+                        ✅ Enrolled and Active
+                      </p>
+                    </div>
+                    <div className="text-green-400 font-mono text-sm">
+                      ACTIVE
+                    </div>
+                  </div>
+                )}
+              </div>
+
+
             </div>
           )}
           {activeTab === 'ekyc' && (

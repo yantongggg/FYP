@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { 
   Mail, 
   Lock, 
@@ -8,7 +7,6 @@ import {
   Eye, 
   EyeOff, 
   LogIn,
-  Camera,
   User,
   CheckCircle,
   Loader2,
@@ -18,6 +16,7 @@ import {
   Send
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import BiometricCapture from '../components/BiometricCapture';
 
 interface LoginState {
   email: string;
@@ -41,7 +40,7 @@ interface OTPStep {
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loginWithFace, loading } = useAuth();
+  const { login, loading } = useAuth();
   
   // Form state
   const [formData, setFormData] = useState<LoginState>({
@@ -56,9 +55,10 @@ const Login: React.FC = () => {
   const [faceStep, setFaceStep] = useState<FaceVerificationStep | null>(null);
   const [otpStep, setOTPStep] = useState<OTPStep | null>(null);
   
-  // Face verification state
+  // Biometric verification state
   const [faceData, setFaceData] = useState<string>('');
-  const [cameraActive, setCameraActive] = useState(false);
+  const [livenessData, setLivenessData] = useState<any>(null);
+  const [biometricCaptureComplete, setBiometricCaptureComplete] = useState(false);
   const [faceAttempts, setFaceAttempts] = useState(0);
   
   // OTP state
@@ -66,10 +66,17 @@ const Login: React.FC = () => {
   const [sendingOTP, setSendingOTP] = useState(false);
   const [verifyingOTP, setVerifyingOTP] = useState(false);
   const [otpCountdown, setOTPCountdown] = useState(0);
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Clear any running intervals when component unmounts
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, []);
   // ============= FORM HANDLERS =============
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -120,64 +127,34 @@ const Login: React.FC = () => {
     }
   };
 
-  // ============= STEP 2: FACE VERIFICATION =============
-  const startCamera = async () => {
-    try {
-      setCameraActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' }
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (error) {
-      console.error('Camera error:', error);
-      setError('Camera access denied. Please allow camera access or use email verification.');
-    }
+  // ============= STEP 2: BIOMETRIC CAPTURE HANDLERS =============
+  const handleFaceCapture = (faceDataUrl: string, faceUrl?: string) => {
+    console.log('Face captured for login:', faceDataUrl.length);
+    setFaceData(faceDataUrl);
+    setBiometricCaptureComplete(true);
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+  const handleLivenessCapture = (livenessResult: any) => {
+    console.log('Liveness data captured for login:', livenessResult);
+    setLivenessData(livenessResult);
     
-    if (!ctx) return;
-
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    
-    // Flip horizontally for mirror effect
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.translate(-canvas.width, 0);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-
-    const capturedData = canvas.toDataURL('image/jpeg', 0.8);
-    setFaceData(capturedData);
-    
-    // Stop camera
-    const stream = video.srcObject as MediaStream;
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+    // Validate liveness requirements
+    if (livenessResult?.liveness_validation?.overall_liveness_passed) {
+      console.log('✅ Liveness validation passed for login');
+    } else {
+      setError('Liveness detection failed. Please try again.');
     }
-    setCameraActive(false);
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-    setCameraActive(false);
   };
 
   const handleFaceVerification = async () => {
     if (!faceData || !faceStep) {
-      setError('Please capture your face first');
+      setError('Please complete biometric capture first');
+      return;
+    }
+
+    // Check liveness validation
+    if (!livenessData?.liveness_validation?.overall_liveness_passed) {
+      setError('Liveness verification required. Please complete all liveness tests.');
       return;
     }
 
@@ -189,7 +166,8 @@ const Login: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: faceStep.user_id,
-          face_image: faceData
+          face_image: faceData.includes(',') ? faceData.split(',')[1] : faceData, // Remove data:image prefix if exists
+          liveness_data: livenessData // Include liveness validation data
         })
       });
 
@@ -205,7 +183,7 @@ const Login: React.FC = () => {
         setFaceAttempts(newAttempts);
         
         if (newAttempts >= 3) {
-          // 🔥 NEW: After 3 failures, automatically show email option
+          // After 3 failures, automatically show email option
           setError(`Face verification failed ${newAttempts} times. Switching to email verification for security.`);
           // Auto-trigger email OTP
           setTimeout(() => {
@@ -215,8 +193,10 @@ const Login: React.FC = () => {
           setError(`Face verification failed (${newAttempts}/3 attempts). ${result.message || 'Please try again.'}`);
         }
         
-        // Reset face data for retry
+        // Reset biometric data for retry
         setFaceData('');
+        setLivenessData(null);
+        setBiometricCaptureComplete(false);
       }
     } catch (error: any) {
       setError('Network error during face verification');
@@ -332,29 +312,52 @@ const Login: React.FC = () => {
 
   // ============= DEMO LOGIN SHORTCUTS =============
   const loginAsDemo = async (type: 'user' | 'admin') => {
-    const email = type === 'admin' ? 'admin@demo.com' : 'demo@user.com';
+    const demoCredentials = {
+      user: { email: 'user@example.com', password: 'user123' },
+      admin: { email: 'admin@example.com', password: 'admin123' }
+    };
+    
+    const creds = demoCredentials[type];
+    setFormData(creds); // Also populate the form
+    
     try {
-      await login(email, 'demo');
+      await login(creds.email, creds.password);
       navigate('/dashboard');
     } catch (error: any) {
       setError(error.message || 'Demo login failed');
     }
   };
 
-  // ============= RENDER HELPERS =============
+  // ============= UTILITY FUNCTIONS =============
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const resetBiometricData = () => {
+    setFaceData('');
+    setLivenessData(null);
+    setBiometricCaptureComplete(false);
+    setError('');
+  };
+
+  const resetToCredentials = () => {
+    setCurrentStep('credentials');
+    setFaceStep(null);
+    setOTPStep(null);
+    setFaceAttempts(0);
+    setOTPCode('');
+    setOTPCountdown(0); // Add this
+    setSendingOTP(false); // Add this
+    setVerifyingOTP(false); // Add this
+    resetBiometricData();
+    setError('');
+  };
+
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-modal rounded-lg p-8 w-full max-w-md"
-      >
+      <div className="glass-modal rounded-lg p-8 w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <LogIn className="h-12 w-12 text-green-400 mx-auto mb-4 neon-glow" />
@@ -472,17 +475,17 @@ const Login: React.FC = () => {
           </form>
         )}
 
-        {/* STEP 2: FACE VERIFICATION */}
+        {/* STEP 2: FACE VERIFICATION WITH LIVENESS */}
         {currentStep === 'face' && faceStep && (
           <div className="space-y-6">
-            <div className="text-center">
-              <Camera className="h-12 w-12 text-cyan-400 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-cyan-400 mb-2">Face Verification Required</h2>
+            <div className="text-center mb-6">
+              <Shield className="h-12 w-12 text-cyan-400 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-cyan-400 mb-2">Biometric Verification</h2>
               <p className="text-green-400 text-sm">
                 Welcome back, {faceStep.full_name}
               </p>
               <p className="text-gray-400 text-xs mt-1">
-                Your account has biometric protection enabled
+                Complete liveness detection and face verification
               </p>
             </div>
 
@@ -496,33 +499,14 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            {/* Camera View */}
-            {cameraActive && faceAttempts < 3 && (
-              <div className="relative">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-64 bg-black rounded transform scale-x-[-1]"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-48 h-64 border-2 border-green-400/50 rounded-xl"></div>
-                </div>
-                <canvas ref={canvasRef} style={{ display: 'none' }} />
-              </div>
-            )}
-
-            {/* Face Preview */}
-            {faceData && faceAttempts < 3 && (
-              <div className="text-center">
-                <img
-                  src={faceData}
-                  alt="Captured face"
-                  className="w-32 h-32 mx-auto rounded-lg border-2 border-green-400"
-                />
-                <CheckCircle className="h-6 w-6 text-green-400 mx-auto mt-2" />
-              </div>
+            {/* Use BiometricCapture component for login */}
+            {faceAttempts < 3 && (
+              <BiometricCapture
+                onFaceCapture={handleFaceCapture}
+                onLivenessCapture={handleLivenessCapture}
+                mode="login"
+                userId={faceStep.user_id}
+              />
             )}
 
             {/* Error Display */}
@@ -535,62 +519,40 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            {/* Camera Controls - Only show if less than 3 attempts */}
-            {faceAttempts < 3 && (
-              <div className="flex gap-4">
-                {!cameraActive && !faceData && (
+            {/* Show captured face preview and verification button */}
+            {faceData && biometricCaptureComplete && faceAttempts < 3 && (
+              <div className="mt-4 glass-card rounded-lg p-4">
+                <h3 className="text-green-400 font-bold mb-2">Captured Face Preview</h3>
+                <img 
+                  src={faceData} 
+                  alt="Captured face" 
+                  className="w-32 h-32 rounded-lg mx-auto object-cover border border-green-400/30"
+                />
+                <div className="flex gap-2 mt-4">
                   <button
-                    onClick={startCamera}
-                    className="flex-1 terminal-button py-3 rounded font-bold hover-glow"
+                    onClick={handleFaceVerification}
+                    disabled={loading}
+                    className="flex-1 terminal-button py-2 rounded hover-glow"
                   >
-                    <Camera className="h-5 w-5 mr-2 inline" />
-                    Start Camera
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        VERIFYING...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4 mr-2" />
+                        VERIFY BIOMETRICS
+                      </>
+                    )}
                   </button>
-                )}
-
-                {cameraActive && (
-                  <>
-                    <button
-                      onClick={capturePhoto}
-                      className="flex-1 terminal-button py-3 rounded font-bold hover-glow"
-                    >
-                      <Camera className="h-5 w-5 mr-2 inline" />
-                      Capture
-                    </button>
-                    <button
-                      onClick={stopCamera}
-                      className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-3 rounded font-bold"
-                    >
-                      Cancel
-                    </button>
-                  </>
-                )}
-
-                {faceData && (
-                  <>
-                    <button
-                      onClick={handleFaceVerification}
-                      disabled={loading}
-                      className="flex-1 terminal-button py-3 rounded font-bold hover-glow"
-                    >
-                      {loading ? (
-                        <Loader2 className="h-5 w-5 mr-2 inline animate-spin" />
-                      ) : (
-                        <Shield className="h-5 w-5 mr-2 inline" />
-                      )}
-                      Verify Face
-                    </button>
-                    <button
-                      onClick={() => {
-                        setFaceData('');
-                        setError('');
-                      }}
-                      className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-3 rounded font-bold"
-                    >
-                      Retake
-                    </button>
-                  </>
-                )}
+                  <button
+                    onClick={resetBiometricData}
+                    className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded font-bold"
+                  >
+                    Retake
+                  </button>
+                </div>
               </div>
             )}
 
@@ -623,14 +585,7 @@ const Login: React.FC = () => {
             {/* Back to Credentials */}
             <div className="text-center">
               <button
-                onClick={() => {
-                  setCurrentStep('credentials');
-                  setFaceStep(null);
-                  setFaceAttempts(0);
-                  setFaceData('');
-                  setError('');
-                  stopCamera();
-                }}
+                onClick={resetToCredentials}
                 className="text-gray-400 hover:text-cyan-400 text-sm underline"
               >
                 ← Back to login
@@ -755,9 +710,7 @@ const Login: React.FC = () => {
                   if (faceAttempts < 3) {
                     setCurrentStep('face');
                   } else {
-                    setCurrentStep('credentials');
-                    setFaceStep(null);
-                    setFaceAttempts(0);
+                    resetToCredentials();
                   }
                   setOTPStep(null);
                   setOTPCode('');
@@ -780,7 +733,7 @@ const Login: React.FC = () => {
             </Link>
           </p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

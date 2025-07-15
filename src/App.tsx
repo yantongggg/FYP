@@ -142,16 +142,7 @@ function AppContent() {
         {/* Enhanced AI Chatbot */}
         <ChatBot />
         
-        {/* FIXED Debug info for development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed top-4 right-4 bg-black/90 backdrop-blur-md text-green-400 text-xs p-2 rounded border border-green-500/30 font-mono z-40">
-            <div className="text-green-400 font-bold mb-1">🔧 FIXED DEV MODE</div>
-            <div>User: {userData?.username || 'Not logged in'}</div>
-            <div>Role: {userData?.role || 'None'}</div>
-            <div>Page: {window.location.pathname}</div>
-            <div>Monitoring: ❌ Disabled</div>
-          </div>
-        )}
+
       </div>
     </div>
   );
