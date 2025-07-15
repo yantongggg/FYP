@@ -1,0 +1,196 @@
+# =============================================================================
+# eKYC Biometric Authentication System - Complete Requirements
+# =============================================================================
+
+# -------------------------
+# Web Framework & CORS
+# -------------------------
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# -------------------------
+# Core Data Processing
+# -------------------------
+numpy==1.24.3
+pandas==2.0.3
+scipy==1.11.2
+
+# -------------------------
+# Computer Vision & Image Processing
+# -------------------------
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+Pillow==10.0.1
+face-recognition==1.3.0
+dlib==19.24.2
+
+# -------------------------
+# Deep Learning Frameworks
+# -------------------------
+# TensorFlow (choose one based on your setup)
+tensorflow==2.13.0        # For GPU support
+# tensorflow-cpu==2.13.0  # For CPU-only (uncomment if needed)
+
+# PyTorch with CPU support (adjust for GPU if needed)
+torch==2.0.1+cpu
+torchvision==0.15.2+cpu
+torchaudio==2.0.2+cpu
+--find-links https://download.pytorch.org/whl/cpu/torch_stable.html
+
+# PyTorch additional packages
+facenet-pytorch==2.5.3
+
+# -------------------------
+# Machine Learning & AI
+# -------------------------
+scikit-learn==1.3.0
+xgboost==1.7.6
+joblib==1.3.2
+
+# -------------------------
+# OCR & Text Processing
+# -------------------------
+pytesseract==0.3.10
+easyocr==1.7.0
+
+# -------------------------
+# Database & Storage
+# -------------------------
+supabase==1.0.4
+python-dotenv==1.0.0
+
+# -------------------------
+# Security & Authentication
+# -------------------------
+bcrypt==4.0.1
+cryptography==41.0.4
+passlib==1.7.4
+
+# -------------------------
+# HTTP Requests & API
+# -------------------------
+requests==2.31.0
+urllib3==2.0.4
+
+# -------------------------
+# Data Visualization (for ML analysis)
+# -------------------------
+matplotlib==3.7.2
+seaborn==0.12.2
+plotly==5.15.0
+
+# -------------------------
+# System Monitoring & Utilities
+# -------------------------
+psutil==5.9.5
+python-dateutil==2.8.2
+
+# -------------------------
+# Email & Communication
+# -------------------------
+secure-smtplib==0.1.1
+email-validator==2.0.0
+
+# -------------------------
+# Async & Threading Support
+# -------------------------
+asyncio==3.4.3
+concurrent-futures==3.1.1
+
+# -------------------------
+# JSON & Data Serialization
+# -------------------------
+marshmallow==3.20.1
+
+# -------------------------
+# Logging & Monitoring
+# -------------------------
+loguru==0.7.1
+
+# -------------------------
+# Development & Testing (Optional)
+# -------------------------
+pytest==7.4.0
+pytest-cov==4.1.0
+black==23.7.0
+flake8==6.0.0
+
+# -------------------------
+# Additional ML Libraries
+# -------------------------
+imutils==0.5.4
+collections-extended==2.0.2
+
+# -------------------------
+# Face Detection & Recognition
+# -------------------------
+mtcnn==0.1.1
+deepface==0.0.79
+
+# -------------------------
+# Anti-Spoofing Models
+# -------------------------
+# For custom liveness detection models
+h5py==3.9.0
+
+# -------------------------
+# Image Enhancement
+# -------------------------
+imageio==2.31.1
+skimage==0.0  # Deprecated, use scikit-image instead
+scikit-image==0.21.0
+
+# -------------------------
+# System Dependencies Info
+# -------------------------
+# Note: Some packages may require system-level dependencies:
+# 
+# For dlib:
+# - cmake
+# - boost
+# 
+# For OpenCV:
+# - libgl1-mesa-glx (Linux)
+# - libglib2.0-0 (Linux)
+# 
+# For face_recognition:
+# - cmake
+# - dlib
+# 
+# For pytesseract:
+# - tesseract-ocr
+# 
+# Install system dependencies on Ubuntu/Debian:
+# sudo apt-get update
+# sudo apt-get install cmake libgl1-mesa-glx libglib2.0-0 tesseract-ocr
+# 
+# Install system dependencies on macOS:
+# brew install cmake tesseract
+# 
+# Install system dependencies on Windows:
+# Install Visual Studio Build Tools
+# Install Tesseract from: https://github.com/UB-Mannheim/tesseract/wiki
+
+# =============================================================================
+# Installation Notes:
+# =============================================================================
+# 
+# 1. Create virtual environment:
+#    python -m venv venv
+#    source venv/bin/activate  # Linux/macOS
+#    venv\Scripts\activate     # Windows
+# 
+# 2. Upgrade pip:
+#    python -m pip install --upgrade pip
+# 
+# 3. Install requirements:
+#    pip install -r requirements.txt
+# 
+# 4. For GPU support (optional):
+#    - Replace tensorflow-cpu with tensorflow
+#    - Replace torch+cpu with appropriate CUDA version
+# 
+# 5. Verify installation:
+#    python -c "import cv2, face_recognition, flask, numpy, torch, tensorflow; print('All packages imported successfully!')"
+# 
+# =============================================================================

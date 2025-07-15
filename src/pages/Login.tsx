@@ -371,23 +371,6 @@ const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Demo Login Shortcuts */}
-        {currentStep === 'credentials' && (
-          <div className="mb-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded">
-            <p className="text-blue-400 text-sm mb-3 font-bold">Quick Demo Access:</p>
-            <div className="flex gap-2">
-
-              <button
-                onClick={() => loginAsDemo('admin')}
-                disabled={loading}
-                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-sm font-bold"
-              >
-                <User className="h-4 w-4 inline mr-1" />
-                Demo Admin
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* STEP 1: CREDENTIALS LOGIN */}
         {currentStep === 'credentials' && (

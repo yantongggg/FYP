@@ -25,119 +25,101 @@ const Architecture = () => {
     'frontend': {
       title: 'Frontend Layer',
       description: 'React-based web application with real-time biometric capture capabilities',
-      technologies: ['React', 'TypeScript', 'Tailwind CSS', 'WebRTC', 'Canvas API'],
+      technologies: ['React', 'TypeScript', 'Tailwind CSS', 'Framer Motion', 'Web Crypto API'],
       features: ['Facial Recognition UI', 'Liveness Detection Interface', 'Behavioral Tracking', 'Real-time Feedback']
     },
-    'api': {
-      title: 'API Gateway',
-      description: 'RESTful API endpoints for external system integration',
-      technologies: ['Node.js', 'Express', 'JWT', 'Rate Limiting', 'CORS'],
-      features: ['Authentication Endpoints', 'Registration API', 'Monitoring Endpoints', 'Webhook Support']
+    'supabase': {
+      title: 'Supabase Backend',
+      description: 'Complete backend-as-a-service with authentication and real-time capabilities',
+      technologies: ['Supabase Auth', 'PostgreSQL', 'Row Level Security', 'Real-time API', 'PostgREST'],
+      features: ['User Authentication', 'Database Management', 'Real-time Updates', 'API Gateway']
     },
     'biometric': {
       title: 'Biometric Processing',
-      description: 'Core biometric analysis and matching algorithms',
-      technologies: ['Python', 'OpenCV', 'DeepFace', 'TensorFlow', 'NumPy'],
+      description: 'Client-side biometric analysis and pattern recognition',
+      technologies: ['Face-api.js', 'Web Crypto API', 'Canvas API', 'MediaDevices API', 'JavaScript ML'],
       features: ['Face Detection', 'Feature Extraction', 'Liveness Detection', 'Behavioral Analysis']
     },
-    'ml': {
-      title: 'Machine Learning',
-      description: 'AI models for pattern recognition and anomaly detection',
-      technologies: ['TensorFlow', 'PyTorch', 'Scikit-learn', 'Pandas', 'OpenCV'],
-      features: ['Face Recognition', 'Anomaly Detection', 'Pattern Matching', 'Continuous Learning']
+    'edge_functions': {
+      title: 'Edge Functions',
+      description: 'Serverless functions for behavioral analysis and ML processing',
+      technologies: ['Deno Runtime', 'TypeScript', 'Supabase Functions', 'WebAssembly', 'HTTP APIs'],
+      features: ['Behavioral Analysis', 'Anomaly Detection', 'Chatbot Processing', 'Data Validation']
     },
     'security': {
       title: 'Security Layer',
-      description: 'Encryption and secure data handling',
-      technologies: ['AES-256', 'RSA', 'TLS/SSL', 'RBAC', 'OAuth 2.0'],
-      features: ['Data Encryption', 'Access Control', 'Secure Storage', 'Audit Logging']
+      description: 'Comprehensive security with Supabase Auth and encryption',
+      technologies: ['Supabase Auth', 'AES-256 Encryption', 'JWT Tokens', 'RLS Policies', 'TLS/SSL'],
+      features: ['Multi-factor Auth', 'Data Encryption', 'Access Control', 'Audit Logging']
     },
     'database': {
-      title: 'Database Layer',
-      description: 'Secure, scalable data storage with encryption',
-      technologies: ['MongoDB', 'Firebase', 'Redis', 'PostgreSQL', 'GridFS'],
-      features: ['Encrypted Storage', 'High Availability', 'Backup & Recovery', 'Scalability']
+      title: 'PostgreSQL Database',
+      description: 'Supabase PostgreSQL with advanced security and real-time features',
+      technologies: ['PostgreSQL 15', 'Row Level Security', 'pgcrypto', 'Real-time subscriptions', 'Vector Extensions'],
+      features: ['Encrypted Storage', 'Real-time Updates', 'Backup & Recovery', 'Vector Similarity']
     },
     'monitoring': {
       title: 'Monitoring & Analytics',
-      description: 'Real-time system monitoring and performance analytics',
-      technologies: ['Grafana', 'Prometheus', 'ELK Stack', 'Winston', 'NewRelic'],
-      features: ['Real-time Alerts', 'Performance Metrics', 'Log Analysis', 'Custom Dashboards']
+      description: 'Built-in Supabase monitoring with custom analytics dashboard',
+      technologies: ['Supabase Dashboard', 'Real-time Metrics', 'Database Logs', 'Custom Analytics', 'JavaScript Tracking'],
+      features: ['Real-time Alerts', 'Performance Metrics', 'User Analytics', 'Anomaly Tracking']
     },
-    'cloud': {
-      title: 'Cloud Infrastructure',
-      description: 'Scalable cloud deployment with auto-scaling capabilities',
-      technologies: ['AWS', 'Docker', 'Kubernetes', 'Load Balancers', 'CDN'],
-      features: ['Auto Scaling', 'Load Distribution', 'Global CDN', 'Disaster Recovery']
+    'deployment': {
+      title: 'Supabase Hosting',
+      description: 'Serverless deployment with global CDN and edge computing',
+      technologies: ['Supabase Platform', 'Edge Functions', 'Global CDN', 'Auto-scaling', 'Git Integration'],
+      features: ['Global Distribution', 'Auto-scaling', 'CI/CD Pipeline', 'Environment Management']
     }
   };
 
-  const dataFlow = [
-    { from: 'User Device', to: 'Frontend', description: 'Biometric data capture' },
-    { from: 'Frontend', to: 'API Gateway', description: 'Encrypted data transmission' },
-    { from: 'API Gateway', to: 'Biometric Processing', description: 'Authentication request' },
-    { from: 'Biometric Processing', to: 'ML Models', description: 'Pattern analysis' },
-    { from: 'ML Models', to: 'Database', description: 'Template matching' },
-    { from: 'Database', to: 'Security Layer', description: 'Encrypted data retrieval' },
-    { from: 'Security Layer', to: 'Monitoring', description: 'Audit logging' },
-    { from: 'Monitoring', to: 'Admin Dashboard', description: 'Real-time alerts' }
-  ];
-
-  const ComponentCard = ({ id, component, icon: Icon, color }: { 
-    id: string, 
-    component: any, 
-    icon: any, 
-    color: string 
-  }) => (
+  const ComponentCard = ({ id, component, icon: Icon, color }: any) => (
     <motion.div
       whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      onClick={() => setSelectedComponent(selectedComponent === id ? null : id)}
-      className={`relative bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 cursor-pointer transition-all duration-300 ${
-        selectedComponent === id ? 'ring-2 ring-blue-500 bg-white/10' : 'hover:bg-white/10'
+      className={`bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 cursor-pointer transition-all ${
+        selectedComponent === id ? 'ring-2 ring-blue-400' : ''
       }`}
+      onClick={() => setSelectedComponent(selectedComponent === id ? null : id)}
     >
-      <div className="flex items-center justify-between mb-4">
-        <Icon className={`h-8 w-8 ${color}`} />
-        <div className={`w-3 h-3 rounded-full ${color.replace('text-', 'bg-')}`} />
-      </div>
-      <h3 className="text-lg font-semibold text-white mb-2">{component.title}</h3>
-      <p className="text-gray-400 text-sm">{component.description}</p>
+      <Icon className={`h-12 w-12 ${color} mb-4`} />
+      <h3 className="text-xl font-semibold text-white mb-2">{component.title}</h3>
+      <p className="text-gray-300 text-sm mb-4">{component.description}</p>
       
-      {selectedComponent === id && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="mt-4 pt-4 border-t border-white/10"
-        >
-          <div className="space-y-3">
-            <div>
-              <h4 className="text-sm font-medium text-blue-400 mb-2">Technologies</h4>
-              <div className="flex flex-wrap gap-2">
-                {component.technologies.map((tech: string) => (
-                  <span key={tech} className="px-2 py-1 bg-blue-600/20 text-blue-300 text-xs rounded-full">
-                    {tech}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h4 className="text-sm font-medium text-green-400 mb-2">Key Features</h4>
-              <ul className="space-y-1">
-                {component.features.map((feature: string) => (
-                  <li key={feature} className="text-gray-300 text-xs flex items-center">
-                    <div className="w-1 h-1 bg-green-400 rounded-full mr-2" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
+      <div className="space-y-3">
+        <div>
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Technologies</h4>
+          <div className="flex flex-wrap gap-1">
+            {component.technologies.map((tech: string, index: number) => (
+              <span key={index} className="px-2 py-1 bg-white/10 rounded text-xs text-gray-300">
+                {tech}
+              </span>
+            ))}
           </div>
-        </motion.div>
-      )}
+        </div>
+        
+        <div>
+          <h4 className="text-sm font-medium text-gray-400 mb-2">Features</h4>
+          <ul className="text-xs text-gray-300 space-y-1">
+            {component.features.map((feature: string, index: number) => (
+              <li key={index} className="flex items-center">
+                <div className="w-1 h-1 bg-green-400 rounded-full mr-2" />
+                {feature}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </motion.div>
   );
+
+  const dataFlow = [
+    { from: 'User Interface', to: 'Biometric Capture', description: 'User initiates authentication' },
+    { from: 'Biometric Capture', to: 'Client Processing', description: 'Extract facial features & patterns' },
+    { from: 'Client Processing', to: 'Supabase Auth', description: 'Send encrypted biometric data' },
+    { from: 'Supabase Auth', to: 'PostgreSQL', description: 'Query encrypted templates' },
+    { from: 'PostgreSQL', to: 'Edge Functions', description: 'Behavioral analysis processing' },
+    { from: 'Edge Functions', to: 'Real-time API', description: 'Return authentication result' },
+    { from: 'Real-time API', to: 'User Interface', description: 'Display authentication status' }
+  ];
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8">
@@ -151,7 +133,7 @@ const Architecture = () => {
             System Architecture
           </h1>
           <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-            Comprehensive overview of the multimodal biometric authentication framework architecture
+            Comprehensive overview of the Supabase-based biometric authentication framework architecture
           </p>
         </motion.div>
 
@@ -171,9 +153,9 @@ const Architecture = () => {
               color="text-blue-400"
             />
             <ComponentCard
-              id="api"
-              component={components.api}
-              icon={Network}
+              id="supabase"
+              component={components.supabase}
+              icon={Database}
               color="text-green-400"
             />
             <ComponentCard
@@ -183,8 +165,8 @@ const Architecture = () => {
               color="text-purple-400"
             />
             <ComponentCard
-              id="ml"
-              component={components.ml}
+              id="edge_functions"
+              component={components.edge_functions}
               icon={Cpu}
               color="text-orange-400"
             />
@@ -207,8 +189,8 @@ const Architecture = () => {
               color="text-yellow-400"
             />
             <ComponentCard
-              id="cloud"
-              component={components.cloud}
+              id="deployment"
+              component={components.deployment}
               icon={Cloud}
               color="text-pink-400"
             />
@@ -222,162 +204,115 @@ const Architecture = () => {
           transition={{ delay: 0.4 }}
           className="mb-12"
         >
-          <h2 className="text-3xl font-bold text-white mb-8 text-center">Data Flow Architecture</h2>
+          <h2 className="text-3xl font-bold text-white mb-8 text-center">Authentication Data Flow</h2>
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-            <div className="relative">
-              {/* Flow Chart */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {/* User Layer */}
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 text-center">
-                    <Smartphone className="h-8 w-8 text-white mx-auto mb-2" />
-                    <p className="text-white font-medium">User Device</p>
-                    <p className="text-blue-200 text-sm">Biometric Capture</p>
+            <div className="space-y-4">
+              {dataFlow.map((flow, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 * index }}
+                  className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full" />
+                      <span className="text-white font-medium">{flow.from}</span>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-gray-400" />
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-green-400 rounded-full" />
+                      <span className="text-white font-medium">{flow.to}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-center">
-                    <ArrowRight className="h-6 w-6 text-gray-400 rotate-90 md:rotate-0" />
-                  </div>
-                </div>
-
-                {/* Frontend Layer */}
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-green-600 to-blue-600 rounded-lg p-4 text-center">
-                    <Monitor className="h-8 w-8 text-white mx-auto mb-2" />
-                    <p className="text-white font-medium">Frontend</p>
-                    <p className="text-green-200 text-sm">Data Processing</p>
-                  </div>
-                  <div className="flex justify-center">
-                    <ArrowRight className="h-6 w-6 text-gray-400 rotate-90 md:rotate-0" />
-                  </div>
-                </div>
-
-                {/* Backend Layer */}
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-4 text-center">
-                    <Server className="h-8 w-8 text-white mx-auto mb-2" />
-                    <p className="text-white font-medium">Backend</p>
-                    <p className="text-purple-200 text-sm">Authentication</p>
-                  </div>
-                  <div className="flex justify-center">
-                    <ArrowRight className="h-6 w-6 text-gray-400 rotate-90 md:rotate-0" />
-                  </div>
-                </div>
-
-                {/* Database Layer */}
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-orange-600 to-red-600 rounded-lg p-4 text-center">
-                    <Database className="h-8 w-8 text-white mx-auto mb-2" />
-                    <p className="text-white font-medium">Database</p>
-                    <p className="text-orange-200 text-sm">Secure Storage</p>
-                  </div>
-                </div>
-              </div>
+                  <span className="text-gray-400 text-sm">{flow.description}</span>
+                </motion.div>
+              ))}
             </div>
           </div>
         </motion.div>
 
-        {/* Integration Endpoints */}
+        {/* Security Architecture */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
           className="mb-12"
         >
-          <h2 className="text-3xl font-bold text-white mb-8 text-center">API Integration Endpoints</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-              <h3 className="text-xl font-semibold text-white mb-4">Authentication Endpoints</h3>
-              <div className="space-y-4">
-                <div className="bg-green-600/20 border border-green-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-green-400 font-mono">POST /api/register</span>
-                    <span className="text-xs bg-green-600 text-white px-2 py-1 rounded">POST</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Register new user with biometric data</p>
-                </div>
-                <div className="bg-blue-600/20 border border-blue-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-blue-400 font-mono">POST /api/authenticate</span>
-                    <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">POST</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Authenticate user with biometric verification</p>
-                </div>
-                <div className="bg-purple-600/20 border border-purple-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-purple-400 font-mono">GET /api/verify</span>
-                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded">GET</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Verify session and get user status</p>
-                </div>
-              </div>
+          <h2 className="text-3xl font-bold text-white mb-8 text-center">Security Architecture</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+              <Lock className="h-8 w-8 text-red-400 mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-3">Client-Side Security</h3>
+              <ul className="text-gray-300 space-y-2 text-sm">
+                <li>• AES-256 biometric encryption</li>
+                <li>• Secure biometric capture</li>
+                <li>• Local pattern analysis</li>
+                <li>• No raw biometric storage</li>
+              </ul>
             </div>
-
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-              <h3 className="text-xl font-semibold text-white mb-4">Monitoring Endpoints</h3>
-              <div className="space-y-4">
-                <div className="bg-yellow-600/20 border border-yellow-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-yellow-400 font-mono">GET /api/logs</span>
-                    <span className="text-xs bg-yellow-600 text-white px-2 py-1 rounded">GET</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Retrieve authentication logs and anomalies</p>
-                </div>
-                <div className="bg-red-600/20 border border-red-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-red-400 font-mono">POST /api/report_anomaly</span>
-                    <span className="text-xs bg-red-600 text-white px-2 py-1 rounded">POST</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Report security anomaly or suspicious activity</p>
-                </div>
-                <div className="bg-cyan-600/20 border border-cyan-500/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-cyan-400 font-mono">GET /api/metrics</span>
-                    <span className="text-xs bg-cyan-600 text-white px-2 py-1 rounded">GET</span>
-                  </div>
-                  <p className="text-gray-300 text-sm">Get system performance metrics</p>
-                </div>
-              </div>
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+              <Shield className="h-8 w-8 text-blue-400 mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-3">Supabase Security</h3>
+              <ul className="text-gray-300 space-y-2 text-sm">
+                <li>• Row Level Security policies</li>
+                <li>• Database encryption at rest</li>
+                <li>• API rate limiting</li>
+              </ul>
+            </div>
+            <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+              <Eye className="h-8 w-8 text-purple-400 mb-4" />
+              <h3 className="text-xl font-semibold text-white mb-3">Monitoring Security</h3>
+              <ul className="text-gray-300 space-y-2 text-sm">
+                <li>• Real-time anomaly detection</li>
+                <li>• Comprehensive audit logging</li>
+                <li>• Behavioral pattern monitoring</li>
+                <li>• Automated threat response</li>
+              </ul>
             </div>
           </div>
         </motion.div>
 
-        {/* Security Features */}
+        {/* Integration Architecture */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
         >
-          <h2 className="text-3xl font-bold text-white mb-8 text-center">Security & Compliance</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-              <Lock className="h-10 w-10 text-red-400 mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">Data Encryption</h3>
-              <ul className="text-gray-400 text-sm space-y-1">
-                <li>• AES-256 encryption at rest</li>
-                <li>• TLS 1.3 for data in transit</li>
-                <li>• End-to-end encryption</li>
-                <li>• Key rotation policies</li>
-              </ul>
-            </div>
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-              <Shield className="h-10 w-10 text-blue-400 mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">Access Control</h3>
-              <ul className="text-gray-400 text-sm space-y-1">
-                <li>• Role-based access control</li>
-                <li>• Multi-factor authentication</li>
-                <li>• Session management</li>
-                <li>• Audit trail logging</li>
-              </ul>
-            </div>
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
-              <Globe className="h-10 w-10 text-green-400 mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">Compliance</h3>
-              <ul className="text-gray-400 text-sm space-y-1">
-                <li>• GDPR compliance</li>
-                <li>• SOC 2 Type II</li>
-                <li>• ISO 27001</li>
-                <li>• FIDO2 standards</li>
-              </ul>
+          <h2 className="text-3xl font-bold text-white mb-8 text-center">Integration Points</h2>
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-4">External APIs</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-300">Supabase REST API</span>
+                    <span className="text-green-400 text-sm">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-300">Supabase Real-time API</span>
+                    <span className="text-green-400 text-sm">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-300">Edge Functions API</span>
+                    <span className="text-green-400 text-sm">Active</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white mb-4">System Integrations</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-300">Local Chatbot</span>
+                    <span className="text-green-400 text-sm">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                    <span className="text-gray-300">Behavioral Analytics</span>
+                    <span className="text-green-400 text-sm">Active</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
