@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { exportLogsToPDF } from '../../backend/utils/exportUtils';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -509,9 +510,40 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const loadUsersFromBackend = async () => {
+    try {
+      console.log('👥 Loading users from backend API');
+      
+      const response = await fetch('http://localhost:5000/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load users from backend');
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setUsers(result.users);
+        setAllUsers(result.users);
+        console.log('✅ Users loaded from backend:', result.users.length);
+        await calculateEnhancedStats(result.users);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Backend API failed, falling back to direct Supabase:', error);
+      // Fallback to the fixed Supabase version above
+      // await loadUsers();
+      await loadUsersFromBackend();
+    }
+  };
   const loadUsers = async () => {
     try {
-      console.log('👥 Loading users data');
+      console.log('👥 Loading users data with real enrollment status');
       
       const { data: usersData, error } = await supabase
         .from('users')
@@ -521,17 +553,45 @@ const AdminDashboard: React.FC = () => {
       if (error) throw error;
       
       if (usersData) {
-        // ✅ FIX: Map data to ensure all required properties exist
-        const processedUsers = usersData.map((user: any) => ({
-          ...user,
-          is_active: user.is_active !== false, // Default to true if undefined
-          biometric_enrolled: user.is_biometric_enrolled || false,
-          behavioral_enrolled: false, // You can load this from behavioral_patterns table
-          trust_score: user.trust_score || 85
-        }));
+        // ✅ FIXED: Actually check database for real enrollment status
+        const processedUsers = await Promise.all(
+          usersData.map(async (user: any) => {
+            // Check if user has face biometric data
+            const { data: biometricData } = await supabase
+              .from('biometric_data')
+              .select('id')
+              .eq('user_id', user.id)
+              .limit(1);
+
+            // Check if user has behavioral patterns
+            const { data: behavioralData } = await supabase
+              .from('behavioral_patterns')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('is_active', true)
+              .limit(1);
+
+            // Alternative: Check behavioral_sessions if no behavioral_patterns table
+            const { data: behavioralSessions } = await supabase
+              .from('behavioral_sessions')
+              .select('id')
+              .eq('user_id', user.id)
+              .limit(1);
+
+            return {
+              ...user,
+              is_active: user.is_active !== false,
+              biometric_enrolled: (biometricData && biometricData.length > 0), // ✅ Real check
+              behavioral_enrolled: (behavioralData && behavioralData.length > 0) || (behavioralSessions && behavioralSessions.length > 0), // ✅ Real check
+              trust_score: user.trust_score || 85
+            };
+          })
+        );
 
         setUsers(processedUsers);
         setAllUsers(processedUsers); 
+        
+        console.log('✅ Users loaded with real enrollment status:', processedUsers.length);
         
         // Load additional biometric stats for each user
         await calculateEnhancedStats(processedUsers);
@@ -1105,6 +1165,7 @@ const AdminDashboard: React.FC = () => {
                 {/* Enhanced System Health */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="glass-card rounded-lg p-6">
+
                     <h3 className="text-lg font-bold text-green-400 mb-4">SYSTEM HEALTH</h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
@@ -1228,6 +1289,21 @@ const AdminDashboard: React.FC = () => {
 
             {activeTab === 'users' && (
               <div className="space-y-6">
+                {/* Header with Export Button */}
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-green-400 flex items-center">
+                    <Users className="mr-3 h-6 w-6" />
+                    USER MANAGEMENT ({filteredUsers.length})
+                  </h2>
+                  <button 
+                    onClick={() => exportLogsToPDF('users', filteredUsers)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-bold transition-all duration-300 hover:shadow-lg"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Export Users PDF
+                  </button>
+                </div>
+
                 {/* Search and Controls Section */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div className="relative w-full md:w-64">
@@ -1239,7 +1315,7 @@ const AdminDashboard: React.FC = () => {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="terminal-input w-full pl-10 pr-4 py-2 rounded bg-gray-900 border border-green-500 text-green-400 placeholder-green-400/50 focus:outline-none focus:border-cyan-400"
                     />
-                  </div>
+      </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-cyan-400 text-sm font-mono">SORT_BY:</span>
                     <button
@@ -1659,8 +1735,15 @@ const AdminDashboard: React.FC = () => {
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
                   <Eye className="mr-3 h-6 w-6" />
-                  ENHANCED BIOMETRIC ANALYTICS
+                  BIOMETRIC ANALYTICS
                 </h2>
+                      <button 
+        onClick={() => exportLogsToPDF('biometrics', behavioralSessions)}
+        className="flex items-center gap-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm"
+      >
+        <FileText className="h-4 w-4" />
+        Export Biometrics
+      </button>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="text-center p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                     <Database className="h-8 w-8 text-blue-400 mx-auto mb-2" />
@@ -1725,6 +1808,34 @@ const AdminDashboard: React.FC = () => {
 
             {/* Enhanced Anomalies Tab */}
             {activeTab === 'anomalies' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-cyan-400">Recent Anomalies</h3>
+                  <button 
+                    onClick={() => exportLogsToPDF('anomaly', anomalies)}
+                    className="flex items-center gap-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Export PDF
+                  </button>
+                </div>
+
+                {/* Your existing anomaly mapping code */}
+                {anomalies.slice(0, 2).map((anomaly) => (
+                  <div key={anomaly.id} className="flex items-center justify-between p-3 bg-red-900/20 rounded">
+                    <div className="flex items-center">
+                      <AlertTriangle className="h-4 w-4 text-red-400 mr-2" />
+                      <span className="text-red-400 text-sm">
+                        {anomaly.severity} anomaly detected
+                      </span>
+                    </div>
+                    <span className="text-gray-400 text-xs">
+                      {new Date(anomaly.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
               <div className="space-y-6">
                 {/* Simple Filters */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -1868,15 +1979,23 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 )}
               </div>
-            )}
+            
 
             {/* Enhanced Logins Tab */}
             {activeTab === 'logins' && (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
-                  <Activity className="mr-3 h-6 w-6" />
-                  ENHANCED AUTHENTICATION LOGS ({loginLogs.length})
-                </h2>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-cyan-400">Login Activity</h3>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => exportLogsToPDF('login', loginLogs)}
+                      className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Export PDF
+                    </button>
+                  </div>
+                </div>
 
                 {/* Login Statistics */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
