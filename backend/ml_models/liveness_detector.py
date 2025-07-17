@@ -44,7 +44,13 @@ THRESHOLDS = {
     'BLINK_MIN_DURATION': 0.1,
     'BLINK_MAX_DURATION': 5,
     'BLINK_MIN_FRAMES': 1,
-    'BLINK_COOLDOWN': 0.8
+    'BLINK_COOLDOWN': 0.8,
+    'RANDOM_BLINKS_MIN': 2,
+    'RANDOM_BLINKS_MAX': 4,
+    'RANDOM_MOUTH_MIN': 1,
+    'RANDOM_MOUTH_MAX': 3,
+    'ENABLE_RANDOM_CHALLENGES': True,
+    'ENABLE_RANDOM_ORDER': True
     
 }
 
@@ -184,17 +190,16 @@ class UserState:
         self.last_eye_state = False
         self.last_mouth_state = False
         self.previous_head_pose = None
-        self.eye_close_start_time = None  # 👈 for blink timing
-        self.last_blink_time = None       # 👈 cooldown tracking
+        self.eye_close_start_time = None  
+        self.last_blink_time = None      
         self.blink_phase = 'open'
 
         # Dynamic scoring with smoothing
         self.real_score_history = deque(maxlen=THRESHOLDS['SCORE_SMOOTHING_WINDOW'])
-        self.ear_history = deque(maxlen=10)  # ✅ FIXED: Ensure proper deque
-        self.mar_history = deque(maxlen=10)  # ✅ FIXED: Ensure proper deque
+        self.ear_history = deque(maxlen=10) 
+        self.mar_history = deque(maxlen=10)  
         self.head_movement_scores = deque(maxlen=20)
 
-        # ✅ ADD: Sequential state management
         self.current_detection_phase = "blinking"  # "blinking" -> "mouth" -> "head" -> "complete"
         self.blinks_completed = False
         self.mouth_completed = False
@@ -215,6 +220,27 @@ class UserState:
         self.current_ear = 0.0
         self.current_mar = 0.0
         self.current_head_movement_score = 0.0
+
+
+        # Add after existing fields in __init__
+        self.required_blinks = THRESHOLDS['MIN_BLINKS']
+        self.required_mouth_opens = THRESHOLDS['MIN_MOUTH_OPENS']
+        self.required_head_movements = THRESHOLDS['MIN_HEAD_MOVEMENTS']
+        self.challenge_order = ["blinking", "mouth", "head"]  # Default order
+        self.multiple_faces_detected = False
+        self.no_face_frames = 0
+
+        # Randomize requirements if enabled
+        if THRESHOLDS['ENABLE_RANDOM_CHALLENGES']:
+            import random
+            self.required_blinks = random.randint(THRESHOLDS['RANDOM_BLINKS_MIN'], THRESHOLDS['RANDOM_BLINKS_MAX'])
+            self.required_mouth_opens = random.randint(THRESHOLDS['RANDOM_MOUTH_MIN'], THRESHOLDS['RANDOM_MOUTH_MAX'])
+            
+        # Randomize order if enabled
+        if THRESHOLDS['ENABLE_RANDOM_ORDER']:
+            import random
+            self.challenge_order = ["blinking", "mouth", "head"]
+            random.shuffle(self.challenge_order[:2])  # Only shuffle first two, keep head last
 
     def reset(self):
         self.__init__()
@@ -275,21 +301,16 @@ class LivenessDetector:
             self.user_states[user_id] = UserState()
         logger.info(f"Reset counters for user: {user_id}")
     
-    #####
-    
-
-    #####
-    
     
     def _get_current_requirement(self, user_state):
         """Get current phase requirement message"""
         phase = user_state.get_current_phase()
         if phase == "blinking":
-            return f"Please blink naturally ({user_state.total_blinks}/{THRESHOLDS['MIN_BLINKS']})"
+            return f"Please blink naturally ({user_state.total_blinks}/{user_state.required_blinks})"
         elif phase == "mouth":
-            return f"Please open your mouth ({user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']})"
+            return f"Please open your mouth ({user_state.total_mouth_open}/{user_state.required_mouth_opens})"
         elif phase == "head":
-            return f"Please move your head ({user_state.total_head_movements}/{THRESHOLDS['MIN_HEAD_MOVEMENTS']})"
+            return f"Please move your head ({user_state.total_head_movements}/{user_state.required_head_movements})"
         else:
             return "Liveness detection complete!"
     
@@ -301,9 +322,9 @@ class LivenessDetector:
             return 0.0
         
         # Calculate progress percentage for each requirement
-        blink_progress = min(1.0, user_state.total_blinks / THRESHOLDS['MIN_BLINKS'])
-        mouth_progress = min(1.0, user_state.total_mouth_open / THRESHOLDS['MIN_MOUTH_OPENS'])
-        head_progress = min(1.0, user_state.total_head_movements / THRESHOLDS['MIN_HEAD_MOVEMENTS'])
+        blink_progress = min(1.0, user_state.total_blinks / user_state.required_blinks)
+        mouth_progress = min(1.0, user_state.total_mouth_open / user_state.required_mouth_opens)
+        head_progress = min(1.0, user_state.total_head_movements / user_state.required_head_movements)
         
         # Simple average of progress
         score = (blink_progress + mouth_progress + head_progress) / 3.0
@@ -312,7 +333,8 @@ class LivenessDetector:
         if user_state.current_detection_phase == "complete":
             score = min(1.0, score + 0.1)
         
-        return float(score)       
+        return float(score)
+          
     # def _predict_fas(self, face_crop):
     #     """Enhanced FAS prediction with proper float scoring"""
         
@@ -421,10 +443,65 @@ class LivenessDetector:
 
         # Face detection
         boxes, probs = self._detect_face_with_retries(rgb_frame)
-        
+
+        # Check for no face
         if boxes is None or len(boxes) == 0:
+            user_state.no_face_frames += 1
             logger.warning("No face detected")
-            return self._create_response(user_state, face_detected=False)
+            return {
+                "success": False,
+                "face_detected": False,
+                "error": "No face detected. Please position your face in the camera.",
+                "alert_type": "no_face",
+                "blink_count": int(user_state.total_blinks),
+                "mouth_open_count": int(user_state.total_mouth_open),
+                "head_movement_count": int(user_state.total_head_movements),
+                "face_real_score": 0.0,
+                "liveness_passed": False,
+                "liveness_score": 0.0,
+                "sequential_state": {
+                    "current_phase": user_state.current_detection_phase,
+                    "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
+                    "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
+                    "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
+                    "all_phases_complete": all_requirements_met,
+                    "challenge_order": user_state.challenge_order,
+                    "requirements": {
+                        "blinks": user_state.required_blinks,
+                        "mouth": user_state.required_mouth_opens,
+                        "head": user_state.required_head_movements
+                    }
+                },
+            }
+
+        # Check for multiple faces
+        if len(boxes) > 1:
+            user_state.multiple_faces_detected = True
+            logger.warning(f"Multiple faces detected: {len(boxes)}")
+            return {
+                "success": False,
+                "face_detected": True,
+                "error": f"Multiple faces detected ({len(boxes)}). Please ensure only one person is in view.",
+                "alert_type": "multiple_faces",
+                "faces_count": len(boxes),
+                "blink_count": int(user_state.total_blinks),
+                "mouth_open_count": int(user_state.total_mouth_open),
+                "head_movement_count": int(user_state.total_head_movements),
+                "face_real_score": 0.0,
+                "liveness_passed": False,
+                "liveness_score": 0.0,
+                "sequential_state": {
+                    "current_phase": user_state.current_detection_phase,
+                    "blinks_completed": False,
+                    "mouth_completed": False,
+                    "head_completed": False,
+                    "all_phases_complete": False
+                }
+            }
+
+        # Reset error counters on successful single face detection
+        user_state.no_face_frames = 0
+        user_state.multiple_faces_detected = False
 
         # Process detected face
         face_detected = True
@@ -507,9 +584,9 @@ class LivenessDetector:
         
         # Calculate completion status
         all_requirements_met = (
-            user_state.total_blinks >= THRESHOLDS['MIN_BLINKS'] and
-            user_state.total_mouth_open >= THRESHOLDS['MIN_MOUTH_OPENS'] and
-            user_state.total_head_movements >= THRESHOLDS['MIN_HEAD_MOVEMENTS'] and
+            user_state.total_blinks >= user_state.required_blinks and
+            user_state.total_mouth_open >= user_state.required_mouth_opens and
+            user_state.total_head_movements >= user_state.required_head_movements and
             not is_static_image
         )
         
@@ -558,15 +635,22 @@ class LivenessDetector:
         }
 
     def _update_detection_phase(self, user_state):
-        """Update detection phase based on real progress"""
-        if user_state.total_blinks < THRESHOLDS['MIN_BLINKS']:
-            user_state.current_detection_phase = "blinking"
-        elif user_state.total_mouth_open < THRESHOLDS['MIN_MOUTH_OPENS']:
-            user_state.current_detection_phase = "mouth"
-        elif user_state.total_head_movements < THRESHOLDS['MIN_HEAD_MOVEMENTS']:
-            user_state.current_detection_phase = "head"
-        else:
-            user_state.current_detection_phase = "complete"
+        """Update detection phase based on real progress and random order"""
+        # Get current position in challenge order
+        current_phase_index = -1
+        for i, phase in enumerate(user_state.challenge_order):
+            if phase == "blinking" and user_state.total_blinks < user_state.required_blinks:
+                user_state.current_detection_phase = "blinking"
+                return
+            elif phase == "mouth" and user_state.total_mouth_open < user_state.required_mouth_opens:
+                user_state.current_detection_phase = "mouth"
+                return
+            elif phase == "head" and user_state.total_head_movements < user_state.required_head_movements:
+                user_state.current_detection_phase = "head"
+                return
+        
+        # All requirements met
+        user_state.current_detection_phase = "complete"
     
     def _create_detailed_debug_log(self, user_state, face_detected, ear_value, mar_value, ear_score, mar_score, liveness_score):
         """Create comprehensive debug log"""
@@ -616,9 +700,9 @@ class LivenessDetector:
                 "all_phases_complete": user_state.get_current_phase() == "complete"
             },
             "progress": {
-                "blinks": f"{user_state.total_blinks}/{THRESHOLDS['MIN_BLINKS']}",
-                "mouth_opens": f"{user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']}",
-                "head_movements": f"{user_state.total_head_movements}/{THRESHOLDS['MIN_HEAD_MOVEMENTS']}",
+                "blinks": f"{user_state.total_blinks}/{user_state.required_blinks}",
+                "mouth_opens": f"{user_state.total_mouth_open}/{user_state.required_mouth_opens}", 
+                "head_movements": f"{user_state.total_head_movements}/{user_state.required_head_movements}",
                 "current_requirement": self._get_current_requirement(user_state)
             },
             "current_state": {
