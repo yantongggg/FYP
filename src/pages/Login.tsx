@@ -41,7 +41,15 @@ interface OTPStep {
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login, loading } = useAuth();
-  
+  const [biometricProgress, setBiometricProgress] = useState({
+    phase: 'ready', // 'ready', 'blinking', 'mouth', 'head', 'complete'
+    blinks: 0,
+    mouth: 0,
+    head: 0,
+    requiredBlinks: 2,
+    requiredMouth: 1,
+    requiredHead: 1
+  });
   // Form state
   const [formData, setFormData] = useState<LoginState>({
     email: '',
@@ -95,6 +103,10 @@ const Login: React.FC = () => {
 
     try {
       setError('');
+      console.log('🔐 LOGIN ATTEMPT:', {
+        email: formData.email,
+        timestamp: new Date().toISOString()
+      });
       
       const response = await fetch('http://localhost:5000/api/login', {
         method: 'POST',
@@ -103,13 +115,29 @@ const Login: React.FC = () => {
       });
 
       const result = await response.json();
+      console.log('🔐 LOGIN RESPONSE:', {
+        status: response.status,
+        result: result,
+        timestamp: new Date().toISOString()
+      });
       
       if (result.success) {
-        // Complete login (no biometric required)
+        // Complete login (only for admin_demo or users without biometric requirements)
+        console.log('✅ LOGIN SUCCESS - No biometric required:', {
+          user_id: result.user_id,
+          email: result.email,
+          role: result.role
+        });
         await login(formData.email, formData.password);
         navigate('/dashboard');
+        
       } else if (result.error === 'BIOMETRIC_REQUIRED') {
         // Move to face verification step
+        console.log('🔐 BIOMETRIC REQUIRED - Moving to face verification:', {
+          user_id: result.user_id,
+          email: result.email,
+          full_name: result.full_name
+        });
         setFaceStep({
           user_id: result.user_id,
           email: result.email,
@@ -117,12 +145,73 @@ const Login: React.FC = () => {
         });
         setCurrentStep('face');
         setError('');
+        
+      } else if (result.error === 'BEHAVIORAL_ENROLLMENT_REQUIRED') {
+        // User needs to complete behavioral enrollment
+        console.log('⚠️ BEHAVIORAL ENROLLMENT REQUIRED:', {
+          user_id: result.user_id,
+          email: result.email,
+          enrollment_status: result.enrollment_status
+        });
+        setError(`${result.message || 'Behavioral pattern enrollment required'} - Redirecting to complete registration...`);
+        setTimeout(() => {
+          console.log('🔀 REDIRECTING to behavioral enrollment');
+          navigate('/register', { 
+            state: { 
+              step: 'behavioral', 
+              user_id: result.user_id,
+              email: result.email,
+              username: result.username 
+            } 
+          });
+        }, 3000);
+        
+      } else if (result.error === 'FACE_ENROLLMENT_REQUIRED') {
+        // User needs to complete face enrollment
+        console.log('⚠️ FACE ENROLLMENT REQUIRED:', {
+          user_id: result.user_id,
+          email: result.email,
+          enrollment_status: result.enrollment_status
+        });
+        setError(`${result.message || 'Face enrollment required'} - Redirecting to complete registration...`);
+        setTimeout(() => {
+          console.log('🔀 REDIRECTING to face enrollment');
+          navigate('/register', { 
+            state: { 
+              step: 'biometric', 
+              user_id: result.user_id,
+              email: result.email,
+              username: result.username 
+            } 
+          });
+        }, 3000);
+        
       } else if (result.error === 'ACCOUNT_LOCKED') {
+        console.log('🔒 ACCOUNT LOCKED:', {
+          email: formData.email,
+          message: result.message,
+          remaining_minutes: result.remaining_minutes
+        });
         setError(`Account locked. ${result.message || 'Please try again later.'}`);
+        
       } else {
+        // Generic error handling
+        console.log('❌ LOGIN FAILED:', {
+          email: formData.email,
+          error: result.error,
+          message: result.message,
+          full_result: result
+        });
         setError(result.error || 'Login failed');
       }
+      
     } catch (error: any) {
+      console.error('❌ NETWORK ERROR during login:', {
+        email: formData.email,
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
       setError('Network error. Please check your connection.');
     }
   };
@@ -135,13 +224,29 @@ const Login: React.FC = () => {
   };
 
   const handleLivenessCapture = (livenessResult: any) => {
-    console.log('Liveness data captured for login:', livenessResult);
+    console.log('🎯 LIVENESS DATA RECEIVED:', livenessResult);
     setLivenessData(livenessResult);
+    
+    // ✅ CRITICAL: Update progress immediately
+    setBiometricProgress(prev => ({
+      ...prev,
+      blinks: livenessResult.blink_count || 0,
+      mouth: livenessResult.mouth_open_count || 0,
+      head: livenessResult.head_movement_count || 0,
+      phase: livenessResult.sequential_state?.current_phase || prev.phase
+    }));
+    
+    // ✅ LOG FOR DEBUGGING
+    console.log('👁️ UI BLINK COUNT UPDATE:', {
+      received: livenessResult.blink_count,
+      setting_to: livenessResult.blink_count || 0
+    });
     
     // Validate liveness requirements
     if (livenessResult?.liveness_validation?.overall_liveness_passed) {
       console.log('✅ Liveness validation passed for login');
-    } else {
+      setBiometricProgress(prev => ({ ...prev, phase: 'complete' }));
+    } else if (livenessResult?.error) {
       setError('Liveness detection failed. Please try again.');
     }
   };
@@ -477,14 +582,112 @@ const Login: React.FC = () => {
 
             {/* Use BiometricCapture component for login */}
             {faceAttempts < 3 && (
-              <BiometricCapture
-                onFaceCapture={handleFaceCapture}
-                onLivenessCapture={handleLivenessCapture}
-                mode="login"
-                userId={faceStep.user_id}
-              />
-            )}
+            <BiometricCapture
+              onFaceCapture={handleFaceCapture}
+              onLivenessCapture={handleLivenessCapture}
+              mode="login"
+              userId={faceStep.user_id}
+              onProgressUpdate={(progress) => {
+                setBiometricProgress(prev => ({
+                  ...prev,
+                  phase: progress.phase as any,
+                  blinks: progress.blinks,
+                  mouth: progress.mouth,
+                  head: progress.head
+                }));
+              }}
+            />
+          )}
+            {/* Enhanced BiometricCapture with progress indicators */}
+{faceAttempts < 3 && (
+  <div className="space-y-4">
+    {/* Clear Progress Header */}
+    <div className="glass-card rounded-lg p-4 border border-cyan-400/30">
+      {/* <h3 className="text-cyan-400 font-bold text-center mb-3">
+        {biometricProgress.phase === 'ready' && '🔄 Initializing Camera...'}
+        {biometricProgress.phase === 'blinking' && '👁️ Please Blink Slowly'}
+        {biometricProgress.phase === 'mouth' && '👄 Open Your Mouth'}
+        {biometricProgress.phase === 'head' && '🗣️ Move Your Head Gently'}
+        {biometricProgress.phase === 'complete' && '✅ Verification Complete!'}
+      </h3> */}
+      
+      {/* Progress Bar */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-xs text-gray-400">
+          <span>Progress</span>
+          <span>{Math.round(((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
+                 (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100)}%</span>
+        </div>
+        <div className="w-full bg-gray-700 rounded-full h-2">
+          <div 
+            className="bg-gradient-to-r from-cyan-400 to-green-400 h-2 rounded-full transition-all duration-300"
+            style={{
+              width: `${((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
+                      (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100}%`
+            }}
+          />
+        </div>
+      </div>
 
+      {/* Step Indicators */}
+      <div className="flex justify-between mt-4 text-xs">
+        <div className={`flex items-center ${biometricProgress.blinks >= biometricProgress.requiredBlinks ? 'text-green-400' : 'text-gray-400'}`}>
+          <span className={`w-2 h-2 rounded-full mr-2 ${biometricProgress.blinks >= biometricProgress.requiredBlinks ? 'bg-green-400' : 'bg-gray-600'}`}></span>
+          Blink ({biometricProgress.blinks}/{biometricProgress.requiredBlinks})
+        </div>
+        <div className={`flex items-center ${biometricProgress.mouth >= biometricProgress.requiredMouth ? 'text-green-400' : 'text-gray-400'}`}>
+          <span className={`w-2 h-2 rounded-full mr-2 ${biometricProgress.mouth >= biometricProgress.requiredMouth ? 'bg-green-400' : 'bg-gray-600'}`}></span>
+          Mouth ({biometricProgress.mouth}/{biometricProgress.requiredMouth})
+        </div>
+        <div className={`flex items-center ${biometricProgress.head >= biometricProgress.requiredHead ? 'text-green-400' : 'text-gray-400'}`}>
+          <span className={`w-2 h-2 rounded-full mr-2 ${biometricProgress.head >= biometricProgress.requiredHead ? 'bg-green-400' : 'bg-gray-600'}`}></span>
+          Head ({biometricProgress.head}/{biometricProgress.requiredHead})
+        </div>
+      </div>
+    </div>
+
+    {/* Current Instruction Card
+    <div className="glass-card rounded-lg p-4 border border-yellow-400/30 bg-yellow-900/10">
+      <div className="text-center">
+        {biometricProgress.phase === 'ready' && (
+          <div>
+            <div className="text-2xl mb-2">📱</div>
+            <p className="text-yellow-400 font-bold">Position your face in the camera</p>
+            <p className="text-gray-400 text-sm">Look directly at the camera and wait for instructions</p>
+          </div>
+        )}
+        {biometricProgress.phase === 'blinking' && (
+          <div>
+            <div className="text-2xl mb-2 animate-pulse">👁️</div>
+            <p className="text-yellow-400 font-bold">Blink {biometricProgress.requiredBlinks} times slowly</p>
+            <p className="text-gray-400 text-sm">Close your eyes completely, then open them</p>
+          </div>
+        )}
+        {biometricProgress.phase === 'mouth' && (
+          <div>
+            <div className="text-2xl mb-2">👄</div>
+            <p className="text-yellow-400 font-bold">Open your mouth wide</p>
+            <p className="text-gray-400 text-sm">Open and close your mouth clearly</p>
+          </div>
+        )}
+        {biometricProgress.phase === 'head' && (
+          <div>
+            <div className="text-2xl mb-2">🗣️</div>
+            <p className="text-yellow-400 font-bold">Move your head slowly</p>
+            <p className="text-gray-400 text-sm">Turn your head left and right gently</p>
+          </div>
+        )}
+        {biometricProgress.phase === 'complete' && (
+          <div>
+            <div className="text-2xl mb-2">✅</div>
+            <p className="text-green-400 font-bold">All checks complete!</p>
+            <p className="text-gray-400 text-sm">Processing your verification...</p>
+          </div>
+        )}
+      </div>
+    </div> */}
+  </div>
+)}
             {/* Error Display */}
             {error && (
               <div className="p-3 bg-red-900/20 border border-red-500/30 rounded">

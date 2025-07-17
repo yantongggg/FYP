@@ -530,11 +530,10 @@ def login_user():
             logger.error(f"Password verification error: {pwd_error}")
             return jsonify({'success': False, 'error': 'Authentication error'}), 401
 
-        # ✅ Step 3: Admin bypass biometric
-        if user.get('role') == 'admin':
-            logger.info(f"🔓 Admin {user['email']} bypassing biometric verification for demo")
+        if user.get('email') == 'admin@example.com' and user.get('role') == 'admin':
+            logger.info(f" Admin demo {user['email']} bypassing biometric verification")
             run_async(supabase_manager.log_login_attempt(
-                email, 'password', True, 'admin_bypass', ip_address
+                email, 'password', True, 'admin_demo_bypass', ip_address
             ))
             return jsonify({
                 'success': True,
@@ -542,15 +541,16 @@ def login_user():
                 'email': user['email'],
                 'username': user.get('username', ''),
                 'role': user.get('role', 'admin'),
-                'message': 'Admin login successful without biometric'
+                'message': 'Admin demo login successful without biometric'
             })
 
-        # Step 4: Check if biometric is enrolled
-        if user.get('is_biometric_enrolled'):
-            logger.info(f"🔐 User {user['id']} has biometric enrolled - face verification required")
+        # Step 4: Check enrollment status and enforce biometric verification for ALL other users
+        if user.get('is_fully_enrolled'):
+            # User has completed both face and behavioral enrollment - proceed to biometric verification
+            logger.info(f" User {user['id']} is fully enrolled - face verification required")
             
             run_async(supabase_manager.log_login_attempt(
-                email, 'password', True, None, ip_address
+                email, 'password', True, 'requires_biometric_verification', ip_address
             ))
             
             return jsonify({
@@ -561,25 +561,53 @@ def login_user():
                 'email': user['email'],
                 'message': 'Face verification required'
             }), 200
-
-        # Step 5: Normal user without biometric
-        run_async(supabase_manager.log_login_attempt(
-            email, 'password', True, None, ip_address
-        ))
-
-        return jsonify({
-            'success': True,
-            'user_id': user['id'],
-            'email': user['email'],
-            'username': user.get('username', ''),
-            'role': user.get('role', 'user')
-        })
+            
+        elif user.get('is_face_enrolled'):
+            # User has face enrolled but not fully enrolled (missing behavioral)
+            logger.info(f" User {user['id']} has face but missing behavioral enrollment")
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', True, 'incomplete_behavioral_enrollment', ip_address
+            ))
+            
+            return jsonify({
+                'success': False,
+                'error': 'BEHAVIORAL_ENROLLMENT_REQUIRED',
+                'user_id': user['id'],
+                'email': user['email'],
+                'username': user.get('username', ''),
+                'message': 'Please complete behavioral pattern enrollment to access your account',
+                'enrollment_status': {
+                    'face_enrolled': True,
+                    'behavioral_enrolled': False,
+                    'fully_enrolled': False
+                }
+            }), 200
+            
+        else:
+            # User doesn't have face enrollment - needs complete registration
+            logger.info(f" User {user['id']} needs to complete face enrollment")
+            run_async(supabase_manager.log_login_attempt(
+                email, 'password', True, 'incomplete_face_enrollment', ip_address
+            ))
+            
+            return jsonify({
+                'success': False,
+                'error': 'FACE_ENROLLMENT_REQUIRED',
+                'user_id': user['id'],
+                'email': user['email'],
+                'username': user.get('username', ''),
+                'message': 'Please complete face enrollment to access your account',
+                'enrollment_status': {
+                    'face_enrolled': False,
+                    'behavioral_enrolled': False,
+                    'fully_enrolled': False
+                }
+            }), 200
 
     except Exception as e:
         logger.error(f"Login error: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'Internal server error'}), 500
-
-
+    
 # ============= OTP FALLBACK ENDPOINTS =============
 
 @app.route('/api/send-login-otp', methods=['POST'])
@@ -1985,8 +2013,8 @@ def sequential_liveness_detect_optimized():
 
         if result['success']:
             # Update session
-            session.last_face_score = result['face_real_score']
-            session.last_enhanced_score = result.get('enhanced_face_score', result['face_real_score'])
+            session.last_face_score = result['liveness_score']
+            session.last_enhanced_score = result.get('enhanced_face_score', result['liveness_score'])
             
             # Check completion
             actions_completed = result.get('actions_completed', {})
@@ -2003,16 +2031,32 @@ def sequential_liveness_detect_optimized():
                 session.completion_time = time.time() - session.start_time
                 logger.info(f"✅ User {user_id} completed all requirements in {session.completion_time:.2f}s")
 
-            # Build response
+            # ✅ FIXED: Forward the complete sequential_state from detector
+            if 'sequential_state' in result:
+                # Use the detector's sequential_state (includes current_phase, progress, etc.)
+                sequential_state = result['sequential_state']
+            else:
+                # Fallback sequential_state
+                sequential_state = {
+                    'current_phase': 'detecting',
+                    'blinks_completed': result['blink_count'] >= session.required_blinks,
+                    'mouth_completed': result['mouth_open_count'] >= session.required_mouth,
+                    'head_completed': result['head_movement_count'] >= session.required_head,
+                    'all_phases_complete': all_met
+                }
+
+            # Build response with proper sequential_state
             response_data = {
                 'success': True,
                 'face_detected': result.get('face_detected', True),
                 'blink_count': min(result['blink_count'], session.required_blinks),
                 'mouth_open_count': min(result['mouth_open_count'], session.required_mouth),
                 'head_movement_count': min(result['head_movement_count'], session.required_head),
-                'face_real_score': result['face_real_score'],
+                'face_real_score': result['liveness_score'],
                 'enhanced_face_score': session.last_enhanced_score,
                 'processing_time': result.get('processing_time', 0),
+                'sequential_state': sequential_state,  # ✅ CRITICAL: Include this!
+                'progress': result.get('progress', {}),  # ✅ Include progress info
                 'liveness_validation': {
                     'overall_liveness_passed': all_met,
                     'step_requirements': step_requirements,
@@ -2021,7 +2065,7 @@ def sequential_liveness_detect_optimized():
                 },
                 'all_completed': session.all_requirements_met
             }
-            
+
             return jsonify(response_data)
         else:
             # Ensure liveness_validation is always present even on failure
@@ -2031,7 +2075,7 @@ def sequential_liveness_detect_optimized():
                 'blink_count': result.get('blink_count', 0),
                 'mouth_open_count': result.get('mouth_open_count', 0),
                 'head_movement_count': result.get('head_movement_count', 0),
-                'face_real_score': result.get('face_real_score', 0),
+                'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': result.get('enhanced_face_score', 0),
                 'liveness_validation': {
                     'overall_liveness_passed': False,
@@ -2334,7 +2378,8 @@ def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: 
             'blinks_met': result['blink_count'] >= 3,
             'mouth_met': result['mouth_open_count'] >= 2,
             'head_met': result['head_movement_count'] >= 2,
-            'score_met': result['face_real_score'] >= 0.2
+            'score_met': result['liveness_score'] >= 0.2
+            # 'score_met': result['face_real_score'] >= 0.2
         }
         all_met = all(step_requirements.values())
 
