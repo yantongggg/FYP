@@ -259,14 +259,8 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
             timestamp: new Date().toISOString()
           });
           
-          // Handle specific error types
-          if (errorData.error === "Static image detected - anti-spoofing failed") {
-            setCameraError("❌ Static image detected! Please use a live camera, not a photo.");
-          } else if (errorData.error === "Unnatural blink pattern detected") {
-            setCameraError("❌ Unnatural blinking detected! Please blink naturally.");
-          } else {
-            setCameraError(`Detection error: ${errorData.error || response.statusText}`);
-          }
+          // Simplified error handling
+          setCameraError(`Detection error: ${errorData.error || response.statusText}`);
           
           return null;
         } catch (parseError) {
