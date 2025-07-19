@@ -25,7 +25,7 @@ const Navbar = () => {
         // Admin - only admin pages
         return [
           { path: '/', label: 'HOME', icon: Terminal },
-          { path: '/admin', label: 'ADMIN_PANEL', icon: Shield },
+          { path: '/admin', label: 'ADMIN PANEL', icon: Shield },
           { path: '/admin/settings', label: 'SETTINGS', icon: Settings },  // ← FIXED PATH
         ];
     } else {
@@ -34,7 +34,7 @@ const Navbar = () => {
         { path: '/', label: 'HOME', icon: Terminal },
         { path: '/home', label: 'DASHBOARD', icon: Activity },
         { path: '/edit-profile', label: 'SETTINGS', icon: Settings },
-        { path: '/my-anomalies', label: 'MY_ANOMALIES', icon: Shield },
+        { path: '/my-anomalies', label: 'ANOMALIES', icon: Shield },
         { path: '/architecture', label: 'ARCHITECTURE', icon: Database },
         { path: '/database', label: 'DATABASE', icon: FileText },
         { path: '/docs', label: 'DOCS', icon: Book },

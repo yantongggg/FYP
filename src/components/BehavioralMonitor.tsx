@@ -95,7 +95,6 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
     return sensitivePages.some(page => currentPath.includes(page));
   }, []);
 
-  // CRITICAL FIX: Enhanced Event Handlers with Proper Capture
   const handleKeyEvent = useCallback((event: KeyboardEvent) => {
     if (!isActive || !isCollecting || !shouldMonitorPage()) return;
 
@@ -223,8 +222,6 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
           deltaY: m.deltaY
         }))
       };
-
-      // CRITICAL: Send to enhanced behavioral check endpoint
       const response = await fetch('http://localhost:5000/api/behavioral-check', {
         method: 'POST',
         headers: {

@@ -437,7 +437,7 @@ const analyzeResults = async () => {
         // Add this button in your controls section
 <button
   onClick={() => {
-    console.log('🧪 MANUAL TEST');
+    console.log('MANUAL TEST');
     console.log('Keystrokes:', keystrokesRef.current.length);
     console.log('Mouse events:', mouseEventsRef.current.length);
     
@@ -453,9 +453,8 @@ const analyzeResults = async () => {
     });
     setLiveKeystrokes(keystrokesRef.current.length);
   }}
-  className="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-4 py-2 rounded"
 >
-  🧪 Manual Test
+  
 </button>
         {/* Status */}
         <div className="flex items-center justify-between mb-6 p-4 bg-black/20 rounded">
@@ -463,7 +462,7 @@ const analyzeResults = async () => {
             <Activity className="h-5 w-5 mr-2 text-cyan-400" />
             <div>
               <span className="text-cyan-400 font-bold text-lg">
-                {isRecording ? '🟢 RECORDING - TYPE NOW!' : isAnalyzing ? '🔄 ANALYZING' : '⏸️ READY'}
+                {isRecording ? 'RECORDING - TYPE NOW!' : isAnalyzing ? 'ANALYZING' : '⏸ READY'}
               </span>
               <div className="text-gray-400 text-sm">
                 {isRecording ? 'Focus the text area and type naturally' : 
@@ -516,7 +515,7 @@ const analyzeResults = async () => {
               <div className="text-2xl font-bold text-blue-400">{liveKeystrokes}</div>
               <div className="text-xs text-gray-400">Live Keystrokes</div>
               <div className="text-xs text-green-400 mt-1">
-                {liveKeystrokes >= 5 ? '✅ Enough data' : `❌ Need ${5 - liveKeystrokes} more`}
+                {liveKeystrokes >= 5 ? ' Enough data' : `Need ${5 - liveKeystrokes} more`}
               </div>
             </div>
             <div className="text-center p-3 bg-black/20 rounded">
@@ -531,7 +530,7 @@ const analyzeResults = async () => {
         {/* Text Area */}
         <div className="mb-6">
           <label className="block text-cyan-400 text-sm font-bold mb-2">
-            📝 Type the following text naturally (click the box first):
+             Type the following text naturally (click the box first):
           </label>
           <div className="p-4 bg-gray-900/50 rounded border border-gray-600 mb-3 text-gray-300 text-sm">
             {TEST_PROMPT}
@@ -540,14 +539,14 @@ const analyzeResults = async () => {
             ref={textAreaRef}
             value={typedText}
             onChange={(e) => setTypedText(e.target.value)}
-            placeholder={isRecording ? "👈 CLICK HERE FIRST, then type the text above..." : "Click START to begin the test..."}
+            placeholder={isRecording ? " CLICK HERE FIRST, then type the text above..." : "Click START to begin the test..."}
             disabled={!isRecording}
             className="terminal-input w-full px-4 py-3 rounded h-32 resize-none text-sm focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
             style={{ fontSize: '14px', lineHeight: '1.4' }}
           />
           {isRecording && (
             <div className="text-xs text-cyan-400 mt-2">
-              💡 TIP: Click inside this text box first, then type naturally. The system will capture your keystrokes and mouse movements.
+              TIP: Click inside this text box first, then type naturally. The system will capture your keystrokes and mouse movements.
             </div>
           )}
         </div>

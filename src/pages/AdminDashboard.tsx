@@ -53,7 +53,6 @@ interface User {
   unresolved_anomalies: number;
 }
 
-// ✅ ADD: EditingUser interface
 interface EditingUser {
   id: string;
   username: string;
@@ -102,6 +101,7 @@ interface DashboardStats {
 interface BehavioralSession {
   id: string;
   user_id: string;
+  user_name: string;
   session_id: string;
   similarity_scores: {
     overall_similarity: number;
@@ -553,7 +553,6 @@ const AdminDashboard: React.FC = () => {
       if (error) throw error;
       
       if (usersData) {
-        // ✅ FIXED: Actually check database for real enrollment status
         const processedUsers = await Promise.all(
           usersData.map(async (user: any) => {
             // Check if user has face biometric data
@@ -1806,11 +1805,14 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Enhanced Anomalies Tab */}
+{/* Enhanced Anomalies Tab - FIXED */}
             {activeTab === 'anomalies' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-cyan-400">Recent Anomalies</h3>
+                  <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
+                    <AlertTriangle className="mr-3 h-6 w-6" />
+                    BEHAVIORAL ANOMALIES ({filteredAnomalies.length})
+                  </h2>
                   <button 
                     onClick={() => exportLogsToPDF('anomaly', anomalies)}
                     className="flex items-center gap-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
@@ -1820,23 +1822,6 @@ const AdminDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Your existing anomaly mapping code */}
-                {anomalies.slice(0, 2).map((anomaly) => (
-                  <div key={anomaly.id} className="flex items-center justify-between p-3 bg-red-900/20 rounded">
-                    <div className="flex items-center">
-                      <AlertTriangle className="h-4 w-4 text-red-400 mr-2" />
-                      <span className="text-red-400 text-sm">
-                        {anomaly.severity} anomaly detected
-                      </span>
-                    </div>
-                    <span className="text-gray-400 text-xs">
-                      {new Date(anomaly.created_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-              <div className="space-y-6">
                 {/* Simple Filters */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                   <div className="relative w-full md:w-64">
@@ -1877,11 +1862,6 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
-                  <AlertTriangle className="mr-3 h-6 w-6" />
-                  🚨 BEHAVIORAL ANOMALIES ({filteredAnomalies.length})
-                </h2>
-
                 {filteredAnomalies.length === 0 ? (
                   <div className="text-center p-8 glass-card rounded-lg">
                     <Shield className="h-12 w-12 text-green-400 mx-auto mb-4" />
@@ -1909,14 +1889,14 @@ const AdminDashboard: React.FC = () => {
                         <tbody>
                           {filteredAnomalies.map((anomaly) => (
                             <tr key={anomaly.id} className="border-b border-green-500/10 hover:bg-green-900/10">
-                            <td className="px-4 py-3">
-                              <div className="text-cyan-400 font-mono text-sm">
-                                {anomaly.users?.username || users.find(u => u.id === anomaly.user_id)?.username || anomaly.user_id.slice(-8) + '...'}
-                              </div>
-                              <div className="text-gray-400 text-xs">
-                                {anomaly.users?.email || users.find(u => u.id === anomaly.user_id)?.email || 'Unknown'}
-                              </div>
-                            </td>
+                              <td className="px-4 py-3">
+                                <div className="text-cyan-400 font-mono text-sm">
+                                  {anomaly.users?.username || users.find(u => u.id === anomaly.user_id)?.username || anomaly.user_id.slice(-8) + '...'}
+                                </div>
+                                <div className="text-gray-400 text-xs">
+                                  {anomaly.users?.email || users.find(u => u.id === anomaly.user_id)?.email || 'Unknown'}
+                                </div>
+                              </td>
                               <td className="px-4 py-3">
                                 <div className="text-white font-bold text-sm">
                                   {anomaly.anomaly_type.replace(/_/g, ' ').toUpperCase()}
@@ -1979,6 +1959,7 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 )}
               </div>
+            )}
             
 
             {/* Enhanced Logins Tab */}

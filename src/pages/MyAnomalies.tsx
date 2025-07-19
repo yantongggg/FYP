@@ -223,7 +223,7 @@ const MyAnomalies = () => {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
         <Activity className="mr-3 h-6 w-6" />
-        RECENT_AUTHENTICATION_ATTEMPTS
+        RECENT AUTHENTICATION ATTEMPTS
       </h2>
 
       {loginLogs.length === 0 ? (
@@ -323,7 +323,7 @@ const MyAnomalies = () => {
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-green-400 mb-4 flex items-center">
         <AlertTriangle className="mr-3 h-6 w-6" />
-        SECURITY_ANOMALIES
+        SECURITY ANOMALIES
       </h2>
 
       {anomalies.length === 0 ? (
@@ -527,8 +527,8 @@ const MyAnomalies = () => {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold text-green-400 mb-2 glitch-text">SECURITY_MONITORING</h1>
-          <p className="text-cyan-400 font-mono">AUTHENTICATION_LOGS // ANOMALY_DETECTION // TRUST_SCORE</p>
+          <h1 className="text-4xl font-bold text-green-400 mb-2 glitch-text">SECURITY MONITORING</h1>
+          <p className="text-cyan-400 font-mono">AUTHENTICATION_LOGS // ANOMALY DETECTION // TRUST SCORE</p>
         </motion.div>
 
         {/* Stats Cards */}
@@ -559,7 +559,7 @@ const MyAnomalies = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-cyan-400 text-sm font-mono">RECENT_LOGINS</p>
+                <p className="text-cyan-400 text-sm font-mono">RECENT LOGINS</p>
                 <p className="text-3xl font-bold text-green-400 neon-glow">{loginLogs.length}</p>
                 <p className="text-green-400 text-sm font-mono">
                   {loginLogs.filter(log => log.success).length} SUCCESSFUL
@@ -634,7 +634,7 @@ const MyAnomalies = () => {
                 }`}
               >
                 <Shield className="h-4 w-4" />
-                <span>TRUST_SCORE</span>
+                <span>TRUST SCORE</span>
               </button>
             </nav>
           </div>

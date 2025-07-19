@@ -326,7 +326,7 @@
           });
           
           if (!anomaliesResponse.ok) {
-            console.warn(`⚠️ FIXED UserHome: Anomalies API failed, trying direct Supabase`);
+            console.warn(`FIXED UserHome: Anomalies API failed, trying direct Supabase`);
             
             // Fallback to direct Supabase query
             const { data: directAnomalies, error } = await supabase
@@ -337,27 +337,27 @@
               .limit(20);
             
             if (error) {
-              console.error('❌ FIXED UserHome: Supabase anomalies query failed:', error);
+              console.error('FIXED UserHome: Supabase anomalies query failed:', error);
               anomaliesData = [];
             } else {
               anomaliesData = directAnomalies || [];
-              console.log(`✅ FIXED UserHome: Loaded ${anomaliesData.length} anomalies via direct Supabase`);
+              console.log(`FIXED UserHome: Loaded ${anomaliesData.length} anomalies via direct Supabase`);
             }
           } else {
             const anomaliesResult = await anomaliesResponse.json();
-            console.log("🚨 FIXED UserHome: Anomalies API response:", anomaliesResult);
+            console.log("FIXED UserHome: Anomalies API response:", anomaliesResult);
             
             if (anomaliesResult.success && Array.isArray(anomaliesResult.anomalies)) {
               anomaliesData = anomaliesResult.anomalies;
-              console.log(`✅ FIXED UserHome: Loaded ${anomaliesData.length} anomalies via API`);
+              console.log(`FIXED UserHome: Loaded ${anomaliesData.length} anomalies via API`);
             } else {
-              console.warn('⚠️ FIXED UserHome: Anomalies API returned non-success result');
+              console.warn('FIXED UserHome: Anomalies API returned non-success result');
               anomaliesData = [];
             }
           }
           
         } catch (anomalyError) {
-          console.error('❌ FIXED UserHome: Error loading anomalies:', anomalyError);
+          console.error('FIXED UserHome: Error loading anomalies:', anomalyError);
           setConnectionStatus('error');
           anomaliesData = [];
         }
@@ -424,7 +424,7 @@
             });
           }
         } catch (statsError) {
-          console.error('❌ FIXED UserHome: Error calculating behavioral stats:', statsError);
+          console.error(' FIXED UserHome: Error calculating behavioral stats:', statsError);
         }
 
         setLoadingStates(prev => ({ ...prev, behavioral: 'loaded' }));
@@ -519,7 +519,7 @@
           table: 'behavioral_sessions',
           filter: `user_id=eq.${userData.uid}`
         }, (payload: any) => {
-          console.log('🔄 FIXED UserHome: Behavioral sessions updated:', payload);
+          console.log('FIXED UserHome: Behavioral sessions updated:', payload);
           loadBehavioralData();
         })
         .on('postgres_changes', {
@@ -528,7 +528,7 @@
           table: 'anomaly_audit',
           filter: `user_id=eq.${userData.uid}`
         }, (payload: any) => {
-          console.log('🚨 FIXED UserHome: Anomalies updated:', payload);
+          console.log('FIXED UserHome: Anomalies updated:', payload);
           loadBehavioralData();
         })
         .on('postgres_changes', {
@@ -663,7 +663,7 @@
           .order('created_at', { ascending: false });
 
         if (behavError) {
-          console.error('❌ FIXED UserHome: Error loading behavioral patterns:', behavError);
+          console.error('FIXED UserHome: Error loading behavioral patterns:', behavError);
         }
 
         // Load eKYC documents  
@@ -702,7 +702,7 @@
     //  re-enrollment handler
     const handleReEnroll = async (type: string) => {
       try {
-        console.log(`🔄 FIXED UserHome: Starting re-enrollment for ${type}`);
+        console.log(`FIXED UserHome: Starting re-enrollment for ${type}`);
         
         if (type === 'face') {
           alert('Face re-enrollment will open biometric capture. This will redirect to the registration page with pre-filled information.');
@@ -722,7 +722,7 @@
       if (refreshing) return;
       
       setRefreshing(true);
-      console.log('🔄 FIXED UserHome:  manual refresh triggered');
+      console.log('FIXED UserHome:  manual refresh triggered');
       
       try {
         await Promise.all([
@@ -1458,7 +1458,37 @@
               <div className="space-y-6">
                 <div className="glass-card rounded-lg p-6">
                   <h3 className="text-lg font-bold text-green-400 mb-4"> Security Overview</h3>
-                  
+                  {/* Add Anomalies Section */}
+      {userAnomalies.length > 0 ? (
+        <div className="mt-6">
+          <h4 className="text-md font-bold text-yellow-400 mb-3">Recent Anomalies</h4>
+          <div className="space-y-3">
+            {userAnomalies.map((anomaly) => (
+              <div key={anomaly.id} className={`p-3 rounded border ${getSeverityColor(anomaly.severity)}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-sm">
+                      {anomaly.anomaly_type.replace(/_/g, ' ').toUpperCase()}
+                    </p>
+                    <p className="text-xs opacity-70">
+                      Score: {(anomaly.anomaly_score * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="text-right text-xs">
+                    <p>{new Date(anomaly.created_at).toLocaleDateString()}</p>
+                    <p>{anomaly.action_taken}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <Shield className="h-12 w-12 text-green-400 mx-auto mb-4" />
+          <p className="text-green-400">No security anomalies detected</p>
+        </div>
+      )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-3 bg-black/20 rounded">
@@ -1508,15 +1538,15 @@
       <div className="glass-card rounded-lg p-6">
         <h3 className="text-green-400 font-bold mb-4 flex items-center">
           <Shield className="mr-2 h-5 w-5" />
-          BIOMETRIC_STATUS
+          BIOMETRIC STATUS
         </h3>
         
         <div className="space-y-3">
           <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
             <div>
-              <p className="text-white font-mono text-sm">FACE_RECOGNITION</p>
+              <p className="text-white font-mono text-sm">FACE RECOGNITION</p>
               <p className="text-gray-400 text-xs">
-                {biometricStats.faceEnrolled ? '✅ Enrolled' : '❌ Not enrolled'}
+                {biometricStats.faceEnrolled ? ' Enrolled' : ' Not enrolled'}
               </p>
             </div>
             <span className="text-green-400 text-sm">ACTIVE</span>
@@ -1524,9 +1554,9 @@
 
           <div className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
             <div>
-              <p className="text-white font-mono text-sm">BEHAVIORAL_PATTERNS</p>
+              <p className="text-white font-mono text-sm">BEHAVIORAL PATTERNS</p>
               <p className="text-gray-400 text-xs">
-                {userBiometricData.behavioralPatterns.length > 0 ? '✅ Enrolled' : '❌ Not enrolled'}
+                {userBiometricData.behavioralPatterns.length > 0 ? ' Enrolled' : ' Not enrolled'}
               </p>
             </div>
             <span className="text-green-400 text-sm">ACTIVE</span>
@@ -1535,7 +1565,7 @@
 
         <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
           <p className="text-yellow-400 text-sm font-mono">
-            ℹ️ BIOMETRIC_RE_ENROLLMENT_REQUIRED?
+            ℹ BIOMETRIC REENROLLMENT REQUIRED?
           </p>
           <p className="text-gray-400 text-xs mt-1">
             Contact administrator for biometric or behavioral pattern updates

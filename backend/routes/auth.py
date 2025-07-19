@@ -36,7 +36,7 @@ def register_user():
             'username': username,
             'password_hash': password_hash,
             'role': 'user',
-            'is_biometric_enrolled': bool(biometric_data),
+            'is_face_enrolled': bool(biometric_data),
             'created_at': datetime.utcnow().isoformat()
         }
         

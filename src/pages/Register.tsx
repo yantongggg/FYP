@@ -1225,7 +1225,7 @@ const Register = () => {
                               </p>
                               {emailVerification.devOTP && (
                                 <p className="text-green-400 text-xs mb-2">
-                                  Dev Mode: {emailVerification.devOTP}
+                                  {/* Dev Mode: {emailVerification.devOTP} */}
                                 </p>
                               )}
                               
@@ -1913,8 +1913,8 @@ const Register = () => {
                               : 'text-red-400'
                           }`}>
                             {biometricData.livenessData.liveness_validation.overall_liveness_passed 
-                              ? '✅ All liveness checks passed' 
-                              : '❌ Liveness verification incomplete'}
+                              ? 'All liveness checks passed' 
+                              : 'Liveness verification incomplete'}
                           </div>
                         </div>
                       )}

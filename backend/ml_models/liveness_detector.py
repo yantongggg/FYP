@@ -31,15 +31,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============= DYNAMIC THRESHOLDS =============
-# Make these easily configurable
 THRESHOLDS = {
-    'EAR_THRESHOLD': 0.2,          # Eyes closed below this (stricter)
-    'MAR_THRESHOLD': 0.6,           # Mouth open above this (stricter)
-    'HEAD_MOVEMENT_THRESHOLD': 8.0, # Head movement threshold (lower = easier)
-    'MIN_BLINKS': 3,                # Required blinks (REAL counting)
-    'MIN_MOUTH_OPENS': 2,           # Required mouth opens (REAL counting)
-    'MIN_HEAD_MOVEMENTS': 1,        # Required head movements (REAL counting)
-    'SCORE_SMOOTHING_WINDOW': 1,    # No smoothing
+    'EAR_THRESHOLD': 0.2,         
+    'MAR_THRESHOLD': 0.6,           
+    'HEAD_MOVEMENT_THRESHOLD': 8.0, 
+    'MIN_BLINKS': 2,               
+    'MIN_MOUTH_OPENS': 1,         
+    'MIN_HEAD_MOVEMENTS': 1,      
+    'SCORE_SMOOTHING_WINDOW': 1,   
     'MOVEMENT_DECAY_RATE': 1.0   ,
     'BLINK_MIN_DURATION': 0.1,
     'BLINK_MAX_DURATION': 5,
@@ -62,7 +61,7 @@ FAS_MODEL = None
 def initialize_models():
     global MTCNN_MODEL, FAS_MODEL
 
-    logger.info("🚀 Starting model initialization...")
+    logger.info(" Starting model initialization...")
 
     # Initialize MTCNN with better error handling
     try:
@@ -72,7 +71,7 @@ def initialize_models():
             min_face_size=40,  # Minimum face size
             thresholds=[0.6, 0.7, 0.7]  # More lenient thresholds
         )
-        logger.info("✅ MTCNN initialized successfully")
+        logger.info(" MTCNN initialized successfully")
         
         # Test MTCNN with a dummy image
         test_img = np.ones((480, 640, 3), dtype=np.uint8) * 128
@@ -80,7 +79,7 @@ def initialize_models():
         logger.info(f"🧪 MTCNN test result: boxes={boxes}, probs={probs}")
         
     except Exception as e:
-        logger.error(f"❌ MTCNN initialization failed: {e}")
+        logger.error(f" MTCNN initialization failed: {e}")
         MTCNN_MODEL = None
 
     # Initialize Anti-spoofing model with better path handling
@@ -223,6 +222,7 @@ class UserState:
 
 
         # Add after existing fields in __init__
+        self.mode = 'registration'  # default mode
         self.required_blinks = THRESHOLDS['MIN_BLINKS']
         self.required_mouth_opens = THRESHOLDS['MIN_MOUTH_OPENS']
         self.required_head_movements = THRESHOLDS['MIN_HEAD_MOVEMENTS']
@@ -230,11 +230,28 @@ class UserState:
         self.multiple_faces_detected = False
         self.no_face_frames = 0
 
-        # Randomize requirements if enabled
+    def set_mode(self, mode):
+        self.mode = mode
+        if mode == 'login':
+            # Login requirements (less strict)
+            self.required_blinks = 2
+            self.required_mouth_opens = 1
+            self.required_head_movements = 1
+        else:
+            # Registration requirements (more strict)
+            self.required_blinks = 3
+            self.required_mouth_opens = 2
+            self.required_head_movements = 2
+        
+        # Randomize requirements if enabled (but respect mode limits)
         if THRESHOLDS['ENABLE_RANDOM_CHALLENGES']:
             import random
-            self.required_blinks = random.randint(THRESHOLDS['RANDOM_BLINKS_MIN'], THRESHOLDS['RANDOM_BLINKS_MAX'])
-            self.required_mouth_opens = random.randint(THRESHOLDS['RANDOM_MOUTH_MIN'], THRESHOLDS['RANDOM_MOUTH_MAX'])
+            if mode == 'login':
+                self.required_blinks = random.randint(2, 3)
+                self.required_mouth_opens = random.randint(1, 2)
+            else:
+                self.required_blinks = random.randint(THRESHOLDS['RANDOM_BLINKS_MIN'], THRESHOLDS['RANDOM_BLINKS_MAX'])
+                self.required_mouth_opens = random.randint(THRESHOLDS['RANDOM_MOUTH_MIN'], THRESHOLDS['RANDOM_MOUTH_MAX'])
             
         # Randomize order if enabled
         if THRESHOLDS['ENABLE_RANDOM_ORDER']:
@@ -291,7 +308,10 @@ class LivenessDetector:
         self.supabase_manager = supabase_manager
         self.user_states = defaultdict(UserState)
 
-    def get_user_state(self, user_id):
+    def get_user_state(self, user_id, mode='registration'):
+        if user_id not in self.user_states:
+            self.user_states[user_id] = UserState()
+        self.user_states[user_id].set_mode(mode)
         return self.user_states[user_id]
 
     def reset_user_counters(self, user_id):
@@ -420,8 +440,7 @@ class LivenessDetector:
         self.eyes_ever_opened = False
         self.mouth_ever_opened = False
 
-    def process_frame_for_user(self, frame, user_id):
-        """REAL MOVEMENT DETECTION with static image prevention"""
+    def process_frame_for_user(self, frame, user_id, mode='registration'):
         
         # Frame validation
         if frame is None or frame.size == 0:
@@ -438,13 +457,11 @@ class LivenessDetector:
         if MTCNN_MODEL is None:
             return self._create_error_response("MTCNN model not initialized")
 
-        user_state = self.get_user_state(user_id)
+        user_state = self.get_user_state(user_id, mode)
         user_state.frames_processed += 1
 
-        # Face detection
         boxes, probs = self._detect_face_with_retries(rgb_frame)
 
-        # Check for no face
         if boxes is None or len(boxes) == 0:
             user_state.no_face_frames += 1
             logger.warning("No face detected")
@@ -478,24 +495,36 @@ class LivenessDetector:
         if len(boxes) > 1:
             user_state.multiple_faces_detected = True
             logger.warning(f"Multiple faces detected: {len(boxes)}")
+            
+            # Reset all counters when multiple faces detected
+            user_state.total_blinks = 0
+            user_state.total_mouth_open = 0
+            user_state.total_head_movements = 0
+            user_state.current_detection_phase = "ready"
+            
             return {
                 "success": False,
                 "face_detected": True,
                 "error": f"Multiple faces detected ({len(boxes)}). Please ensure only one person is in view.",
                 "alert_type": "multiple_faces",
                 "faces_count": len(boxes),
-                "blink_count": int(user_state.total_blinks),
-                "mouth_open_count": int(user_state.total_mouth_open),
-                "head_movement_count": int(user_state.total_head_movements),
+                "blink_count": 0,
+                "mouth_open_count": 0,
+                "head_movement_count": 0,
                 "face_real_score": 0.0,
                 "liveness_passed": False,
                 "liveness_score": 0.0,
                 "sequential_state": {
-                    "current_phase": user_state.current_detection_phase,
+                    "current_phase": "ready",
                     "blinks_completed": False,
                     "mouth_completed": False,
                     "head_completed": False,
-                    "all_phases_complete": False
+                    "all_phases_complete": False,
+                    "requirements": {
+                        "blinks": user_state.required_blinks,
+                        "mouth": user_state.required_mouth_opens,
+                        "head": user_state.required_head_movements
+                    }
                 }
             }
 
@@ -526,41 +555,34 @@ class LivenessDetector:
         if landmarks:
             lmarks = landmarks[0]
             
-            # EAR calculation
             ear = get_eye_aspect_ratio(lmarks)
             if ear is not None:
                 ear_value = float(ear)
                 user_state.current_ear = ear_value
                 user_state.ear_history.append(ear_value)
                 
-                # Check if eyes are open (for static image detection)
-                EAR_OPEN_THRESHOLD = 0.3  # Eyes are open above this
+                EAR_OPEN_THRESHOLD = 0.3  
                 if ear > EAR_OPEN_THRESHOLD:
                     user_state.eyes_ever_opened = True
                 
-                # Blink detection
-                EAR_THRESHOLD = 0.25  # Eyes closed below this
+                EAR_THRESHOLD = 0.25  
                 current_eye_closed = ear <= EAR_THRESHOLD
                 
-                # Process blink only in blinking phase
                 phase = user_state.get_current_phase()
                 if phase == "blinking":
                     self._process_blink_detection(user_state, ear)
             
-            # MAR calculation
             mar = get_mouth_aspect_ratio(lmarks)
             if mar is not None:
                 mar_value = float(mar)
                 user_state.current_mar = mar_value
                 user_state.mar_history.append(mar_value)
                 
-                # Check if mouth ever opens (for static image detection)
                 MAR_THRESHOLD = 0.6
                 current_mouth_open = mar > MAR_THRESHOLD
                 if current_mouth_open:
                     user_state.mouth_ever_opened = True
                 
-                # Process mouth only in mouth phase
                 phase = user_state.get_current_phase()
                 if phase == "mouth":
                     self._process_mouth_detection(user_state, current_mouth_open)
@@ -569,8 +591,9 @@ class LivenessDetector:
             phase = user_state.get_current_phase()
             if phase == "head":
                 head_moved, head_score = self._detect_head_movement(lmarks, user_state)
-                if head_moved:
+                if head_moved and user_state.total_head_movements < user_state.required_head_movements:
                     user_state.total_head_movements += 1
+                    logger.info(f"Head movement detected: {user_state.total_head_movements}/{user_state.required_head_movements}")
 
         # Update detection phase
         self._update_detection_phase(user_state)
@@ -611,12 +634,18 @@ class LivenessDetector:
             "liveness_score": float(liveness_score),
             "processing_time": 0.0,
             "sequential_state": {
-                "current_phase": user_state.current_detection_phase,
-                "blinks_completed": user_state.total_blinks >= THRESHOLDS['MIN_BLINKS'],
-                "mouth_completed": user_state.total_mouth_open >= THRESHOLDS['MIN_MOUTH_OPENS'],
-                "head_completed": user_state.total_head_movements >= THRESHOLDS['MIN_HEAD_MOVEMENTS'],
-                "all_phases_complete": all_requirements_met
-            },
+                    "current_phase": user_state.current_detection_phase,
+                    "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
+                    "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
+                    "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
+                    "all_phases_complete": all_requirements_met,
+                    "challenge_order": user_state.challenge_order,
+                    "requirements": {
+                        "blinks": user_state.required_blinks,
+                        "mouth": user_state.required_mouth_opens,
+                        "head": user_state.required_head_movements
+                    }
+                },
             "progress": {
                 "blinks": f"{user_state.total_blinks}/{THRESHOLDS['MIN_BLINKS']}",
                 "mouth_opens": f"{user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']}", 
@@ -735,13 +764,13 @@ class LivenessDetector:
         ear_thresh = THRESHOLDS['EAR_THRESHOLD']
         is_eye_closed = ear < ear_thresh
 
-        print(f"   👁️ EAR: {ear:.4f}, Threshold: {ear_thresh}, Eyes Closed: {is_eye_closed}")
+        print(f"    EAR: {ear:.4f}, Threshold: {ear_thresh}, Eyes Closed: {is_eye_closed}")
 
         # Eyes just closed
         if is_eye_closed and not user_state.last_eye_state:
             user_state.eye_close_start_time = current_time
             user_state.eye_closed_frames = 1
-            print(f"   👁️ Eyes CLOSED (EAR: {ear:.3f})")
+            print(f"    Eyes CLOSED (EAR: {ear:.3f})")
 
         # Eyes still closed
         elif is_eye_closed and user_state.last_eye_state:
@@ -766,14 +795,14 @@ class LivenessDetector:
 
                         user_state.total_blinks += 1
                         user_state.last_blink_time = current_time
-                        print(f"   ✅ VALID BLINK #{user_state.total_blinks} - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
+                        print(f"    VALID BLINK #{user_state.total_blinks} - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
                     else:
-                        print("   🚫 REJECTED: Blink too soon after previous")
+                        print("    REJECTED: Blink too soon after previous")
                 else:
-                    print(f"   🚫 REJECTED: Invalid blink - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
+                    print(f"    REJECTED: Invalid blink - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
 
             else:
-                print("⚠️ Skipped blink validation - start time was not set")
+                print(" Skipped blink validation - start time was not set")
 
             # Always reset after eyes open
             user_state.eye_closed_frames = 0
@@ -883,15 +912,14 @@ def ensure_json_serializable(obj):
     else:
         return obj
 
-def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
-    """API wrapper that ensures JSON serializable response"""
+def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False, mode: str = 'registration'):
     try:
         if user_id is None:
             user_id = "default_user"
         if reset_counters:
             DETECTOR.reset_user_counters(user_id)
         frame = process_base64_image(face_image_b64)
-        result = DETECTOR.process_frame_for_user(frame, user_id)
+        result = DETECTOR.process_frame_for_user(frame, user_id, mode)
         
         # Ensure all values are JSON serializable
         return ensure_json_serializable(result)

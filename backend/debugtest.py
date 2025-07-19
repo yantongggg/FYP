@@ -77,11 +77,11 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     if ic_result == "030301-08-0532":
-        print("✅ ALL TESTS PASSED! OCR fix is working correctly.")
-        print("✅ IC number: 030301-08-0532 (correct)")
-        print("✅ Gender should be: PEREMPUAN (female, ends in 2)")
+        print("ALL TESTS PASSED! OCR fix is working correctly.")
+        print("IC number: 030301-08-0532 (correct)")
+        print("Gender should be: PEREMPUAN (female, ends in 2)")
     else:
-        print(f"❌ TEST FAILED! Got IC: {ic_result}")
-        print("❌ Expected: 030301-08-0532")
+        print(f"TEST FAILED! Got IC: {ic_result}")
+        print("Expected: 030301-08-0532")
     
-    print("\n🚀 Ready to test with your registration system!")
+    print("\ Ready to test with your registration system!")

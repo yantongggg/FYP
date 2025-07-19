@@ -268,7 +268,7 @@ const EditProfile = () => {
           <div className="text-center mb-8">
             <Settings className="h-12 w-12 text-green-400 mx-auto mb-4 neon-glow" />
             <h1 className="text-3xl font-bold text-green-400 mb-2 glitch-text" style={{ fontFamily: 'Orbitron' }}>
-              EDIT_PROFILE
+              EDIT PROFILE
             </h1>
             <p className="text-cyan-400" style={{ fontFamily: 'IBM Plex Mono' }}>
               Update your profile information and security settings
@@ -393,12 +393,12 @@ const EditProfile = () => {
               </div> */}
 
               <div className="border-t border-green-500/30 pt-6">
-                <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE_PASSWORD</h3>
+                <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE PASSWORD</h3>
                 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                      CURRENT_PASSWORD
+                      CURRENT PASSWORD
                     </label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
@@ -422,7 +422,7 @@ const EditProfile = () => {
 
                   <div>
                     <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                      NEW_PASSWORD
+                      NEW PASSWORD
                     </label>
                     <div className="relative">
                       <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
@@ -446,7 +446,7 @@ const EditProfile = () => {
 
                   <div>
                     <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                      CONFIRM_NEW_PASSWORD
+                      CONFIRM NEW PASSWORD
                     </label>
                     <div className="relative">
                       <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
@@ -476,7 +476,7 @@ const EditProfile = () => {
                 ) : (
                   <div className="flex items-center justify-center">
                     <Save className="h-5 w-5 mr-2" />
-                    UPDATE_PROFILE
+                    UPDATE PROFILE
                   </div>
                 )}
               </button>
@@ -488,12 +488,12 @@ const EditProfile = () => {
             <div className="space-y-6">
               <h2 className="text-xl font-bold text-green-400 mb-6 flex items-center">
                 <Camera className="mr-3 h-6 w-6" />
-                BIOMETRIC_SETTINGS
+                BIOMETRIC SETTINGS
               </h2>
 
               <div className="p-4 bg-yellow-900/30 border border-yellow-500/30 rounded-lg mb-6">
                 <p className="text-yellow-400 font-mono text-sm mb-2">
-                  ⚠️ SECURITY_NOTICE
+                  SECURITY NOTICE
                 </p>
                 <p className="text-gray-300 font-mono text-sm">
                   Biometric re-enrollment requires administrator approval for security reasons.
@@ -509,7 +509,7 @@ const EditProfile = () => {
                         BIOMETRIC ENROLLMENT
                       </h3>
                       <p className="text-gray-400 text-sm">
-                        ✅ Enrolled and Active
+                        Enrolled and Active
                       </p>
                     </div>
                     <div className="text-green-400 font-mono text-sm">
@@ -525,7 +525,7 @@ const EditProfile = () => {
                         KEYSTROKE_DYNAMICS
                       </h3>
                       <p className="text-gray-400 text-sm">
-                        ✅ Enrolled and Active
+                        Enrolled and Active
                       </p>
                     </div>
                     <div className="text-green-400 font-mono text-sm">
@@ -541,7 +541,7 @@ const EditProfile = () => {
                         SCROLL_BEHAVIOR
                       </h3>
                       <p className="text-gray-400 text-sm">
-                        ✅ Enrolled and Active
+                        Enrolled and Active
                       </p>
                     </div>
                     <div className="text-green-400 font-mono text-sm">
@@ -558,12 +558,12 @@ const EditProfile = () => {
             <div className="space-y-6">
               <h2 className="text-xl font-bold text-green-400 mb-6 flex items-center">
                 <FileText className="mr-3 h-6 w-6" />
-                eKYC_DOCUMENT_VERIFICATION
+                eKYC DOCUMENT VERIFICATION
               </h2>
 
               <div className="p-4 bg-green-900/30 border border-green-500/30 rounded-lg">
                 <p className="text-green-400 font-mono text-sm mb-2">
-                  ✅ Your eKYC documents have been submitted successfully.
+                  Your eKYC documents have been submitted successfully.
                 </p>
                 <p className="text-gray-400 font-mono text-sm">
                   eKYC documents are securely stored and cannot be re-uploaded.

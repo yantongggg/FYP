@@ -61,7 +61,7 @@ class MockQueryBuilder {
 
   private getMockData() {
     switch(this.tableName){
-      case 'users': return [{id:'mock-1', email:'demo@example.com', username:'demo', role:'user', status:'active', is_biometric_enrolled:true, trust_score:90, created_at:new Date().toISOString()}]
+      case 'users': return [{id:'mock-1', email:'demo@example.com', username:'demo', role:'user', status:'active', is_face_enrolled:true, trust_score:90, created_at:new Date().toISOString()}]
       case 'biometric_profiles': return [{id:'bio-1', user_id:'mock-1', face_template_hash:'hash', enrollment_quality:0.9}]
       default: return []
     }
@@ -116,7 +116,7 @@ export interface User {
   email:string
   role:'user'|'admin'
   status:'active'|'suspended'
-  is_biometric_enrolled:boolean
+  is_face_enrolled:boolean
   trust_score:number
   created_at:string
 }

@@ -176,17 +176,14 @@ class MyKadOCR:
             return None
 
     def validate_mykad_authenticity(self, text: str) -> Dict:
-        """FIXED: Enhanced authenticity validation with better scoring"""
         try:
             text_upper = text.upper()
             
-            # Find keywords
             found_keywords = []
             for keyword in self.mykad_keywords:
                 if keyword in text_upper:
                     found_keywords.append(keyword)
             
-            # Calculate individual scores
             keyword_score = len(found_keywords) / len(self.mykad_keywords)
             has_ic_format = bool(re.search(r'\d{6}[-:\s]?\d{2}[-:\s]?\d{4}', text))
             has_gender = any(gender in text_upper for gender in ['LELAKI', 'PEREMPUAN', 'PEREM', 'LAKI'])
@@ -194,7 +191,6 @@ class MyKadOCR:
             has_malaysia = 'MALAYSIA' in text_upper
             has_warganegara = 'WARGANEGARA' in text_upper
             
-            # FIXED: Better scoring algorithm
             authenticity_score = (
                 keyword_score * 0.3 +           # 30% from keywords
                 (1.0 if has_ic_format else 0.0) * 0.25 +  # 25% from IC format
@@ -233,12 +229,9 @@ class MyKadOCR:
             }
 
     def process_mykad_front(self, image: np.ndarray) -> Dict:
-        """UPDATED: Process MyKad front with all fixes"""
         try:
-            # Preprocess image
             processed_image = self.preprocess_image(image)
             
-            # Try multiple OCR configurations
             text = None
             ic_number = None
             best_confidence = 0
@@ -249,7 +242,6 @@ class MyKadOCR:
                     current_text = pytesseract.image_to_string(processed_image, config=config)
                     logger.info(f"OCR with config {config}: {repr(current_text[:100])}...")
                     
-                    # Try to extract IC with FIXED method
                     current_ic = self.extract_ic_number(current_text)
                     
                     if current_ic:

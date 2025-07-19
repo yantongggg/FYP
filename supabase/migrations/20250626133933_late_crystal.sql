@@ -9,7 +9,7 @@
       - `password_hash` (text)
       - `created_at` (timestamp)
       - `role` (text, default 'user')
-      - `is_biometric_enrolled` (boolean, default false)
+      - `is_face_enrolled` (boolean, default false)
     
     - `biometric_data`
       - `id` (uuid, primary key)
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash text NOT NULL,
   created_at timestamptz DEFAULT now(),
   role text DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-  is_biometric_enrolled boolean DEFAULT false,
+  is_face_enrolled boolean DEFAULT false,
   last_login timestamptz,
   trust_score decimal(5,2) DEFAULT 100.00,
   status text DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending'))

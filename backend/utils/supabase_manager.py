@@ -575,7 +575,7 @@ class SupabaseManager:
             
             if existing_user.data:
                 user_id = existing_user.data[0]['id']
-                logger.info(f"✅ User already exists, using existing ID: {user_id}")
+                logger.info(f" User already exists, using existing ID: {user_id}")
                 
                 return {
                     "success": True,
@@ -599,7 +599,7 @@ class SupabaseManager:
                 "username": user_data['username'],
                 "email": user_data['email'],
                 "password_hash": password_hash,
-                "is_biometric_enrolled": False,
+                "is_face_enrolled": False,
                 "trust_score": 85,
                 "status": "active",
                 "failed_login_attempts": 0,
@@ -918,7 +918,7 @@ class SupabaseManager:
                 
                 # Update user record
                 self.client.table("users").update({
-                    "is_biometric_enrolled": True,
+                    "is_face_enrolled": True,
                     "last_face_enrolled_at": datetime.now().isoformat()
                 }).eq("id", user_id).execute()
                 

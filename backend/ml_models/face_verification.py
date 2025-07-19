@@ -15,7 +15,7 @@ class FaceVerificationModel:
     
     def __init__(self):
         # Very relaxed thresholds for easy authentication
-        self.LOGIN_THRESHOLD = 0.35  # Very relaxed threshold
+        self.LOGIN_THRESHOLD = 0.55  # Very relaxed threshold
         
     def extract_face_encoding_from_base64(self, base64_image):
         """
@@ -117,12 +117,12 @@ class FaceVerificationModel:
             # Determine if faces match using relaxed threshold
             is_match = similarity >= self.LOGIN_THRESHOLD
             
-            logger.info(f"📊 Face comparison result: similarity={similarity:.3f}, threshold={self.LOGIN_THRESHOLD}, match={is_match}")
+            logger.info(f"Face comparison result: similarity={similarity:.3f}, threshold={self.LOGIN_THRESHOLD}, match={is_match}")
             
             return float(similarity), is_match
             
         except Exception as e:
-            logger.error(f"❌ Error in face comparison: {str(e)}", exc_info=True)
+            logger.error(f"Error in face comparison: {str(e)}", exc_info=True)
             return 0.0, False
     
     def verify_for_login(self, current_face_base64, stored_embedding):

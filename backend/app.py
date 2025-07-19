@@ -67,9 +67,9 @@ except ImportError:
 
 try:
     face_verifier = FaceVerificationModel()
-    logger.info("✅ Face verification model initialized")
+    logger.info("Face verification model initialized")
 except Exception as e:
-    logger.error(f"⚠️ Could not initialize face verification model: {e}")
+    logger.error(f"Could not initialize face verification model: {e}")
     face_verifier = None
 
 # Flask App with CORS
@@ -77,8 +77,6 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/api/*": {
         "origins": [
-            "http://localhost:3000", "http://127.0.0.1:3000", 
-            "http://localhost:3001", "http://127.0.0.1:3001",
             "http://localhost:5173", "http://127.0.0.1:5173"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -92,6 +90,7 @@ CORS(app, resources={
         "max_age": 86400
     }
 })
+
 
 GLOBAL_MONITORING_STATE = {
     'active_users': {},
@@ -191,7 +190,7 @@ def handle_preflight():
 # ============= REAL-TIME MONITORING FUNCTIONS =============
 
 def update_global_monitoring_state(user_id: str, behavioral_data: dict, anomaly_detected: bool = False):
-    """✅ FIXED: Update global monitoring state for real-time updates"""
+  
     with MONITORING_LOCK:
         current_time = datetime.now()
         
@@ -226,7 +225,6 @@ def update_global_monitoring_state(user_id: str, behavioral_data: dict, anomaly_
 @app.route('/api/monitoring/status', methods=['GET'])
 @cross_origin()
 def get_monitoring_status():
-    """✅ FIXED: Get real-time monitoring status for UI updates"""
     try:
         with MONITORING_LOCK:
             # Clean up old entries (older than 5 minutes)
@@ -253,7 +251,7 @@ def get_monitoring_status():
             })
             
     except Exception as e:
-        logger.error(f"❌ Error getting monitoring status: {e}")
+        logger.error(f"Error getting monitoring status: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -262,7 +260,6 @@ def get_monitoring_status():
 @app.route('/api/monitoring/user/<user_id>', methods=['GET'])
 @cross_origin()
 def get_user_monitoring_status(user_id):
-    """✅ FIXED: Get specific user's behavioral monitoring status"""
     try:
         with MONITORING_LOCK:
             user_data = GLOBAL_MONITORING_STATE['active_users'].get(user_id)
@@ -287,7 +284,7 @@ def get_user_monitoring_status(user_id):
                 })
                 
     except Exception as e:
-        logger.error(f"❌ Error getting user monitoring status: {e}")
+        logger.error(f" Error getting user monitoring status: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -331,7 +328,7 @@ def check_user():
                 'error': 'Username or email is required'
             }), 400
         
-        logger.info(f"🔍 Checking if user exists: username='{username}', email='{email}'")
+        logger.info(f"Checking if user exists: username='{username}', email='{email}'")
         
         if not supabase_manager.client:
             return jsonify({
@@ -349,7 +346,7 @@ def check_user():
         
         # Query database for existing user
         user_result = supabase_manager.client.table("users") \
-            .select("id, username, email, status, is_biometric_enrolled, created_at") \
+            .select("id, username, email, status, is_face_enrolled, created_at") \
             .or_("|".join(query_conditions)) \
             .execute()
         
@@ -362,7 +359,7 @@ def check_user():
             if existing_user['email'] == email:
                 matched_fields.append('email')
             
-            logger.info(f"✅ User found: {existing_user['id']} (matched: {', '.join(matched_fields)})")
+            logger.info(f"User found: {existing_user['id']} (matched: {', '.join(matched_fields)})")
             
             return jsonify({
                 'success': True,
@@ -372,14 +369,14 @@ def check_user():
                     'username': existing_user['username'],
                     'email': existing_user['email'],
                     'status': existing_user['status'],
-                    'is_biometric_enrolled': existing_user['is_biometric_enrolled'],
+                    'is_face_enrolled': existing_user['is_face_enrolled'],
                     'created_at': existing_user['created_at']
                 },
                 'matched_fields': matched_fields,
                 'message': f"User exists (matched: {', '.join(matched_fields)})"
             })
         else:
-            logger.info(f"✅ No existing user found for username='{username}', email='{email}'")
+            logger.info(f"No existing user found for username='{username}', email='{email}'")
             return jsonify({
                 'success': True,
                 'exists': False,
@@ -398,7 +395,7 @@ def register():
     """Complete registration endpoint - Orchestrates all 4 steps"""
     try:
         data = request.get_json()
-        logger.info(f"📝 Starting registration for {data.get('email', 'unknown')}")
+        logger.info(f"Starting registration for {data.get('email', 'unknown')}")
         
         # Validate required fields
         required_fields = ['username', 'email', 'password', 'faceData', 'livenessData', 'behavioralData', 'ekycFiles']
@@ -457,7 +454,7 @@ def register():
             return jsonify(ekyc_result), 400
         
         # All steps completed successfully
-        logger.info(f"✅ Registration completed successfully for {user_id}")
+        logger.info(f"Registration completed successfully for {user_id}")
         
         return jsonify({
             'success': True,
@@ -478,12 +475,11 @@ def register():
             'error': str(e)
         }), 500
 
-# ============= ENHANCED LOGIN WITH FACE VERIFICATION =============
+# =============  LOGIN WITH FACE VERIFICATION =============
 
 @app.route('/api/login', methods=['POST'])
 @cross_origin()
 def login_user():
-    """Enhanced login with automatic face verification and OTP fallback"""
     try:
         data = request.get_json()
         email = data.get('email')
@@ -625,7 +621,7 @@ def send_login_otp():
                 'error': 'User ID and email are required'
             }), 400
         
-        logger.info(f"🔐 Sending login fallback OTP to {email}")
+        logger.info(f"Sending login fallback OTP to {email}")
         
         if not supabase_manager.client:
             return jsonify({
@@ -661,7 +657,7 @@ def send_login_otp():
         ))
         
         if otp_result['success']:
-            logger.info(f"✅ Login OTP sent to {email}")
+            logger.info(f"Login OTP sent to {email}")
             return jsonify({
                 'success': True,
                 'message': f'OTP sent to {email}',
@@ -698,7 +694,7 @@ def verify_login_otp():
                 'error': 'User ID, email, and OTP code are required'
             }), 400
         
-        logger.info(f"🔐 Verifying login OTP for {email}")
+        logger.info(f"Verifying login OTP for {email}")
         
         # Verify OTP
         verification_result = run_async(supabase_manager.verify_otp(
@@ -726,7 +722,7 @@ def verify_login_otp():
             
             if user_result.data:
                 user = user_result.data
-                logger.info(f"✅ OTP login successful for {email}")
+                logger.info(f"OTP login successful for {email}")
                 
                 return jsonify({
                     'success': True,
@@ -776,7 +772,7 @@ def send_email_verification():
                 'error': 'Email is required'
             }), 400
         
-        logger.info(f"📧 Sending email verification OTP to {email}")
+        logger.info(f"Sending email verification OTP to {email}")
         
         # Send OTP
         otp_result = run_async(supabase_manager.send_otp_email(
@@ -784,7 +780,7 @@ def send_email_verification():
         ))
         
         if otp_result['success']:
-            logger.info(f"✅ Email verification OTP sent to {email}")
+            logger.info(f"Email verification OTP sent to {email}")
             return jsonify({
                 'success': True,
                 'message': f'Verification code sent to {email}',
@@ -820,7 +816,7 @@ def verify_email_otp():
                 'error': 'Email and OTP code are required'
             }), 400
         
-        logger.info(f"📧 Verifying email OTP for {email}")
+        logger.info(f"Verifying email OTP for {email}")
         
         # Verify OTP
         verification_result = run_async(supabase_manager.verify_otp(
@@ -828,7 +824,7 @@ def verify_email_otp():
         ))
         
         if verification_result['success']:
-            logger.info(f"✅ Email verification successful for {email}")
+            logger.info(f"Email verification successful for {email}")
             
             return jsonify({
                 'success': True,
@@ -1048,6 +1044,51 @@ def admin_get_users():
         logger.error(f"Admin users endpoint error: {e}")
         return jsonify({'success': False, 'error': 'Failed to load users'}), 500
 
+
+@app.route('/api/admin/ekyc', methods=['GET'])
+@cross_origin()
+def admin_get_ekyc():
+    try:
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+        
+        result = supabase_manager.client.table("ekyc_documents") \
+            .select("*, users(username, email)") \
+            .order("created_at", desc=True) \
+            .limit(100) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'documents': result.data or []
+        })
+        
+    except Exception as e:
+        logger.error(f"Admin eKYC endpoint error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load eKYC data'}), 500
+
+@app.route('/api/admin/logins', methods=['GET'])
+@cross_origin()
+def admin_get_logins():
+    try:
+        if not supabase_manager.client:
+            return jsonify({'success': False, 'error': 'Database not available'}), 500
+        
+        result = supabase_manager.client.table("login_audit") \
+            .select("*, users(username, email)") \
+            .order("event_ts", desc=True) \
+            .limit(200) \
+            .execute()
+        
+        return jsonify({
+            'success': True,
+            'logins': result.data or []
+        })
+        
+    except Exception as e:
+        logger.error(f"Admin logins endpoint error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to load login data'}), 500
+    
 @app.route('/api/admin/update-user', methods=['POST'])
 @cross_origin()
 def admin_update_user():
@@ -1148,7 +1189,6 @@ def admin_toggle_user_status():
 @app.route('/api/behavioral-monitor', methods=['POST'])
 @cross_origin()
 def continuous_behavioral_monitor_fixed():
-    """✅ FIXED: Continuous behavioral monitoring with real-time updates"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
@@ -1158,14 +1198,12 @@ def continuous_behavioral_monitor_fixed():
         if not user_id or not behavioral_data:
             return jsonify({'success': False, 'error': 'Missing data'}), 400
         
-        logger.info(f"🔍 FIXED: Continuous monitoring for user {user_id} on {page_context}")
+        logger.info(f" FIXED: Continuous monitoring for user {user_id} on {page_context}")
         
         keystrokes = behavioral_data.get('keystrokes', [])
         mouse_movements = behavioral_data.get('mouseMovements', [])
         
-        # ✅ FIXED: More lenient data requirements for continuous monitoring
         if len(keystrokes) < 3:
-            # Still update monitoring state even with insufficient data
             update_global_monitoring_state(user_id, {
                 'similarity_score': 0.8,
                 'keystroke_count': len(keystrokes),
@@ -1182,7 +1220,6 @@ def continuous_behavioral_monitor_fixed():
                 'monitoring_updated': True
             })
         
-        # ✅ FIXED: Calculate features with error handling
         try:
             current_features = calculate_simple_behavioral_features(keystrokes, mouse_movements)
         except Exception as e:
@@ -1197,7 +1234,6 @@ def continuous_behavioral_monitor_fixed():
         # Calculate similarity with stored pattern
         similarity_score = calculate_basic_similarity(current_features, user_id)
         
-        # ✅ FIXED: RELAXED thresholds for continuous monitoring
         AUTO_LOCK_THRESHOLD = 0.15   # Only auto-lock if extremely different
         ANOMALY_THRESHOLD = 0.25     # Flag anomaly if quite different
         
@@ -1207,14 +1243,27 @@ def continuous_behavioral_monitor_fixed():
         if is_critical:
             action_taken = 'auto_lock'
             severity = 'critical'
+            
+            # Actually lock the user
+            if supabase_manager.client:
+                try:
+                    lock_result = supabase_manager.client.table("users") \
+                        .update({
+                            "is_active": False,
+                            "status": "suspended",
+                            "suspension_reason": f"Critical behavioral anomaly detected - similarity: {similarity_score:.3f}"
+                        }) \
+                        .eq("id", user_id) \
+                        .execute()
+                    logger.warning(f"User {user_id} auto-locked due to critical behavioral anomaly")
+                except Exception as e:
+                    logger.error(f"Failed to auto-lock user {user_id}: {e}")
         elif is_anomaly:
             action_taken = 'warning'
             severity = 'medium'
         else:
             action_taken = 'none'
             severity = 'low'
-        
-        # ✅ FIXED: Update global monitoring state for real-time updates
         update_global_monitoring_state(user_id, {
             'similarity_score': similarity_score,
             'keystroke_count': len(keystrokes),
@@ -1224,7 +1273,6 @@ def continuous_behavioral_monitor_fixed():
             'action_taken': action_taken
         }, anomaly_detected=is_anomaly)
         
-        # ✅ FIXED: Save session data with guaranteed persistence
         if supabase_manager.client:
             try:
                 session_data = {
@@ -1249,9 +1297,8 @@ def continuous_behavioral_monitor_fixed():
                 executor.submit(save_monitoring_session, session_data)
                 
             except Exception as e:
-                logger.error(f"❌ Error saving monitoring session: {e}")
+                logger.error(f"Error saving monitoring session: {e}")
         
-        # ✅ FIXED: Save anomaly if detected
         if is_anomaly:
             try:
                 anomaly_data = {
@@ -1274,9 +1321,9 @@ def continuous_behavioral_monitor_fixed():
                 executor.submit(save_monitoring_anomaly, anomaly_data)
                 
             except Exception as e:
-                logger.error(f"❌ Error saving monitoring anomaly: {e}")
+                logger.error(f"Error saving monitoring anomaly: {e}")
         
-        logger.info(f"✅ FIXED: Continuous monitoring completed - similarity: {similarity_score:.3f}, anomaly: {is_anomaly}")
+        logger.info(f" FIXED: Continuous monitoring completed - similarity: {similarity_score:.3f}, anomaly: {is_anomaly}")
         
         return jsonify({
             'success': True,
@@ -1293,7 +1340,7 @@ def continuous_behavioral_monitor_fixed():
         })
         
     except Exception as e:
-        logger.error(f"❌ FIXED: Continuous monitoring error: {e}", exc_info=True)
+        logger.error(f" FIXED: Continuous monitoring error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e),
@@ -2029,7 +2076,7 @@ def sequential_liveness_detect_optimized():
             if all_met and not session.all_requirements_met:
                 session.all_requirements_met = True
                 session.completion_time = time.time() - session.start_time
-                logger.info(f"✅ User {user_id} completed all requirements in {session.completion_time:.2f}s")
+                logger.info(f"User {user_id} completed all requirements in {session.completion_time:.2f}s")
 
             # ✅ FIXED: Forward the complete sequential_state from detector
             if 'sequential_state' in result:
@@ -2097,7 +2144,6 @@ def sequential_liveness_detect_optimized():
 @app.route('/api/behavioral-check', methods=['POST'])
 @cross_origin()
 def enhanced_behavioral_check_fixed():
-    """✅ FIXED: Enhanced behavioral check with proper error handling"""
     try:
         data = request.get_json()
         user_id = data.get('user_id')
@@ -2414,7 +2460,6 @@ def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: 
 @app.route('/api/biometric-login-verify', methods=['POST', 'OPTIONS'])
 @cross_origin()
 def biometric_login_verify():
-    """FIXED: Enhanced biometric login verification with proper error handling"""
     try:
         if request.method == 'OPTIONS':
             response = make_response()
@@ -2435,7 +2480,7 @@ def biometric_login_verify():
         if not user_id or not face_image_b64:
             return jsonify({'success': False, 'error': 'User ID and face image are required'}), 400
 
-        logger.info(f"🔍 Starting biometric login verification for user: {user_id}")
+        logger.info(f" Starting biometric login verification for user: {user_id}")
 
         if not supabase_manager.client:
             return jsonify({'success': False, 'error': 'Database not available'}), 500

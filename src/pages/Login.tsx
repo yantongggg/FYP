@@ -615,15 +615,15 @@ const Login: React.FC = () => {
       <div className="space-y-2">
         <div className="flex justify-between text-xs text-gray-400">
           <span>Progress</span>
-          <span>{Math.round(((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
-                 (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100)}%</span>
+          <span>{Math.min(100, Math.round(((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
+            (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100))}%</span>
         </div>
         <div className="w-full bg-gray-700 rounded-full h-2">
           <div 
             className="bg-gradient-to-r from-cyan-400 to-green-400 h-2 rounded-full transition-all duration-300"
             style={{
-              width: `${((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
-                      (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100}%`
+              width: `${Math.min(100, ((biometricProgress.blinks + biometricProgress.mouth + biometricProgress.head) / 
+                (biometricProgress.requiredBlinks + biometricProgress.requiredMouth + biometricProgress.requiredHead)) * 100)}%`
             }}
           />
         </div>
@@ -788,7 +788,7 @@ const Login: React.FC = () => {
               <p className="text-cyan-400 font-bold">{otpStep.email}</p>
               {otpStep.dev_otp && (
                 <p className="text-green-400 text-xs mt-2">
-                  Dev Mode: Use code {otpStep.dev_otp}
+                  {/* Dev Mode: Use code {otpStep.dev_otp} */}
                 </p>
               )}
             </div>
