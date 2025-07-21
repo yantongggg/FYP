@@ -628,7 +628,10 @@ const AdminDashboard: React.FC = () => {
       // Calculate comprehensive stats
       const totalUsers = usersData.length;
       const activeUsers = usersData.filter(u => u.status === 'active').length;
-      const enrolledUsers = usersData.filter(u => u.is_biometric_enrolled).length;
+      
+      // 🔧 FIX: Use the correct property name 'biometric_enrolled' instead of 'is_biometric_enrolled'
+      const enrolledUsers = usersData.filter(u => u.biometric_enrolled).length;
+      
       const suspendedUsers = usersData.filter(u => u.status === 'suspended').length;
 
       // Biometric stats
@@ -636,7 +639,6 @@ const AdminDashboard: React.FC = () => {
       const averageQualityScore = biometricData && biometricData.length > 0 
         ? biometricData.reduce((sum: number, b: { quality_score?: number }) => sum + (b.quality_score || 0), 0) / biometricData.length 
         : 0;
-
 
       // Login stats
       const totalLoginAttempts = loginLogs.length || 0;  // Use loginLogs state instead
@@ -654,12 +656,10 @@ const AdminDashboard: React.FC = () => {
       const criticalAnomalies = anomalyData?.filter((a: { severity: string }) => a.severity === 'critical').length || 0;
       const autoLockEvents = anomalyData?.filter((a: { action_taken: string }) => a.action_taken === 'auto_lock').length || 0;
 
-      
       // Last 24 hours anomalies
       const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const last24hAnomalies = anomalyData?.filter((a: { created_at: string }) => new Date(a.created_at) > last24h).length || 0;
 
-      
       const anomalyRate = totalUsers > 0 ? (anomalyCount / totalUsers) * 100 : 0;
 
       // Overall success rate (combined behavioral + login)
@@ -668,7 +668,7 @@ const AdminDashboard: React.FC = () => {
       const calculatedStats: DashboardStats = {
         totalUsers,
         activeUsers,
-        enrolledUsers,
+        enrolledUsers, // 🔧 This will now show the correct count
         suspendedUsers,
         totalBiometricCaptures,
         averageQualityScore,
@@ -686,6 +686,7 @@ const AdminDashboard: React.FC = () => {
       
       setStats(calculatedStats);
       console.log('✅ Enhanced stats calculated:', calculatedStats);
+      console.log('🔍 Debug - enrolledUsers:', enrolledUsers, 'totalUsers:', totalUsers);
       
     } catch (error) {
       console.error('Error calculating enhanced stats:', error);

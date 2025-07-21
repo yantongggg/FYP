@@ -405,7 +405,7 @@ const Login: React.FC = () => {
             setError('');
           }, 3000);
         } else {
-          setError(`Invalid code (${newAttempts}/5 attempts). ${result.error || 'Please try again.'}`);
+          setError(`Invalid code (${newAttempts}/5 attempts). 'Please try again.`);
         }
       }
     } catch (error) {

@@ -9,18 +9,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FaceVerificationModel:
-    """
-    FIXED: Simplified face verification model with proper data type handling
-    """
     
     def __init__(self):
         # Very relaxed thresholds for easy authentication
         self.LOGIN_THRESHOLD = 0.55  # Very relaxed threshold
         
     def extract_face_encoding_from_base64(self, base64_image):
-        """
-        FIXED: Extract face encoding from base64 image string
-        """
         try:
             # Clean base64 string
             if ',' in base64_image:
@@ -69,18 +63,8 @@ class FaceVerificationModel:
             return None, str(e)
     
     def compare_faces(self, stored_embedding, current_face_base64):
-        """
-        FIXED: Compare stored embedding with current face image
-        
-        Args:
-            stored_embedding: List of floats (face encoding from database)
-            current_face_base64: Base64 string of current face image
-            
-        Returns:
-            tuple: (similarity_score, is_match)
-        """
         try:
-            logger.info("🔍 Starting face comparison...")
+            logger.info("Starting face comparison...")
             
             # Validate stored embedding
             if not stored_embedding or not isinstance(stored_embedding, (list, np.ndarray)):

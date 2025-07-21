@@ -50,7 +50,6 @@ THRESHOLDS = {
     'RANDOM_MOUTH_MAX': 3,
     'ENABLE_RANDOM_CHALLENGES': True,
     'ENABLE_RANDOM_ORDER': True
-    
 }
 
 # Initialize models
@@ -62,21 +61,18 @@ def initialize_models():
     global MTCNN_MODEL, FAS_MODEL
 
     logger.info(" Starting model initialization...")
-
-    # Initialize MTCNN with better error handling
     try:
         MTCNN_MODEL = MTCNN(
             keep_all=False, 
             device=DEVICE,
-            min_face_size=40,  # Minimum face size
-            thresholds=[0.6, 0.7, 0.7]  # More lenient thresholds
+            min_face_size=40, 
+            thresholds=[0.6, 0.7, 0.7] 
         )
         logger.info(" MTCNN initialized successfully")
         
-        # Test MTCNN with a dummy image
         test_img = np.ones((480, 640, 3), dtype=np.uint8) * 128
         boxes, probs = MTCNN_MODEL.detect(test_img)
-        logger.info(f"🧪 MTCNN test result: boxes={boxes}, probs={probs}")
+        logger.info(f" MTCNN test result: boxes={boxes}, probs={probs}")
         
     except Exception as e:
         logger.error(f" MTCNN initialization failed: {e}")
@@ -462,6 +458,12 @@ class LivenessDetector:
 
         boxes, probs = self._detect_face_with_retries(rgb_frame)
 
+        all_requirements_met = (
+            user_state.total_blinks >= user_state.required_blinks and
+            user_state.total_mouth_open >= user_state.required_mouth_opens and
+            user_state.total_head_movements >= user_state.required_head_movements
+        )
+
         if boxes is None or len(boxes) == 0:
             user_state.no_face_frames += 1
             logger.warning("No face detected")
@@ -481,7 +483,7 @@ class LivenessDetector:
                     "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
                     "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
                     "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
-                    "all_phases_complete": all_requirements_met,
+                    "all_phases_complete": all_requirements_met,  # ✅ NOW DEFINED
                     "challenge_order": user_state.challenge_order,
                     "requirements": {
                         "blinks": user_state.required_blinks,
@@ -519,7 +521,7 @@ class LivenessDetector:
                     "blinks_completed": False,
                     "mouth_completed": False,
                     "head_completed": False,
-                    "all_phases_complete": False,
+                    "all_phases_complete": False,  
                     "requirements": {
                         "blinks": user_state.required_blinks,
                         "mouth": user_state.required_mouth_opens,
@@ -605,7 +607,7 @@ class LivenessDetector:
                 is_static_image = True
                 logger.warning(f"Static image detected: eyes_opened={user_state.eyes_ever_opened}, mouth_opened={user_state.mouth_ever_opened}")
         
-        # Calculate completion status
+        # 🔧 FIX: Recalculate all_requirements_met with static image check
         all_requirements_met = (
             user_state.total_blinks >= user_state.required_blinks and
             user_state.total_mouth_open >= user_state.required_mouth_opens and
@@ -638,7 +640,7 @@ class LivenessDetector:
                     "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
                     "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
                     "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
-                    "all_phases_complete": all_requirements_met,
+                    "all_phases_complete": all_requirements_met,  # ✅ NOW PROPERLY DEFINED
                     "challenge_order": user_state.challenge_order,
                     "requirements": {
                         "blinks": user_state.required_blinks,
@@ -662,7 +664,7 @@ class LivenessDetector:
                 "static_image_detected": bool(is_static_image)
             }
         }
-
+    
     def _update_detection_phase(self, user_state):
         """Update detection phase based on real progress and random order"""
         # Get current position in challenge order
@@ -756,26 +758,20 @@ class LivenessDetector:
         return None, None
 
     def _process_blink_detection(self, user_state, ear):
-        """ENHANCED: Real blink detection with proper state tracking"""
         if ear is None:
             return
-
         current_time = time.time()
         ear_thresh = THRESHOLDS['EAR_THRESHOLD']
         is_eye_closed = ear < ear_thresh
-
         print(f"    EAR: {ear:.4f}, Threshold: {ear_thresh}, Eyes Closed: {is_eye_closed}")
-
         # Eyes just closed
         if is_eye_closed and not user_state.last_eye_state:
             user_state.eye_close_start_time = current_time
             user_state.eye_closed_frames = 1
             print(f"    Eyes CLOSED (EAR: {ear:.3f})")
-
         # Eyes still closed
         elif is_eye_closed and user_state.last_eye_state:
             user_state.eye_closed_frames += 1
-
         # Eyes just opened
         elif not is_eye_closed and user_state.last_eye_state:
             # Validate only if the start time was set

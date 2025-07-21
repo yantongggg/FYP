@@ -166,13 +166,12 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       currentSessionMouse: mouseEventsRef.current.length
     }));
 
-    console.log(`🖱️ FIXED Monitor: Mouse event captured: ${eventType} at (${event.clientX}, ${event.clientY})`);
+    console.log(` FIXED Monitor: Mouse event captured: ${eventType} at (${event.clientX}, ${event.clientY})`);
   }, [isActive, isCollecting, shouldMonitorPage]);
 
-  // CRITICAL FIX: Enhanced Behavioral Verification with Proper Error Handling
   const runBehavioralVerification = useCallback(async () => {
     if (!isActive || !userId || !shouldMonitorPage()) {
-      console.log('⏭️ FIXED Monitor: Skipping verification - not active or not on monitored page');
+      console.log('⏭FIXED Monitor: Skipping verification - not active or not on monitored page');
       return;
     }
 
@@ -182,7 +181,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
     // Only check every 2 minutes minimum for continuous monitoring
     const minCheckInterval = triggerInterval * 60 * 1000;
     if (timeSinceLastCheck < minCheckInterval) {
-      console.log(`⏭️ FIXED Monitor: Skipping verification - too soon (${Math.floor(timeSinceLastCheck / 1000)}s ago)`);
+      console.log(`⏭ FIXED Monitor: Skipping verification - too soon (${Math.floor(timeSinceLastCheck / 1000)}s ago)`);
       return;
     }
 
@@ -191,7 +190,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
 
     // Check if we have enough data
     if (keystrokes.length < minDataThreshold && mouseEvents.length < minDataThreshold) {
-      console.log(`⏭️ FIXED Monitor: Insufficient data for verification - keystrokes: ${keystrokes.length}, mouse: ${mouseEvents.length}, threshold: ${minDataThreshold}`);
+      console.log(`⏭FIXED Monitor: Insufficient data for verification - keystrokes: ${keystrokes.length}, mouse: ${mouseEvents.length}, threshold: ${minDataThreshold}`);
       return;
     }
 
@@ -200,8 +199,8 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       const currentPageContext = getCurrentPageContext();
       const sessionId = `monitor_${userId}_${now}`;
 
-      console.log(`🔍 FIXED Monitor: Running behavioral verification for user ${userId} on ${currentPageContext}`);
-      console.log(`📊 FIXED Monitor: Data: ${keystrokes.length} keystrokes, ${mouseEvents.length} mouse events`);
+      console.log(` FIXED Monitor: Running behavioral verification for user ${userId} on ${currentPageContext}`);
+      console.log(` FIXED Monitor: Data: ${keystrokes.length} keystrokes, ${mouseEvents.length} mouse events`);
 
       const behavioralData = {
         keystrokes: keystrokes.map(k => ({

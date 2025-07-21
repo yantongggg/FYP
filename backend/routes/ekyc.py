@@ -153,9 +153,6 @@ def extract_ic_face_enhanced(image: np.ndarray) -> dict:
 
 @ekyc_bp.route('/ekyc-mykad-verify', methods=['POST'])
 def ekyc_mykad_verify_enhanced():
-    """
-    FIXED: Enhanced Malaysian IC (MyKad) eKYC verification with improved OCR and validation
-    """
     try:
         data = request.get_json()
         ic_front_b64 = data.get('ic_front')
@@ -168,7 +165,7 @@ def ekyc_mykad_verify_enhanced():
                 'error': 'IC front, IC back, and user_id are required'
             }), 400
         
-        logger.info(f"🔍 Starting enhanced eKYC verification for user {user_id}")
+        logger.info(f" Starting enhanced eKYC verification for user {user_id}")
         
         # Decode images
         ic_front_image = decode_base64_image(ic_front_b64)

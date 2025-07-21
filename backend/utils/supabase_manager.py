@@ -229,7 +229,6 @@ class SupabaseManager:
     # ========== ENHANCED OTP EMAIL FUNCTIONALITY ==========
     
     async def send_otp_email(self, email: str, purpose: str = 'login_fallback', user_id: str = None) -> Dict:
-        """FIXED: Send OTP via email with proper error handling"""
         try:
             if not self.client:
                 return {"success": False, "error": "Database not available"}
@@ -281,7 +280,7 @@ class SupabaseManager:
 
             if not smtp_password:
                 logger.error("GMAIL_APP_PASSWORD missing")
-                logger.info(f"🔐 Development OTP for {email}: {otp_code}")
+                logger.info(f" Development OTP for {email}: {otp_code}")
                 return "development_log"
 
             msg = MIMEMultipart('alternative')
@@ -328,7 +327,6 @@ class SupabaseManager:
         return subject, html
 
     async def verify_otp(self, email: str, otp_code: str, purpose: str = 'login_fallback') -> Dict:
-        """FIXED: Verify OTP code with proper error handling"""
         try:
             if not self.client:
                 return {"success": False, "error": "Database not available"}

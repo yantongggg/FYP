@@ -432,9 +432,8 @@ const analyzeResults = async () => {
       >
         <h2 className="text-2xl font-bold text-green-400 mb-4 flex items-center">
           <Activity className="mr-3 h-6 w-6" />
-          FIXED BEHAVIORAL TEST - GUARANTEED CAPTURE
+          BEHAVIORAL TEST
         </h2>
-        // Add this button in your controls section
 <button
   onClick={() => {
     console.log('MANUAL TEST');
@@ -471,9 +470,9 @@ const analyzeResults = async () => {
               </div>
             </div>
           </div>
-          <div className="text-green-400 font-mono text-xl">
+          {/* <div className="text-green-400 font-mono text-xl">
             {Math.floor(currentTime / 60)}:{(currentTime % 60).toString().padStart(2, '0')} / 1:00
-          </div>
+          </div> */}
         </div>
 
         {/* Controls */}
@@ -484,7 +483,7 @@ const analyzeResults = async () => {
               className="terminal-button px-6 py-3 rounded flex items-center text-lg"
             >
               <Play className="h-5 w-5 mr-2" />
-              START FIXED TEST
+              START TEST
             </button>
           )}
           
