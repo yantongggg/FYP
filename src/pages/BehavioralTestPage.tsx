@@ -49,7 +49,7 @@ const BehavioralTestPage: React.FC = () => {
       return;
     }
 
-    console.log(`🔑 KEYSTROKE CAPTURED: ${e.key} (${e.code})`);
+    console.log(`  KEYSTROKE CAPTURED: ${e.key} (${e.code})`);
     
     const keystroke = {
       key: e.key,
@@ -64,7 +64,7 @@ const BehavioralTestPage: React.FC = () => {
     keystrokesRef.current.push(keystroke);
     setLiveKeystrokes(keystrokesRef.current.length);
     
-    console.log(`📊 Total keystrokes now: ${keystrokesRef.current.length}`);
+    console.log(`  Total keystrokes now: ${keystrokesRef.current.length}`);
   }, [isRecording]);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
@@ -98,7 +98,7 @@ const BehavioralTestPage: React.FC = () => {
       return;
     }
     
-    console.log(`🖱️ MOUSE MOVE: (${e.clientX}, ${e.clientY})`);
+    console.log(`  MOUSE MOVE: (${e.clientX}, ${e.clientY})`);
     
     const mouseEvent = {
       x: e.clientX,
@@ -114,7 +114,7 @@ const BehavioralTestPage: React.FC = () => {
   const handleMouseClick = useCallback((e: MouseEvent) => {
     if (!isRecording) return;
     
-    console.log(`🖱️ MOUSE CLICK: (${e.clientX}, ${e.clientY}) button: ${e.button}`);
+    console.log(`  MOUSE CLICK: (${e.clientX}, ${e.clientY}) button: ${e.button}`);
     
     const mouseEvent = {
       x: e.clientX,
@@ -145,7 +145,7 @@ const BehavioralTestPage: React.FC = () => {
 
   // CRITICAL FIX: Proper Event Attachment
   const attachEventListeners = useCallback(() => {
-    console.log('🔗 ATTACHING EVENT LISTENERS');
+    console.log('  ATTACHING EVENT LISTENERS');
     
     // Attach to multiple targets for maximum coverage
     document.addEventListener('keydown', handleKeyDown, { capture: true, passive: true });
@@ -161,14 +161,14 @@ const BehavioralTestPage: React.FC = () => {
     if (textAreaRef.current) {
       textAreaRef.current.addEventListener('keydown', handleKeyDown as any);
       textAreaRef.current.addEventListener('keyup', handleKeyUp as any);
-      console.log('🎯 Attached listeners to textarea specifically');
+      console.log('  Attached listeners to textarea specifically');
     }
 
-    console.log('✅ All event listeners attached');
+    console.log('  All event listeners attached');
   }, [handleKeyDown, handleKeyUp, handleMouseMove, handleMouseClick, handleMouseWheel]);
 
   const removeEventListeners = useCallback(() => {
-    console.log('🔗 REMOVING EVENT LISTENERS');
+    console.log('  REMOVING EVENT LISTENERS');
     
     document.removeEventListener('keydown', handleKeyDown, true);
     document.removeEventListener('keyup', handleKeyUp, true);
@@ -184,7 +184,7 @@ const BehavioralTestPage: React.FC = () => {
       textAreaRef.current.removeEventListener('keyup', handleKeyUp as any);
     }
 
-    console.log('✅ All event listeners removed');
+    console.log('  All event listeners removed');
   }, [handleKeyDown, handleKeyUp, handleMouseMove, handleMouseClick, handleMouseWheel]);
 
   const startTest = useCallback(() => {
@@ -193,7 +193,7 @@ const BehavioralTestPage: React.FC = () => {
       return;
     }
 
-    console.log('🚀 STARTING TEST WITH DIRECT EVENT ATTACHMENT');
+    console.log('  STARTING TEST WITH DIRECT EVENT ATTACHMENT');
     
     setIsRecording(true);
     setCurrentTime(0);
@@ -208,7 +208,7 @@ const BehavioralTestPage: React.FC = () => {
 
     // CRITICAL FIX: Direct event handler functions
     const keyDownHandler = (e: KeyboardEvent) => {
-      console.log(`🔑 KEY DOWN: ${e.key}`);
+      console.log(`  KEY DOWN: ${e.key}`);
       keystrokesRef.current.push({
         key: e.key,
         code: e.code,
@@ -222,7 +222,7 @@ const BehavioralTestPage: React.FC = () => {
     };
 
     const keyUpHandler = (e: KeyboardEvent) => {
-      console.log(`🔑 KEY UP: ${e.key}`);
+      console.log(`  KEY UP: ${e.key}`);
       keystrokesRef.current.push({
         key: e.key,
         code: e.code,
@@ -240,7 +240,7 @@ const BehavioralTestPage: React.FC = () => {
       const lastMouse = mouseEventsRef.current[mouseEventsRef.current.length - 1];
       if (lastMouse && (now - lastMouse.timestamp) < 100) return;
       
-      console.log(`🖱️ MOUSE MOVE: (${e.clientX}, ${e.clientY})`);
+      console.log(`  MOUSE MOVE: (${e.clientX}, ${e.clientY})`);
       mouseEventsRef.current.push({
         x: e.clientX,
         y: e.clientY,
@@ -251,7 +251,7 @@ const BehavioralTestPage: React.FC = () => {
     };
 
     const mouseClickHandler = (e: MouseEvent) => {
-      console.log(`🖱️ MOUSE CLICK: (${e.clientX}, ${e.clientY})`);
+      console.log(`  MOUSE CLICK: (${e.clientX}, ${e.clientY})`);
       mouseEventsRef.current.push({
         x: e.clientX,
         y: e.clientY,
@@ -276,7 +276,7 @@ const BehavioralTestPage: React.FC = () => {
     document.addEventListener('mousemove', mouseMoveHandler);
     document.addEventListener('click', mouseClickHandler, true);
 
-    console.log('✅ Event listeners attached directly');
+    console.log('  Event listeners attached directly');
 
     // Focus textarea
     setTimeout(() => {
@@ -300,7 +300,7 @@ const BehavioralTestPage: React.FC = () => {
   const stopTest = useCallback(async () => {
   if (!isRecording) return;
 
-  console.log('🛑 STOPPING TEST');
+  console.log('  STOPPING TEST');
   setIsRecording(false);
 
   // Remove handlers
@@ -318,7 +318,7 @@ const BehavioralTestPage: React.FC = () => {
     timerRef.current = null;
   }
 
-  console.log(`📊 FINAL COUNT: ${keystrokesRef.current.length} keystrokes, ${mouseEventsRef.current.length} mouse events`);
+  console.log(`  FINAL COUNT: ${keystrokesRef.current.length} keystrokes, ${mouseEventsRef.current.length} mouse events`);
   
   await analyzeResults();
 }, [isRecording]);
@@ -332,18 +332,18 @@ const analyzeResults = async () => {
     const keystrokes = [...keystrokesRef.current];
     const mouseEvents = [...mouseEventsRef.current];
 
-    console.log(`📊 ANALYSIS: ${keystrokes.length} keystrokes, ${mouseEvents.length} mouse events`);
+    console.log(`  ANALYSIS: ${keystrokes.length} keystrokes, ${mouseEvents.length} mouse events`);
 
     // CRITICAL: Must have at least 5 keystrokes
     if (keystrokes.length < 5) {
-      alert(`❌ INSUFFICIENT DATA!\n\nKeystrokes captured: ${keystrokes.length}\nMinimum required: 5\n\nPlease:\n1. Click in the text area\n2. Type the full sentence\n3. Try again`);
+      alert(`  INSUFFICIENT DATA!\n\nKeystrokes captured: ${keystrokes.length}\nMinimum required: 5\n\nPlease:\n1. Click in the text area\n2. Type the full sentence\n3. Try again`);
       setIsAnalyzing(false);
       return;
     }
 
     const sessionId = `test_${userData.uid}_${Date.now()}`;
 
-    console.log('📡 Sending to /api/behavioral-test');
+    console.log('  Sending to /api/behavioral-test');
     
     // Send to backend
     const response = await fetch('http://localhost:5000/api/behavioral-test', {
@@ -369,23 +369,23 @@ const analyzeResults = async () => {
 
     const result: TestResult = await response.json();
     
-    console.log('✅ TEST RESULT:', result);
+    console.log('  TEST RESULT:', result);
     setTestResults(result);
 
     // User-friendly notifications
     if (result.is_anomaly) {
       if (result.action_taken === 'auto_lock') {
-        alert(`🚨 CRITICAL ANOMALY DETECTED!\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nAction: ${result.action_taken.toUpperCase()}\n\nYour behavioral pattern is significantly different from baseline.\nContact security if this is an error.`);
+        alert(`  CRITICAL ANOMALY DETECTED!\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nAction: ${result.action_taken.toUpperCase()}\n\nYour behavioral pattern is significantly different from baseline.\nContact security if this is an error.`);
       } else {
-        alert(`⚠️ Behavioral Anomaly Detected\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nSeverity: ${result.severity.toUpperCase()}\n\nThis has been logged for review.`);
+        alert(`  Behavioral Anomaly Detected\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nSeverity: ${result.severity.toUpperCase()}\n\nThis has been logged for review.`);
       }
     } else {
-      alert(`✅ Test Successful!\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nData: ${result.details.keystroke_count} keystrokes, ${result.details.mouse_count} mouse events\n\nYour behavioral pattern matches your baseline!`);
+      alert(`  Test Successful!\n\nSimilarity: ${(result.similarity_score * 100).toFixed(1)}%\nData: ${result.details.keystroke_count} keystrokes, ${result.details.mouse_count} mouse events\n\nYour behavioral pattern matches your baseline!`);
     }
 
   } catch (error) {
-    console.error('❌ ANALYSIS ERROR:', error);
-    alert(`❌ Analysis Failed\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\nData collected:\n• Keystrokes: ${keystrokesRef.current.length}\n• Mouse events: ${mouseEventsRef.current.length}`);
+    console.error('  ANALYSIS ERROR:', error);
+    alert(`  Analysis Failed\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\nData collected:\n• Keystrokes: ${keystrokesRef.current.length}\n• Mouse events: ${mouseEventsRef.current.length}`);
   } finally {
     setIsAnalyzing(false);
   }
@@ -393,7 +393,7 @@ const analyzeResults = async () => {
 
   // FIXED: Reset
   const resetTest = () => {
-    console.log('🔄 RESETTING TEST');
+    console.log('  RESETTING TEST');
     
     setIsRecording(false);
     setCurrentTime(0);
@@ -470,9 +470,6 @@ const analyzeResults = async () => {
               </div>
             </div>
           </div>
-          {/* <div className="text-green-400 font-mono text-xl">
-            {Math.floor(currentTime / 60)}:{(currentTime % 60).toString().padStart(2, '0')} / 1:00
-          </div> */}
         </div>
 
         {/* Controls */}

@@ -29,19 +29,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // If not logged in, redirect to login
   if (!currentUser) {
-    console.log('🔒 ProtectedRoute: No user, redirecting to login');
+    console.log('  ProtectedRoute: No user, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
   // Handle adminOnly prop (backward compatibility)
   if (adminOnly && userData?.role !== 'admin') {
-    console.log('🔒 ProtectedRoute: Admin required, user is not admin');
+    console.log('  ProtectedRoute: Admin required, user is not admin');
     return <Navigate to="/home" replace />;
   }
 
   // If a specific role is required, check it
   if (requiredRole && userData?.role !== requiredRole) {
-    console.log(`🔒 ProtectedRoute: Required role ${requiredRole}, user has ${userData?.role}`);
+    console.log(`  ProtectedRoute: Required role ${requiredRole}, user has ${userData?.role}`);
     // If user doesn't have required role, redirect based on their actual role
     if (userData?.role === 'admin') {
       return <Navigate to="/admin" replace />;
@@ -51,7 +51,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // If all checks pass, render the protected content
-  console.log('✅ ProtectedRoute: Access granted');
+  console.log('  ProtectedRoute: Access granted');
   return <>{children}</>;
 };
 

@@ -83,7 +83,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
       currentPath === '' // Default route
     );
     
-    console.log(`🔍 FIXED Global: Page check - ${currentPath} is ${isSensitive ? 'SENSITIVE' : 'NOT SENSITIVE'}`);
+    console.log(`  FIXED Global: Page check - ${currentPath} is ${isSensitive ? 'SENSITIVE' : 'NOT SENSITIVE'}`);
     return isSensitive;
   }, []);
 
@@ -152,7 +152,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
       .filter(k => k.timestamp > fifteenMinutesAgo)
       .slice(-200); // Max 200 recent keystrokes
 
-    console.log(`🔑 FIXED Global: Keystroke captured on ${getCurrentPageContext()} (Total: ${behavioralDataRef.current.keystrokes.length})`);
+    console.log(`  FIXED Global: Keystroke captured on ${getCurrentPageContext()} (Total: ${behavioralDataRef.current.keystrokes.length})`);
   }, [userData?.uid, isMonitoring, isOnSensitivePage, getCurrentPageContext]);
 
   // CRITICAL FIX: Enhanced keyup handler for complete keystroke dynamics
@@ -228,7 +228,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     };
 
     behavioralDataRef.current.mouseMovements.push(clickEvent);
-    console.log(`🖱️ FIXED Global: Click captured on ${getCurrentPageContext()}`);
+    console.log(`  FIXED Global: Click captured on ${getCurrentPageContext()}`);
   }, [userData?.uid, isMonitoring, isOnSensitivePage, getCurrentPageContext]);
 
   const handleScroll = useCallback((e: WheelEvent) => {
@@ -249,7 +249,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
   // CRITICAL FIX: Enhanced behavioral analysis with comprehensive error handling
   const performBehavioralCheck = useCallback(async () => {
     if (!userData?.uid || !isMonitoring || !isOnSensitivePage()) {
-      console.log('🔄 FIXED Global: Skipping behavioral check - conditions not met');
+      console.log('  FIXED Global: Skipping behavioral check - conditions not met');
       return;
     }
 
@@ -259,7 +259,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     // CRITICAL FIX: Only check every 3 minutes minimum for global monitoring
     const minCheckInterval = 3 * 60 * 1000; // 3 minutes
     if (timeSinceLastCheck < minCheckInterval) {
-      console.log(`🔄 FIXED Global: Skipping check - too soon (${Math.floor(timeSinceLastCheck / 1000)}s ago, need ${Math.floor(minCheckInterval / 1000)}s)`);
+      console.log(`  FIXED Global: Skipping check - too soon (${Math.floor(timeSinceLastCheck / 1000)}s ago, need ${Math.floor(minCheckInterval / 1000)}s)`);
       return;
     }
     
@@ -267,7 +267,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     
     // CRITICAL FIX: Need minimum data for meaningful global check
     if (keystrokes.length < 8 && mouseMovements.length < 10) {
-      console.log(`🔄 FIXED Global: Insufficient data - K:${keystrokes.length}/8, M:${mouseMovements.length}/10`);
+      console.log(`  FIXED Global: Insufficient data - K:${keystrokes.length}/8, M:${mouseMovements.length}/10`);
       return;
     }
 
@@ -278,8 +278,8 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
       const sessionDuration = Math.floor((now - sessionStartRef.current) / 1000);
       const pageDuration = Math.floor((now - pageStartTimeRef.current) / 1000);
 
-      console.log(`🔍 FIXED Global: Running behavioral check on ${currentPage}`);
-      console.log(`📊 FIXED Global: Data: ${keystrokes.length} keystrokes, ${mouseMovements.length} mouse events`);
+      console.log(`  FIXED Global: Running behavioral check on ${currentPage}`);
+      console.log(`  FIXED Global: Data: ${keystrokes.length} keystrokes, ${mouseMovements.length} mouse events`);
       
       // CRITICAL FIX: Prepare anonymized behavioral data
       const behavioralData = {
@@ -348,7 +348,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
         (monitoringStatsRef.current.averageSimilarity * (totalChecks - 1) + 
          (result.similarity_score || 0)) / totalChecks;
 
-      console.log('✅ FIXED Global: Behavioral check result:', {
+      console.log('  FIXED Global: Behavioral check result:', {
         similarity: result.similarity_score,
         action: result.action_taken,
         page: currentPage,
@@ -390,17 +390,17 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
         });
 
         if (sessionSaveResponse.ok) {
-          console.log('✅ FIXED Global: Session saved successfully');
+          console.log('  FIXED Global: Session saved successfully');
         } else {
-          console.error('❌ FIXED Global: Failed to save session');
+          console.error('  FIXED Global: Failed to save session');
         }
       } catch (sessionError) {
-        console.error('❌ FIXED Global: Session save error:', sessionError);
+        console.error('  FIXED Global: Session save error:', sessionError);
       }
 
       // CRITICAL FIX: Store anomaly if detected with enhanced details
       if (result.is_anomaly && result.action_taken !== 'none') {
-        console.log(`🚨 FIXED Global: Anomaly detected: ${result.severity} - ${result.action_taken}`);
+        console.log(`  FIXED Global: Anomaly detected: ${result.severity} - ${result.action_taken}`);
         
         try {
           const anomalySaveResponse = await fetch('http://localhost:5000/api/save-anomaly', {
@@ -434,12 +434,12 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
           });
 
           if (anomalySaveResponse.ok) {
-            console.log('✅ FIXED Global: Anomaly saved successfully');
+            console.log('  FIXED Global: Anomaly saved successfully');
           } else {
-            console.error('❌ FIXED Global: Failed to save anomaly');
+            console.error('  FIXED Global: Failed to save anomaly');
           }
         } catch (anomalyError) {
-          console.error('❌ FIXED Global: Anomaly save error:', anomalyError);
+          console.error('  FIXED Global: Anomaly save error:', anomalyError);
         }
 
         // CRITICAL FIX: Trigger enhanced real-time update event
@@ -460,15 +460,15 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
 
       // CRITICAL FIX: Handle critical anomalies with enhanced user experience
       if (result.action_taken === 'auto_lock' || result.severity === 'critical') {
-        console.error('🚨 FIXED Global: CRITICAL auto-lock triggered by global monitoring');
+        console.error('  FIXED Global: CRITICAL auto-lock triggered by global monitoring');
         
-        const criticalAlert = `🚨 CRITICAL SECURITY ALERT 🚨\n\n` +
+        const criticalAlert = `  CRITICAL SECURITY ALERT  \n\n` +
           `Unusual behavioral patterns detected during your session.\n\n` +
-          `📍 Page: ${currentPage}\n` +
-          `📊 Similarity Score: ${(result.similarity_score * 100).toFixed(1)}%\n` +
-          `⏱️ Session Duration: ${Math.floor(sessionDuration / 60)} minutes\n` +
-          `🔍 Total Checks: ${monitoringStatsRef.current.totalChecks}\n` +
-          `📈 Average Similarity: ${(monitoringStatsRef.current.averageSimilarity * 100).toFixed(1)}%\n\n` +
+          `  Page: ${currentPage}\n` +
+          `  Similarity Score: ${(result.similarity_score * 100).toFixed(1)}%\n` +
+          `  Session Duration: ${Math.floor(sessionDuration / 60)} minutes\n` +
+          `  Total Checks: ${monitoringStatsRef.current.totalChecks}\n` +
+          ` Average Similarity: ${(monitoringStatsRef.current.averageSimilarity * 100).toFixed(1)}%\n\n` +
           `Your account has been flagged for security review.\n\n` +
           `If you are the legitimate user, this may be due to:\n` +
           `• Changed typing environment or device\n` +
@@ -482,7 +482,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
         
         // Optional: Auto-logout for critical security breaches
         if (result.action_taken === 'auto_lock') {
-          console.log('🔒 FIXED Global: Auto-logout triggered due to critical anomaly');
+          console.log('  FIXED Global: Auto-logout triggered due to critical anomaly');
           // Uncomment to enable auto-logout:
           // window.location.href = '/login?reason=security_anomaly';
         }
@@ -494,14 +494,14 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
       behavioralDataRef.current.mouseMovements = behavioralDataRef.current.mouseMovements.filter(m => m.timestamp > processedTime);
 
     } catch (error) {
-      console.error('❌ FIXED Global: Behavioral check failed:', error);
+      console.error('  FIXED Global: Behavioral check failed:', error);
       setConnectionStatus('error');
       
       // Don't spam errors - only log once per minute
       const errorKey = `global_error_${Math.floor(Date.now() / 60000)}`;
       if (!localStorage.getItem(errorKey)) {
         localStorage.setItem(errorKey, 'true');
-        console.error('❌ FIXED Global: Network or API error in behavioral monitoring');
+        console.error('  FIXED Global: Network or API error in behavioral monitoring');
       }
     }
   }, [userData?.uid, isMonitoring, isOnSensitivePage, getCurrentPageContext]);
@@ -509,11 +509,11 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
   // CRITICAL FIX: Enhanced monitoring lifecycle management
   const startGlobalMonitoring = useCallback(() => {
     if (!userData?.uid || !isOnSensitivePage() || isMonitoring) {
-      console.log('🔄 FIXED Global: Cannot start monitoring - conditions not met');
+      console.log('  FIXED Global: Cannot start monitoring - conditions not met');
       return;
     }
 
-    console.log(`🚀 FIXED Global: Starting monitoring for ${userData.uid} on ${getCurrentPageContext()}`);
+    console.log(`  FIXED Global: Starting monitoring for ${userData.uid} on ${getCurrentPageContext()}`);
     
     setIsMonitoring(true);
     pageStartTimeRef.current = Date.now();
@@ -534,7 +534,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     behavioralDataRef.current = { keystrokes: [], mouseMovements: [] };
 
     // CRITICAL FIX: Attach event listeners with proper options
-    console.log('🔗 FIXED Global: Attaching enhanced event listeners');
+    console.log('  FIXED Global: Attaching enhanced event listeners');
     
     document.addEventListener('keydown', handleKeyDown, { capture: true, passive: true });
     document.addEventListener('keyup', handleKeyUp, { capture: true, passive: true });
@@ -556,13 +556,13 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
       performBehavioralCheck();
     }, 2 * 60 * 1000);
 
-    console.log('✅ FIXED Global: Enhanced monitoring started with proper event handling');
+    console.log('  FIXED Global: Enhanced monitoring started with proper event handling');
   }, [userData?.uid, isOnSensitivePage, isMonitoring, getCurrentPageContext, handleKeyDown, handleKeyUp, handleMouseMove, handleClick, handleScroll, performBehavioralCheck]);
 
   const stopGlobalMonitoring = useCallback(() => {
     if (!isMonitoring) return;
 
-    console.log('🛑 FIXED Global: Stopping monitoring');
+    console.log('  FIXED Global: Stopping monitoring');
     
     setIsMonitoring(false);
 
@@ -573,7 +573,7 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     }
 
     // CRITICAL FIX: Remove event listeners properly
-    console.log('🔗 FIXED Global: Removing event listeners');
+    console.log('  FIXED Global: Removing event listeners');
     
     document.removeEventListener('keydown', handleKeyDown, true);
     document.removeEventListener('keyup', handleKeyUp, true);
@@ -587,11 +587,11 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
     // CRITICAL FIX: Run final verification if we have enough data
     const { keystrokes, mouseMovements } = behavioralDataRef.current;
     if ((keystrokes.length >= 5 || mouseMovements.length >= 8) && userData?.uid) {
-      console.log('🔍 FIXED Global: Running final check before stop');
+      console.log('  FIXED Global: Running final check before stop');
       performBehavioralCheck();
     }
 
-    console.log('✅ FIXED Global: Monitoring stopped cleanly');
+    console.log('  FIXED Global: Monitoring stopped cleanly');
   }, [isMonitoring, handleKeyDown, handleKeyUp, handleMouseMove, handleClick, handleScroll, performBehavioralCheck, userData?.uid]);
 
   // CRITICAL FIX: Enhanced effect for monitoring lifecycle
@@ -611,18 +611,18 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
   useEffect(() => {
     const handleLocationChange = () => {
       const newPageContext = getCurrentPageContext();
-      console.log(`🔄 FIXED Global: Page changed to ${newPageContext}`);
+      console.log(`  FIXED Global: Page changed to ${newPageContext}`);
       
       if (isMonitoring && !isOnSensitivePage()) {
-        console.log('🔄 FIXED Global: Left sensitive page, stopping monitoring');
+        console.log('  FIXED Global: Left sensitive page, stopping monitoring');
         stopGlobalMonitoring();
       } else if (!isMonitoring && isOnSensitivePage() && userData?.uid) {
-        console.log('🔄 FIXED Global: Entered sensitive page, starting monitoring');
+        console.log('  FIXED Global: Entered sensitive page, starting monitoring');
         startGlobalMonitoring();
       } else if (isMonitoring && isOnSensitivePage()) {
         // Page change within sensitive areas - reset page timer
         pageStartTimeRef.current = Date.now();
-        console.log('🔄 FIXED Global: Page changed within sensitive area, resetting timer');
+        console.log('  FIXED Global: Page changed within sensitive area, resetting timer');
       }
     };
 
@@ -696,41 +696,41 @@ const GlobalBehavioralWrapper: React.FC<GlobalBehavioralWrapperProps> = ({ child
           
           <div className="space-y-1">
             <div className="flex justify-between">
-              <span>📍 Page:</span>
+              <span>  Page:</span>
               <span className="text-cyan-400">{getCurrentPageContext()}</span>
             </div>
             <div className="flex justify-between">
-              <span>🔑 Keystrokes:</span>
+              <span>  Keystrokes:</span>
               <span className="text-cyan-400">{behavioralDataRef.current.keystrokes.length}</span>
             </div>
             <div className="flex justify-between">
-              <span>🖱️ Mouse Events:</span>
+              <span>  Mouse Events:</span>
               <span className="text-cyan-400">{behavioralDataRef.current.mouseMovements.length}</span>
             </div>
             <div className="flex justify-between">
-              <span>✅ Total Checks:</span>
+              <span>  Total Checks:</span>
               <span className="text-purple-400">{monitoringStatsRef.current.totalChecks}</span>
             </div>
             <div className="flex justify-between">
-              <span>🚨 Anomalies:</span>
+              <span>  Anomalies:</span>
               <span className={monitoringStatsRef.current.anomaliesDetected > 0 ? 'text-red-400' : 'text-green-400'}>
                 {monitoringStatsRef.current.anomaliesDetected}
               </span>
             </div>
             <div className="flex justify-between">
-              <span>📈 Avg Similarity:</span>
+              <span> Avg Similarity:</span>
               <span className="text-yellow-400">
                 {(monitoringStatsRef.current.averageSimilarity * 100).toFixed(0)}%
               </span>
             </div>
             <div className="flex justify-between">
-              <span>⏱️ Session Time:</span>
+              <span>  Session Time:</span>
               <span className="text-blue-400">
                 {Math.floor((Date.now() - sessionStartRef.current) / 60000)}m
               </span>
             </div>
             <div className="flex justify-between">
-              <span>🔄 Next Check:</span>
+              <span>  Next Check:</span>
               <span className="text-orange-400">
                 {Math.max(0, Math.floor((3 * 60 * 1000 - (Date.now() - lastCheckRef.current)) / 1000))}s
               </span>

@@ -599,7 +599,7 @@ const anomalySubscription = supabase
           </div>
 
           <div className="bg-red-600/10 border border-red-500/50 rounded-lg p-6">
-            <h4 className="text-lg font-semibold text-red-400 mb-3">⚠️ Critical Security Warnings</h4>
+            <h4 className="text-lg font-semibold text-red-400 mb-3">  Critical Security Warnings</h4>
             <ul className="text-gray-300 space-y-2">
               <li>• Never expose Supabase service role key in client-side code</li>
               <li>• Always use HTTPS in production environments</li>
@@ -739,35 +739,35 @@ VITE_SUPABASE_ANON_KEY=your_anon_key`}
                   <ul className="text-gray-300 space-y-2">
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Enable Supabase RLS on all tables
+                        Enable Supabase RLS on all tables
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Configure custom SMTP for auth emails
+                        Configure custom SMTP for auth emails
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Set up domain allowlists for auth
+                        Set up domain allowlists for auth
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Enable rate limiting on auth endpoints
+                        Enable rate limiting on auth endpoints
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Configure JWT expiration times
+                        Configure JWT expiration times
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Set up database backups and PITR
+                        Set up database backups and PITR
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Enable audit logging
+                        Enable audit logging
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-400 rounded-full mr-3" />
-                      ✅ Configure SSL/TLS certificates
+                        Configure SSL/TLS certificates
                     </li>
                   </ul>
                 </div>

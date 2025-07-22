@@ -125,7 +125,7 @@ class FaceVerificationModel:
             }
             
         except Exception as e:
-            logger.error(f"❌ Login verification error: {str(e)}")
+            logger.error(f"  Login verification error: {str(e)}")
             return {
                 'success': False,
                 'similarity': 0.0,

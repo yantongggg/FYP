@@ -27,14 +27,14 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (userData) {
-      console.log(`🔄 FIXED App: Redirecting user ${userData.username} (${userData.role}) to appropriate dashboard`);
+      console.log(`  FIXED App: Redirecting user ${userData.username} (${userData.role}) to appropriate dashboard`);
       if (userData.role === 'admin') {
         navigate('/admin', { replace: true });
       } else {
         navigate('/home', { replace: true });
       }
     } else {
-      console.log('🔄 FIXED App: No user data, redirecting to login');
+      console.log('  FIXED App: No user data, redirecting to login');
       navigate('/login', { replace: true });
     }
   }, [userData, navigate]);
@@ -53,7 +53,7 @@ function AppContent() {
   const { userData } = useAuth();
 
   useEffect(() => {
-    console.log('🚀 FIXED App: Enhanced behavioral monitoring app initialized');
+    console.log('  FIXED App: Enhanced behavioral monitoring app initialized');
     if (userData) {
       console.log(`👤 FIXED App: User authenticated: ${userData.username} (${userData.role})`);
     } else {
@@ -152,24 +152,24 @@ function App() {
   // CRITICAL FIX: Global error handler for behavioral monitoring
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      console.error('🚨 FIXED App: Global error in behavioral monitoring:', event.error);
+      console.error('  FIXED App: Global error in behavioral monitoring:', event.error);
       
       // Don't crash the app for behavioral monitoring errors
       if (event.error?.message?.includes('behavioral') || 
           event.error?.message?.includes('monitoring')) {
         event.preventDefault();
-        console.log('🛡️ FIXED App: Prevented behavioral monitoring error from crashing app');
+        console.log('  FIXED App: Prevented behavioral monitoring error from crashing app');
       }
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('🚨 FIXED App: Unhandled promise rejection:', event.reason);
+      console.error('  FIXED App: Unhandled promise rejection:', event.reason);
       
       // Don't crash the app for API failures
       if (event.reason?.message?.includes('behavioral') || 
           event.reason?.message?.includes('fetch')) {
         event.preventDefault();
-        console.log('🛡️ FIXED App: Prevented API error from crashing app');
+        console.log('  FIXED App: Prevented API error from crashing app');
       }
     };
 
@@ -177,8 +177,8 @@ function App() {
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     // Log app startup
-    console.log('🚀 FIXED App: Enhanced behavioral monitoring application started');
-    console.log('🔧 FIXED App: Global error handlers registered');
+    console.log('  FIXED App: Enhanced behavioral monitoring application started');
+    console.log('  FIXED App: Global error handlers registered');
 
     return () => {
       window.removeEventListener('error', handleError);
@@ -191,7 +191,7 @@ function App() {
     const logPerformance = () => {
       if (performance.mark) {
         performance.mark('app-loaded');
-        console.log('📊 FIXED App: Performance mark set - app loaded');
+        console.log('  FIXED App: Performance mark set - app loaded');
       }
     };
 

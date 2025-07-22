@@ -103,7 +103,7 @@ const Login: React.FC = () => {
 
     try {
       setError('');
-      console.log('🔐 LOGIN ATTEMPT:', {
+      console.log('  LOGIN ATTEMPT:', {
         email: formData.email,
         timestamp: new Date().toISOString()
       });
@@ -115,7 +115,7 @@ const Login: React.FC = () => {
       });
 
       const result = await response.json();
-      console.log('🔐 LOGIN RESPONSE:', {
+      console.log('  LOGIN RESPONSE:', {
         status: response.status,
         result: result,
         timestamp: new Date().toISOString()
@@ -123,7 +123,7 @@ const Login: React.FC = () => {
       
       if (result.success) {
         // Complete login (only for admin_demo or users without biometric requirements)
-        console.log('✅ LOGIN SUCCESS - No biometric required:', {
+        console.log('  LOGIN SUCCESS - No biometric required:', {
           user_id: result.user_id,
           email: result.email,
           role: result.role
@@ -133,7 +133,7 @@ const Login: React.FC = () => {
         
       } else if (result.error === 'BIOMETRIC_REQUIRED') {
         // Move to face verification step
-        console.log('🔐 BIOMETRIC REQUIRED - Moving to face verification:', {
+        console.log('  BIOMETRIC REQUIRED - Moving to face verification:', {
           user_id: result.user_id,
           email: result.email,
           full_name: result.full_name
@@ -148,14 +148,14 @@ const Login: React.FC = () => {
         
       } else if (result.error === 'BEHAVIORAL_ENROLLMENT_REQUIRED') {
         // User needs to complete behavioral enrollment
-        console.log('⚠️ BEHAVIORAL ENROLLMENT REQUIRED:', {
+        console.log('  BEHAVIORAL ENROLLMENT REQUIRED:', {
           user_id: result.user_id,
           email: result.email,
           enrollment_status: result.enrollment_status
         });
         setError(`${result.message || 'Behavioral pattern enrollment required'} - Redirecting to complete registration...`);
         setTimeout(() => {
-          console.log('🔀 REDIRECTING to behavioral enrollment');
+          console.log('  REDIRECTING to behavioral enrollment');
           navigate('/register', { 
             state: { 
               step: 'behavioral', 
@@ -168,14 +168,14 @@ const Login: React.FC = () => {
         
       } else if (result.error === 'FACE_ENROLLMENT_REQUIRED') {
         // User needs to complete face enrollment
-        console.log('⚠️ FACE ENROLLMENT REQUIRED:', {
+        console.log('  FACE ENROLLMENT REQUIRED:', {
           user_id: result.user_id,
           email: result.email,
           enrollment_status: result.enrollment_status
         });
         setError(`${result.message || 'Face enrollment required'} - Redirecting to complete registration...`);
         setTimeout(() => {
-          console.log('🔀 REDIRECTING to face enrollment');
+          console.log('  REDIRECTING to face enrollment');
           navigate('/register', { 
             state: { 
               step: 'biometric', 
@@ -187,7 +187,7 @@ const Login: React.FC = () => {
         }, 3000);
         
       } else if (result.error === 'ACCOUNT_LOCKED') {
-        console.log('🔒 ACCOUNT LOCKED:', {
+        console.log('  ACCOUNT LOCKED:', {
           email: formData.email,
           message: result.message,
           remaining_minutes: result.remaining_minutes
@@ -196,7 +196,7 @@ const Login: React.FC = () => {
         
       } else {
         // Generic error handling
-        console.log('❌ LOGIN FAILED:', {
+        console.log('  LOGIN FAILED:', {
           email: formData.email,
           error: result.error,
           message: result.message,
@@ -206,7 +206,7 @@ const Login: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error('❌ NETWORK ERROR during login:', {
+      console.error('  NETWORK ERROR during login:', {
         email: formData.email,
         error: error.message,
         stack: error.stack,
@@ -224,10 +224,10 @@ const Login: React.FC = () => {
   };
 
   const handleLivenessCapture = (livenessResult: any) => {
-    console.log('🎯 LIVENESS DATA RECEIVED:', livenessResult);
+    console.log('  LIVENESS DATA RECEIVED:', livenessResult);
     setLivenessData(livenessResult);
     
-    // ✅ CRITICAL: Update progress immediately
+    //   CRITICAL: Update progress immediately
     setBiometricProgress(prev => ({
       ...prev,
       blinks: livenessResult.blink_count || 0,
@@ -236,15 +236,15 @@ const Login: React.FC = () => {
       phase: livenessResult.sequential_state?.current_phase || prev.phase
     }));
     
-    // ✅ LOG FOR DEBUGGING
-    console.log('👁️ UI BLINK COUNT UPDATE:', {
+    //   LOG FOR DEBUGGING
+    console.log('  UI BLINK COUNT UPDATE:', {
       received: livenessResult.blink_count,
       setting_to: livenessResult.blink_count || 0
     });
     
     // Validate liveness requirements
     if (livenessResult?.liveness_validation?.overall_liveness_passed) {
-      console.log('✅ Liveness validation passed for login');
+      console.log('  Liveness validation passed for login');
       setBiometricProgress(prev => ({ ...prev, phase: 'complete' }));
     } else if (livenessResult?.error) {
       setError('Liveness detection failed. Please try again.');
@@ -604,11 +604,11 @@ const Login: React.FC = () => {
     {/* Clear Progress Header */}
     <div className="glass-card rounded-lg p-4 border border-cyan-400/30">
       {/* <h3 className="text-cyan-400 font-bold text-center mb-3">
-        {biometricProgress.phase === 'ready' && '🔄 Initializing Camera...'}
-        {biometricProgress.phase === 'blinking' && '👁️ Please Blink Slowly'}
-        {biometricProgress.phase === 'mouth' && '👄 Open Your Mouth'}
+        {biometricProgress.phase === 'ready' && '  Initializing Camera...'}
+        {biometricProgress.phase === 'blinking' && '  Please Blink Slowly'}
+        {biometricProgress.phase === 'mouth' && '  Open Your Mouth'}
         {biometricProgress.phase === 'head' && '🗣️ Move Your Head Gently'}
-        {biometricProgress.phase === 'complete' && '✅ Verification Complete!'}
+        {biometricProgress.phase === 'complete' && '  Verification Complete!'}
       </h3> */}
       
       {/* Progress Bar */}
@@ -646,46 +646,6 @@ const Login: React.FC = () => {
       </div>
     </div>
 
-    {/* Current Instruction Card
-    <div className="glass-card rounded-lg p-4 border border-yellow-400/30 bg-yellow-900/10">
-      <div className="text-center">
-        {biometricProgress.phase === 'ready' && (
-          <div>
-            <div className="text-2xl mb-2">📱</div>
-            <p className="text-yellow-400 font-bold">Position your face in the camera</p>
-            <p className="text-gray-400 text-sm">Look directly at the camera and wait for instructions</p>
-          </div>
-        )}
-        {biometricProgress.phase === 'blinking' && (
-          <div>
-            <div className="text-2xl mb-2 animate-pulse">👁️</div>
-            <p className="text-yellow-400 font-bold">Blink {biometricProgress.requiredBlinks} times slowly</p>
-            <p className="text-gray-400 text-sm">Close your eyes completely, then open them</p>
-          </div>
-        )}
-        {biometricProgress.phase === 'mouth' && (
-          <div>
-            <div className="text-2xl mb-2">👄</div>
-            <p className="text-yellow-400 font-bold">Open your mouth wide</p>
-            <p className="text-gray-400 text-sm">Open and close your mouth clearly</p>
-          </div>
-        )}
-        {biometricProgress.phase === 'head' && (
-          <div>
-            <div className="text-2xl mb-2">🗣️</div>
-            <p className="text-yellow-400 font-bold">Move your head slowly</p>
-            <p className="text-gray-400 text-sm">Turn your head left and right gently</p>
-          </div>
-        )}
-        {biometricProgress.phase === 'complete' && (
-          <div>
-            <div className="text-2xl mb-2">✅</div>
-            <p className="text-green-400 font-bold">All checks complete!</p>
-            <p className="text-gray-400 text-sm">Processing your verification...</p>
-          </div>
-        )}
-      </div>
-    </div> */}
   </div>
 )}
             {/* Error Display */}

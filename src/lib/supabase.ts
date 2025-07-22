@@ -4,15 +4,15 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// ✅ Validate env
+//   Validate env
 const isValidUrl = supabaseUrl && supabaseUrl.startsWith('https://') && !supabaseUrl.includes('your-project')
 const isValidKey = supabaseAnonKey && supabaseAnonKey.length > 20 && !supabaseAnonKey.includes('your_supabase_anon_key')
 
 if (!isValidUrl || !isValidKey) {
-  console.warn('⚠️ Supabase not configured properly. Using mock mode.')
+  console.warn('  Supabase not configured properly. Using mock mode.')
 }
 
-// ✅ Mock Query Builder
+//   Mock Query Builder
 class MockQueryBuilder {
   private filters: any[] = []
   private orderBy: { column: string; ascending: boolean } | null = null
@@ -68,7 +68,7 @@ class MockQueryBuilder {
   }
 }
 
-// ✅ Mock Storage
+//   Mock Storage
 interface MockStorageBucket {
   upload: (path:string, file:File|Blob)=>Promise<{data:{path:string}|null; error:any}>
   download: (path:string)=>Promise<{data:Blob|null; error:any}>
@@ -82,14 +82,14 @@ const createMockStorageBucket = (): MockStorageBucket => ({
   getPublicUrl: (path)=>({data:{publicUrl:`https://mock/${path}`}})
 })
 
-// ✅ Mock Channel
+//   Mock Channel
 class MockChannel {
   constructor(private name:string){}
   on(){return this}
   subscribe(){return {unsubscribe:()=>{}}}
 }
 
-// ✅ Mock Client
+//   Mock Client
 const createMockClient = ()=>({
   auth:{
     getUser:()=>Promise.resolve({data:{user:null},error:null}),
@@ -104,12 +104,12 @@ const createMockClient = ()=>({
   storage:{ from:()=>createMockStorageBucket() }
 })
 
-// ✅ Supabase client
+//   Supabase client
 export const supabase = (isValidUrl && isValidKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : createMockClient() as any
 
-// ✅ Types
+//   Types
 export interface User {
   id:string
   username:string
@@ -144,7 +144,7 @@ export interface AnomalyAudit {
   resolved:boolean
 }
 
-// ✅ CRUD Helpers
+//   CRUD Helpers
 export class SupabaseCRUD {
   static async createUser(user:Partial<User>) {
     return this.make(async()=>{
@@ -175,7 +175,7 @@ export class SupabaseCRUD {
   }
 }
 
-// ✅ Upload Utility
+//   Upload Utility
 export const uploadBiometricFile = async(bucket:string, path:string, file:File|Blob)=>{
   const {data,error} = await supabase.storage.from(bucket).upload(path,file)
   if(error) throw error

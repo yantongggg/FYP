@@ -58,7 +58,7 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
 
   const frontDoc = documents.find((doc) => doc.document_type.toLowerCase().includes('front'));
   const backDoc = documents.find((doc) => doc.document_type.toLowerCase().includes('back'));
-  console.log('📄 BackDoc:', backDoc);
+  console.log('  BackDoc:', backDoc);
 
   return (
     <div className="space-y-6">
@@ -98,26 +98,7 @@ const EKYCDocumentViewer: React.FC<EKYCDocumentViewerProps> = ({ userId }) => {
           </div>
         </div>
 
-        {frontDoc?.extracted_info && (
-          <>
-        {/* <div className="mt-4 p-4 bg-black/30 rounded">
-          <h4 className="text-sm font-bold text-green-400 mb-3">EXTRACTED_INFORMATION</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-2 text-sm font-mono text-cyan-400">
-            <div>
-              <p><span className="text-gray-400">NAME:</span> {frontDoc.extracted_info?.name || 'N/A'}</p>
-              <p><span className="text-gray-400">GENDER:</span> {frontDoc.extracted_info?.gender || 'N/A'}</p>
-              <p><span className="text-gray-400">RELIGION:</span> {frontDoc.extracted_info?.religion || 'N/A'}</p>
-            </div>
-            <div>
-              <p><span className="text-gray-400">ADDRESS:</span> {frontDoc.extracted_info?.address || 'N/A'}</p>
-              <p><span className="text-gray-400">IC NUMBER:</span> {frontDoc.extracted_info?.ic_number || 'N/A'}</p>
-              <p><span className="text-gray-400">DATE OF BIRTH:</span> {frontDoc.extracted_info?.date_of_birth || 'N/A'}</p>
-            </div>
-          </div>
-        </div> */}
-
-          </>
-        )}
+    
         <div className="flex justify-center gap-6 mt-6 flex-wrap">
           {/* Authenticity */}
           <div className="text-center p-3 bg-green-900/20 border border-green-500/30 rounded w-40">

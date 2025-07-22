@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { Camera, CheckCircle, AlertCircle, Loader2, RefreshCw, User } from "lucide-react";
 
-// ✅ UPDATED: Match actual backend response format
+//   UPDATED: Match actual backend response format
 interface LivenessResponse {
   success: boolean;
   face_detected: boolean;
@@ -14,11 +14,11 @@ interface LivenessResponse {
   cdcn_score?: number;
   enhanced_face_score?: number;
   
-  // ✅ NEW: Handle both old and new response formats
+  //   NEW: Handle both old and new response formats
   all_completed?: boolean;  // New backend format
   cached_response?: boolean;
   
-  // ✅ OPTIONAL: Legacy format (if backend still sends this)
+  //   OPTIONAL: Legacy format (if backend still sends this)
   sequential_state?: {
     current_phase: "blinking" | "mouth" | "head" | "complete";
     blinks_completed: boolean;
@@ -142,7 +142,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   }, []);
 
   const determineCurrentPhase = useCallback((metrics: LivenessMetrics, isAllCompleted: boolean) => {
-    console.log("🔍 [PHASE LOGIC] Determining current phase", {
+    console.log("  [PHASE LOGIC] Determining current phase", {
       metrics,
       isAllCompleted,
       phaseCompleted
@@ -150,31 +150,31 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
 
     // If backend says all completed, only then show complete
     if (isAllCompleted) {
-      console.log("✅ [PHASE LOGIC] Backend confirms all completed");
+      console.log("  [PHASE LOGIC] Backend confirms all completed");
       return "complete";
     }
 
     // Determine phase based on what's not yet completed
     if (metrics.blinkCount < 2) {
-      console.log("👁️ [PHASE LOGIC] Still need blinks", {
+      console.log("  [PHASE LOGIC] Still need blinks", {
         current: metrics.blinkCount,
         required: 2
       });
       return "blinking";
     } else if (metrics.mouthOpenCount < 1) {
-      console.log("👄 [PHASE LOGIC] Still need mouth opens", {
+      console.log("  [PHASE LOGIC] Still need mouth opens", {
         current: metrics.mouthOpenCount,
         required: 1
       });
       return "mouth";
     } else if (metrics.headMovementCount < 1) {
-      console.log("👤 [PHASE LOGIC] Still need head movements", {
+      console.log(" [PHASE LOGIC] Still need head movements", {
         current: metrics.headMovementCount,
         required: 1
       });
       return "head";
     } else {
-      console.log("⏳ [PHASE LOGIC] All metrics met (2 blinks, 1 mouth, 1 head), waiting for backend confirmation");
+      console.log("[PHASE LOGIC] All metrics met (2 blinks, 1 mouth, 1 head), waiting for backend confirmation");
       return "head"; // Keep in head phase until backend confirms completion
     }
   }, [phaseCompleted]);
@@ -182,7 +182,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   const getStepPrompt = (step: WorkflowStep): string => {
     const metrics = livenessMetrics;
     
-    console.log("📝 [PROMPT] Getting step prompt", {
+    console.log("  [PROMPT] Getting step prompt", {
       step,
       currentPhase,
       metrics,
@@ -343,7 +343,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         if (result.sequential_state) {
           // Use legacy format if available
           isAllCompleted = result.sequential_state.all_phases_complete;
-          console.log("📊 [PHASE] Using legacy sequential_state format", {
+          console.log("  [PHASE] Using legacy sequential_state format", {
             current_phase: result.sequential_state.current_phase,
             all_phases_complete: result.sequential_state.all_phases_complete
           });
@@ -357,15 +357,15 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         } else {
           // Fallback: determine based on metrics
           isAllCompleted = newPhaseCompleted.blinks && newPhaseCompleted.mouth && newPhaseCompleted.head;
-          console.log("📊 [PHASE] Using fallback metrics-based completion", {
+          console.log("  [PHASE] Using fallback metrics-based completion", {
             isAllCompleted,
             phaseCompleted: newPhaseCompleted
           });
         }
 
-        // ✅ FIXED: Only update phase, don't prematurely complete
+        //   FIXED: Only update phase, don't prematurely complete
         const determinedPhase = determineCurrentPhase(newMetrics, isAllCompleted);
-        console.log("🎯 [PHASE UPDATE] Phase determination result", {
+        console.log("  [PHASE UPDATE] Phase determination result", {
           previousPhase: currentPhase,
           determinedPhase,
           isAllCompleted,
@@ -373,7 +373,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         });
 
         if (determinedPhase !== currentPhase) {
-          console.log("🔄 [PHASE TRANSITION]", {
+          console.log("  [PHASE TRANSITION]", {
             from: currentPhase,
             to: determinedPhase,
             trigger: "backend response"
@@ -397,18 +397,18 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
             head: newMetrics.headMovementCount
           };
           
-          console.log("📡 [PROGRESS] Calling onProgressUpdate", progressData);
+          console.log("  [PROGRESS] Calling onProgressUpdate", progressData);
           onProgressUpdate(progressData);
         }
 
       } else {
-        console.error("❌ [API] Backend returned success: false", result.error);
+        console.error("  [API] Backend returned success: false", result.error);
       }
 
       return result;
 
     } catch (error) {
-      console.error("💥 [FATAL ERROR] API request failed", {
+      console.error(" [FATAL ERROR] API request failed", {
         error,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
@@ -422,7 +422,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         timestamp: new Date().toISOString()
       });
       
-      // ✅ ENHANCED: Better error messages for common issues
+      //   ENHANCED: Better error messages for common issues
       let errorMessage = "Network error. Please check backend connection.";
       
       if (error instanceof TypeError && error.message.includes("fetch")) {
@@ -437,7 +437,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   const saveToSupabase = useCallback(async (faceData: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('💾 [SUPABASE] Saving face data', {
+      console.log('  [SUPABASE] Saving face data', {
         hasSession: !!session,
         userId: session?.user?.id || userId
       });
@@ -466,7 +466,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         });
 
       if (uploadError) {
-        console.error('❌ [SUPABASE] Upload error:', uploadError);
+        console.error('  [SUPABASE] Upload error:', uploadError);
         setCameraError(`Upload failed: ${uploadError.message}`);
         return false;
       }
@@ -520,7 +520,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       let attempts = 0;
       const maxAttempts = 240; // 2 minutes timeout
 
-      console.log("🔄 [WORKFLOW] Starting sequential detection loop");
+      console.log("  [WORKFLOW] Starting sequential detection loop");
 
       while (!allComplete && attempts < maxAttempts) {
         const result = await runSequentialDetection(false);
@@ -540,7 +540,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
           const backendConfirmsComplete = result.all_completed || 
             (result.sequential_state && result.sequential_state.all_phases_complete);
 
-          console.log("🔍 [WORKFLOW] Loop iteration", {
+          console.log("  [WORKFLOW] Loop iteration", {
             attempt: attempts,
             metrics,
             backendConfirmsComplete,
@@ -620,7 +620,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       onLivenessCapture(completeLivenessData);
 
     } catch (error: any) {
-      console.error("❌ [WORKFLOW ERROR]", error);
+      console.error("  [WORKFLOW ERROR]", error);
       setCameraError(error.message || "Workflow failed");
       setCurrentStep("ready");
       setCurrentPhase("ready");
@@ -630,7 +630,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   }, [runSequentialDetection, captureFrame, saveToSupabase, onLivenessCapture, livenessMetrics, currentPhase]);
 
   const reset = () => {
-    console.log("🔄 [RESET] Resetting biometric capture");
+    console.log("  [RESET] Resetting biometric capture");
     setCurrentStep("ready");
     setCurrentPhase("ready");
     setCameraError("");
@@ -690,7 +690,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
                 {getStepPrompt(currentStep)}
               </div>
               <div className="text-sm text-gray-400">
-                Phase: {currentPhase} | Step: {currentStep}
+              
               </div>
               {isProcessing && (
                 <div className="flex items-center justify-center text-cyan-400 text-sm mt-2">
@@ -716,7 +716,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.blinkCount}</div>
                 <div className="text-xs text-gray-400">Blinks</div>
                 <div className="text-xs text-green-400">/2</div>
-                {/* ✅ Show completion indicator */}
+                {/*   Show completion indicator */}
                 {phaseCompleted.blinks && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
                 )}
@@ -729,7 +729,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.mouthOpenCount}</div>
                 <div className="text-xs text-gray-400">Mouth</div>
                 <div className="text-xs text-green-400">/1</div>
-                {/* ✅ Show completion indicator */}
+                {/*   Show completion indicator */}
                 {phaseCompleted.mouth && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
                 )}
@@ -742,7 +742,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.headMovementCount}</div>
                 <div className="text-xs text-gray-400">Head</div>
                 <div className="text-xs text-green-400">/1</div>
-                {/* ✅ Show completion indicator */}
+                {/*   Show completion indicator */}
                 {phaseCompleted.head && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
                 )}

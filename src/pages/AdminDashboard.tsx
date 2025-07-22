@@ -170,8 +170,8 @@ const AdminDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');              // ✅ ADD THIS
-  const [updating, setUpdating] = useState(false);                 // ✅ ADD THIS
+  const [success, setSuccess] = useState<string>('');              //   ADD THIS
+  const [updating, setUpdating] = useState(false);                 //   ADD THIS
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'biometrics' | 'anomalies' | 'logins' | 'ekyc'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('created_at');
@@ -181,7 +181,7 @@ const AdminDashboard: React.FC = () => {
   const [actionType, setActionType] = useState('');
   const [anomalyFilter, setAnomalyFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
 
-  // ✅ ADD: Missing functions
+  //   ADD: Missing functions
   const handleEditUser = (user: User) => {
     setEditingUser({
       id: user.id,
@@ -203,7 +203,7 @@ const AdminDashboard: React.FC = () => {
     setSuccess('');
 
     try {
-      console.log('👑 Updating user:', editingUser.id);
+      console.log('Updating user:', editingUser.id);
 
       const response = await fetch('http://localhost:5000/api/admin/update-user', {
         method: 'POST',
@@ -223,7 +223,7 @@ const AdminDashboard: React.FC = () => {
         setError(result.error || 'Update failed');
       }
     } catch (err) {
-      console.error('❌ User update error:', err);
+      console.error('  User update error:', err);
       setError('Network error. Please try again.');
     } finally {
       setUpdating(false);
@@ -255,7 +255,7 @@ const AdminDashboard: React.FC = () => {
         setError(result.error || 'Status update failed');
       }
     } catch (err) {
-      console.error('❌ User status toggle error:', err);
+      console.error('  User status toggle error:', err);
       setError('Network error');
     }
   };
@@ -289,12 +289,12 @@ const AdminDashboard: React.FC = () => {
         setError(result.error || 'Reset failed');
       }
     } catch (err) {
-      console.error('❌ Biometric reset error:', err);
+      console.error('  Biometric reset error:', err);
       setError('Network error');
     }
   };
 
-  // ✅ ADD: Filter and sort users
+  //   ADD: Filter and sort users
   useEffect(() => {
     let filtered = allUsers;
 
@@ -441,7 +441,7 @@ const AdminDashboard: React.FC = () => {
   const setupRealtimeSubscriptions = () => {
     if (userData?.role !== 'admin') return;
 
-    console.log('🔗 Setting up admin real-time subscriptions');
+    console.log('  Setting up admin real-time subscriptions');
 
     const subscription = supabase
       .channel('admin-dashboard-updates')
@@ -450,7 +450,7 @@ const AdminDashboard: React.FC = () => {
         schema: 'public',
         table: 'behavioral_sessions'
       }, (payload: any) => {
-        console.log('🔄 Behavioral sessions updated:', payload);
+        console.log('  Behavioral sessions updated:', payload);
         loadBehavioralData();
       })
       .on('postgres_changes', {
@@ -458,7 +458,7 @@ const AdminDashboard: React.FC = () => {
         schema: 'public',
         table: 'anomaly_audit'
       }, (payload: any) => {
-        console.log('🚨 Anomalies updated:', payload);
+        console.log('  Anomalies updated:', payload);
         loadAnomalies();
       })
       .on('postgres_changes', {
@@ -466,7 +466,7 @@ const AdminDashboard: React.FC = () => {
         schema: 'public',
         table: 'login_audit'
       }, (payload: any) => {
-        console.log('🔐 Login audit updated:', payload);
+        console.log('  Login audit updated:', payload);
         loadLoginLogs();
       })
       .on('postgres_changes', {
@@ -474,7 +474,7 @@ const AdminDashboard: React.FC = () => {
         schema: 'public',
         table: 'biometric_data'
       }, (payload: any) => {
-        console.log('👁️ Biometric data updated:', payload);
+        console.log('  Biometric data updated:', payload);
         loadUsers(); // Reload to update biometric stats
       })
       .subscribe();
@@ -529,7 +529,7 @@ const AdminDashboard: React.FC = () => {
       if (result.success) {
         setUsers(result.users);
         setAllUsers(result.users);
-        console.log('✅ Users loaded from backend:', result.users.length);
+        console.log('  Users loaded from backend:', result.users.length);
         await calculateEnhancedStats(result.users);
       } else {
         throw new Error(result.error);
@@ -580,8 +580,8 @@ const AdminDashboard: React.FC = () => {
             return {
               ...user,
               is_active: user.is_active !== false,
-              biometric_enrolled: (biometricData && biometricData.length > 0), // ✅ Real check
-              behavioral_enrolled: (behavioralData && behavioralData.length > 0) || (behavioralSessions && behavioralSessions.length > 0), // ✅ Real check
+              biometric_enrolled: (biometricData && biometricData.length > 0), //   Real check
+              behavioral_enrolled: (behavioralData && behavioralData.length > 0) || (behavioralSessions && behavioralSessions.length > 0), //   Real check
               trust_score: user.trust_score || 85
             };
           })
@@ -590,7 +590,7 @@ const AdminDashboard: React.FC = () => {
         setUsers(processedUsers);
         setAllUsers(processedUsers); 
         
-        console.log('✅ Users loaded with real enrollment status:', processedUsers.length);
+        console.log('  Users loaded with real enrollment status:', processedUsers.length);
         
         // Load additional biometric stats for each user
         await calculateEnhancedStats(processedUsers);
@@ -629,7 +629,7 @@ const AdminDashboard: React.FC = () => {
       const totalUsers = usersData.length;
       const activeUsers = usersData.filter(u => u.status === 'active').length;
       
-      // 🔧 FIX: Use the correct property name 'biometric_enrolled' instead of 'is_biometric_enrolled'
+      //   FIX: Use the correct property name 'biometric_enrolled' instead of 'is_biometric_enrolled'
       const enrolledUsers = usersData.filter(u => u.biometric_enrolled).length;
       
       const suspendedUsers = usersData.filter(u => u.status === 'suspended').length;
@@ -668,7 +668,7 @@ const AdminDashboard: React.FC = () => {
       const calculatedStats: DashboardStats = {
         totalUsers,
         activeUsers,
-        enrolledUsers, // 🔧 This will now show the correct count
+        enrolledUsers, //   This will now show the correct count
         suspendedUsers,
         totalBiometricCaptures,
         averageQualityScore,
@@ -685,8 +685,8 @@ const AdminDashboard: React.FC = () => {
       };
       
       setStats(calculatedStats);
-      console.log('✅ Enhanced stats calculated:', calculatedStats);
-      console.log('🔍 Debug - enrolledUsers:', enrolledUsers, 'totalUsers:', totalUsers);
+      console.log('  Enhanced stats calculated:', calculatedStats);
+      console.log('  Debug - enrolledUsers:', enrolledUsers, 'totalUsers:', totalUsers);
       
     } catch (error) {
       console.error('Error calculating enhanced stats:', error);
@@ -696,7 +696,7 @@ const AdminDashboard: React.FC = () => {
   // Enhanced anomaly loading
   const loadAnomalies = async () => {
     try {
-      console.log('🚨 Loading anomalies');
+      console.log('  Loading anomalies');
       
       const { data: anomalyData, error } = await supabase
         .from('anomaly_audit')
@@ -721,7 +721,7 @@ const AdminDashboard: React.FC = () => {
         setAnomalies(anomalyData || []);
       }
       
-      console.log('✅ Anomalies loaded:', anomalyData?.length || 0);
+      console.log('  Anomalies loaded:', anomalyData?.length || 0);
     } catch (error) {
       console.error('Error loading anomalies:', error);
       setAnomalies([]);
@@ -731,7 +731,7 @@ const AdminDashboard: React.FC = () => {
   // Enhanced login logs loading
   const loadLoginLogs = async () => {
     try {
-      console.log('🔐 Loading login logs');
+      console.log('  Loading login logs');
       
       const { data: logsData, error } = await supabase
         .from('login_audit')
@@ -756,7 +756,7 @@ const AdminDashboard: React.FC = () => {
         setLoginLogs(logsData || []);
       }
       
-      console.log('✅ Login logs loaded:', logsData?.length || 0);
+      console.log('  Login logs loaded:', logsData?.length || 0);
     } catch (error) {
       console.error('Error loading login logs:', error);
       setLoginLogs([]);
@@ -766,7 +766,7 @@ const AdminDashboard: React.FC = () => {
   // Enhanced behavioral data loading
   const loadBehavioralData = async () => {
     try {
-      console.log('🧠 Loading behavioral sessions');
+      console.log('  Loading behavioral sessions');
       
       const { data: behavioralData, error } = await supabase
         .from('behavioral_sessions')
@@ -778,7 +778,7 @@ const AdminDashboard: React.FC = () => {
         console.error('Behavioral sessions query error:', error);
       } else {
         setBehavioralSessions(behavioralData || []);
-        console.log('✅ Behavioral sessions loaded:', behavioralData?.length || 0);
+        console.log('  Behavioral sessions loaded:', behavioralData?.length || 0);
       }
     } catch (error) {
       console.error('Error loading behavioral data:', error);
@@ -789,7 +789,7 @@ const AdminDashboard: React.FC = () => {
   // Enhanced eKYC loading
   const loadEKYCDocuments = async () => {
     try {
-      console.log('📄 Loading eKYC documents');
+      console.log('  Loading eKYC documents');
       
       const { data: ekycData, error } = await supabase
         .from('ekyc_documents')
@@ -813,7 +813,7 @@ const AdminDashboard: React.FC = () => {
         setEkycDocuments(ekycData || []);
       }
       
-      console.log('✅ eKYC documents loaded:', ekycData?.length || 0);
+      console.log('  eKYC documents loaded:', ekycData?.length || 0);
     } catch (error) {
       console.error('Error loading eKYC documents:', error);
       setEkycDocuments([]);
@@ -1236,7 +1236,7 @@ const AdminDashboard: React.FC = () => {
 
                 {/* Real-time Activity Feed */}
                 <div className="glass-card rounded-lg p-6">
-                  <h3 className="text-lg font-bold text-green-400 mb-4">🔄 REAL-TIME ACTIVITY FEED</h3>
+                  <h3 className="text-lg font-bold text-green-400 mb-4">  REAL-TIME ACTIVITY FEED</h3>
                   <div className="space-y-3 max-h-64 overflow-y-auto">
                     {/* Recent Behavioral Sessions */}
                     {behavioralSessions.slice(0, 3).map((session) => (

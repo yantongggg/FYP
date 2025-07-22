@@ -3,29 +3,29 @@ REM ============================================================================
 REM eKYC Biometric Authentication System - Windows Setup Script
 REM =============================================================================
 
-echo 🚀 eKYC Biometric Authentication System Setup
+echo   eKYC Biometric Authentication System Setup
 echo ==============================================
 echo.
 
 REM Check if Python is installed
-echo 🔍 Checking Python installation...
+echo   Checking Python installation...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Python not found. Please install Python 3.8+ from https://python.org
+    echo   Python not found. Please install Python 3.8+ from https://python.org
     pause
     exit /b 1
 )
-echo ✅ Python found
+echo   Python found
 
 REM Check if Node.js is installed  
-echo 🔍 Checking Node.js installation...
+echo   Checking Node.js installation...
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Node.js not found. Please install Node.js 18+ from https://nodejs.org
+    echo   Node.js not found. Please install Node.js 18+ from https://nodejs.org
     pause
     exit /b 1
 )
-echo ✅ Node.js found
+echo   Node.js found
 
 REM Create virtual environment
 echo 🐍 Setting up Python virtual environment...
@@ -37,7 +37,7 @@ if not exist "venv" (
 REM Activate virtual environment
 call venv\Scripts\activate.bat
 
-echo ✅ Virtual environment activated
+echo   Virtual environment activated
 
 REM Upgrade pip
 echo Upgrading pip...
@@ -107,7 +107,7 @@ pip install h5py==3.9.0
 pip install imutils==0.5.4
 pip install scikit-image==0.21.0
 
-echo ✅ Python dependencies installed
+echo   Python dependencies installed
 
 REM Install Node.js dependencies
 echo 📦 Installing Node.js dependencies...
@@ -141,7 +141,7 @@ npm install --save-dev @vitejs/plugin-react@^4.0.3 vite@^4.4.5
 npm install --save-dev typescript@^5.0.2 tailwindcss@^3.3.0 autoprefixer@^10.4.14 postcss@^8.4.27
 npm install --save-dev eslint@^8.45.0 @typescript-eslint/eslint-plugin@^6.0.0 @typescript-eslint/parser@^6.0.0
 
-echo ✅ Node.js dependencies installed
+echo   Node.js dependencies installed
 
 REM Test Python imports
 echo 🧪 Testing Python imports...
@@ -170,23 +170,23 @@ total = len(imports_to_test)
 for module, name in imports_to_test:
     try:
         __import__(module)
-        print(f'✅ {name} - OK')
+        print(f'  {name} - OK')
         working += 1
     except ImportError as e:
-        print(f'❌ {name} - FAILED: {e}')
+        print(f'  {name} - FAILED: {e}')
 
 print(f'')
-print(f'📊 Status: {working}/{total} dependencies working')
+print(f'  Status: {working}/{total} dependencies working')
 
 if working >= 10:
-    print('✅ System ready for full biometric authentication!')
+    print('  System ready for full biometric authentication!')
 else:
-    print('⚠️ Some dependencies missing - check errors above')
+    print('  Some dependencies missing - check errors above')
 "
 
 REM Create environment file template if it doesn't exist
 if not exist ".env" (
-    echo 📝 Creating environment file template...
+    echo   Creating environment file template...
     (
         echo # =============================================================================
         echo # eKYC Biometric Authentication System - Environment Configuration
@@ -220,8 +220,8 @@ if not exist ".env" (
         echo LOG_LEVEL=INFO
         echo ENABLE_METRICS=true
     ) > .env
-    echo ✅ .env template created
-    echo ⚠️ Please edit .env file with your actual configuration
+    echo   .env template created
+    echo   Please edit .env file with your actual configuration
 )
 
 REM Create basic project structure
@@ -238,7 +238,7 @@ mkdir src\types 2>nul
 mkdir public 2>nul
 mkdir supabase\functions 2>nul
 mkdir supabase\migrations 2>nul
-echo ✅ Project structure created
+echo   Project structure created
 
 echo.
 echo 🎉 Setup completed successfully!

@@ -69,7 +69,7 @@ class UnifiedBehavioralAnalyzer:
         self.thresholds = {
             'similarity_threshold': 0.4,      # Minimum similarity to pass
             'critical_threshold': 0.3,        # Below this = auto-lock
-            'anomaly_threshold': 0.6,         # Above this = anomaly
+            'anomaly_threshold': 0.75,         # Above this = anomaly
             'typing_speed_variance': 0.5,
             'mouse_velocity_variance': 3.0
         }
@@ -99,7 +99,7 @@ class UnifiedBehavioralAnalyzer:
         # Time-based features
         start_time = events[0].timestamp
         end_time = events[-1].timestamp
-        duration = (end_time - start_time) / 1000.0  # Convert to seconds
+        duration = (end_time - start_time) / 1000.0 
         
         features['typing_duration'] = duration
         if duration > 0:
@@ -116,7 +116,7 @@ class UnifiedBehavioralAnalyzer:
             )
             if matching_keyup:
                 dwell_time = matching_keyup.timestamp - keydown.timestamp
-                if dwell_time < 1000:  # Reasonable limit
+                if dwell_time < 1000:
                     dwell_times.append(dwell_time)
         
         if dwell_times:
@@ -128,7 +128,7 @@ class UnifiedBehavioralAnalyzer:
         flight_times = []
         for i in range(1, len(keydown_events)):
             flight_time = keydown_events[i].timestamp - keydown_events[i-1].timestamp
-            if flight_time < 2000:  # Reasonable limit
+            if flight_time < 2000: 
                 flight_times.append(flight_time)
         
         if flight_times:

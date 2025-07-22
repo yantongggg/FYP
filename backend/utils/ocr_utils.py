@@ -73,23 +73,21 @@ class MyKadOCR:
             fixed = fixed.replace(mistake, correction)
         
         if fixed != original:
-            logger.info(f"🔧 Safe IC correction: '{original}' → '{fixed}'")
+            logger.info(f"  Safe IC correction: '{original}' → '{fixed}'")
         
         return fixed
 
     def extract_ic_number(self, text: str) -> Optional[str]:
-        """FIXED: Extract IC number with proper colon handling"""
         try:
             cleaned_text = self.clean_ocr_text(text)
-            logger.info(f"🧹 Cleaned OCR text for IC extraction: {repr(cleaned_text[:200])}...")
+            logger.info(f" Cleaned OCR text for IC extraction: {repr(cleaned_text[:200])}...")
 
-            # CRITICAL: Handle colon separator that appears in your logs
+            # Generic IC patterns
             ic_patterns = [
-                r'(\d{6}-\d{2}-\d{4})',              # Standard: 030301-08-0532
-                r'(\d{6}:\d{2}:\d{4})',              # Colon: 030301:08:0532 (from your logs!)
-                r'(\d{6}\s*[-:]\s*\d{2}\s*[-:]\s*\d{4})', # Mixed separators
-                r'(030301[-:\s]?08[-:\s]?0532)',     # Specific pattern for this IC
-                r'(\d{6}[-:\s]?\d{2}[-:\s]?\d{4})',  # General flexible pattern
+                r'(\d{6}-\d{2}-\d{4})',              
+                r'(\d{6}:\d{2}:\d{4})',             
+                r'(\d{6}\s*[-:]\s*\d{2}\s*[-:]\s*\d{4})', 
+                r'(\d{6}[-:\s]?\d{2}[-:\s]?\d{4})',  
             ]
 
             for pattern in ic_patterns:
@@ -105,28 +103,25 @@ class MyKadOCR:
                         # Format as standard IC
                         formatted = f"{digits_only[:6]}-{digits_only[6:8]}-{digits_only[8:]}"
                         
-                        # Check if it's already valid (no correction needed)
+                        # Check if it's already valid
                         if self.validate_ic_number_format(formatted):
-                            logger.info(f"✅ IC number found (direct): {formatted}")
+                            logger.info(f"IC number found: {formatted}")
                             return formatted
                         
-                        # Only apply SAFE corrections if validation fails
+                        # Apply safe corrections if validation fails
                         corrected = self.fix_ic_number_digits(formatted)
                         if self.validate_ic_number_format(corrected):
-                            logger.info(f"✅ IC number found (safely corrected): {corrected}")
+                            logger.info(f"IC number found (corrected): {corrected}")
                             return corrected
 
-            # Special case for the specific IC in your logs
-            if '030301' in cleaned_text and '0532' in cleaned_text:
-                logger.info("🎯 Found specific IC pattern components")
-                return "030301-08-0532"
-
-            logger.warning(f"❌ No valid IC number found in text: {cleaned_text[:200]}...")
+            # REMOVED: Hardcoded specific IC fallback
+            logger.warning(f" No valid IC number found in text")
             return None
 
         except Exception as e:
-            logger.error(f"❌ Error extracting IC number: {str(e)}")
+            logger.error(f" Error extracting IC number: {str(e)}")
             return None
+
 
     def extract_gender_improved(self, text: str, ic_number: str = None) -> Optional[str]:
         """FIXED: Extract gender with guaranteed IC number fallback"""
@@ -142,7 +137,7 @@ class MyKadOCR:
             for correct_gender, variants in gender_variations.items():
                 for variant in variants:
                     if variant in cleaned_text:
-                        logger.info(f"✅ Gender found in text: {correct_gender} (matched: {variant})")
+                        logger.info(f"  Gender found in text: {correct_gender} (matched: {variant})")
                         return correct_gender
             
             # Method 2: GUARANTEED fallback - extract from IC number
@@ -150,7 +145,7 @@ class MyKadOCR:
                 try:
                     last_digit = int(ic_number[-1])
                     gender_from_ic = "LELAKI" if last_digit % 2 == 1 else "PEREMPUAN"
-                    logger.info(f"✅ Gender extracted from IC {ic_number}: {gender_from_ic} (last digit: {last_digit})")
+                    logger.info(f"  Gender extracted from IC {ic_number}: {gender_from_ic} (last digit: {last_digit})")
                     return gender_from_ic
                 except Exception as ic_error:
                     logger.error(f"Error extracting gender from IC {ic_number}: {ic_error}")
@@ -162,13 +157,13 @@ class MyKadOCR:
                 context = cleaned_text[warganegara_index:warganegara_index + 100]
                 
                 if any(p in context for p in ['PEREM', 'PUAN']):
-                    logger.info("✅ Gender found via WARGANEGARA context: PEREMPUAN")
+                    logger.info("  Gender found via WARGANEGARA context: PEREMPUAN")
                     return 'PEREMPUAN'
                 elif any(p in context for p in ['LELAKI', 'LAKI']):
-                    logger.info("✅ Gender found via WARGANEGARA context: LELAKI")
+                    logger.info("  Gender found via WARGANEGARA context: LELAKI")
                     return 'LELAKI'
             
-            logger.warning(f"⚠️ Could not determine gender from text or IC: {ic_number}")
+            logger.warning(f"  Could not determine gender from text or IC: {ic_number}")
             return None
             
         except Exception as e:
@@ -200,7 +195,7 @@ class MyKadOCR:
                 (1.0 if has_gender else 0.0) * 0.1        # 10% from gender
             )
             
-            logger.info(f"📊 Authenticity details:")
+            logger.info(f"  Authenticity details:")
             logger.info(f"  Keywords: {found_keywords} (score: {keyword_score:.2f})")
             logger.info(f"  IC format: {has_ic_format}, Malaysia: {has_malaysia}")
             logger.info(f"  Name: {has_name}, Gender: {has_gender}")
@@ -303,8 +298,8 @@ class MyKadOCR:
             # Success if we have IC number and reasonable authenticity
             success = bool(ic_number) and authenticity['authenticity_score'] >= 0.35
             
-            logger.info(f"✅ OCR Processing complete - IC: {ic_number}, Success: {success}")
-            logger.info(f"📝 Extracted info: {extracted_info}")
+            logger.info(f" OCR Processing complete - IC: {ic_number}, Success: {success}")
+            logger.info(f" Extracted info: {extracted_info}")
             
             return {
                 'success': success,
@@ -324,33 +319,30 @@ class MyKadOCR:
             }
     
     def extract_name_improved(self, text: str, ic_number: str = None) -> Optional[str]:
-        """Extract name with enhanced patterns"""
         try:
-            lines = text.split('\n')
             cleaned_text = self.clean_ocr_text(text)
             
-            # Look for "CHYE YAN TONG" specifically or similar patterns
+            # Generic name patterns (removed specific "CHYE YAN TONG")
             name_patterns = [
-                r'CHYE\s+YAN\s+TONG',
-                r'([A-Z]+\s+[A-Z]+\s+[A-Z]+)',  # Three-word names
-                r'([A-Z]+\s+[A-Z]+)',           # Two-word names
+                r'([A-Z]+(?:\s+[A-Z]+){1,3})',       # 2-4 word uppercase names
+                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})', # 2-4 word title case names
             ]
             
             for pattern in name_patterns:
                 matches = re.findall(pattern, cleaned_text)
                 for match in matches:
-                    name_candidate = match if isinstance(match, str) else ' '.join(match) if isinstance(match, tuple) else match
+                    name_candidate = match.strip()
                     
-                    # Skip obvious non-names
+                    # Skip obvious non-names (same as before)
                     skip_words = [
                         'MALAYSIA', 'WARGANEGARA', 'IDENTITY', 'CARD', 'MYKAD',
                         'KAD', 'PENGENALAN', 'NO', 'JALAN', 'TAMAN', 'KAMPUNG',
-                        'HIGHLANDS', 'PAHANG'
+                        'HIGHLANDS', 'PAHANG', 'ISLAM', 'KRISTIAN', 'BUDDHA', 'HINDU'
                     ]
                     
-                    if not any(word in name_candidate for word in skip_words):
+                    if not any(word in name_candidate.upper() for word in skip_words):
                         if 3 <= len(name_candidate) <= 50:
-                            logger.info(f"✅ Name found: {name_candidate}")
+                            logger.info(f" Name found: {name_candidate}")
                             return name_candidate
             
             return None
@@ -360,43 +352,31 @@ class MyKadOCR:
             return None
     
     def extract_address_improved(self, text: str, ic_number: str = None) -> Optional[str]:
-        """Extract address with enhanced patterns"""
+        """FIXED: Generic address extraction without hardcoded addresses"""
         try:
-            lines = text.split('\n')
             cleaned_text = self.clean_ocr_text(text)
-            
-            # Look for address components
             address_components = []
             
-            # Find line with "NO 15 JALAN"
-            jalan_pattern = r'NO\s*15\s*JALAN\s*\w+'
-            jalan_match = re.search(jalan_pattern, cleaned_text)
-            if jalan_match:
-                address_components.append("NO 15 JALAN CORINA 7")
+            # Generic address pattern extraction
+            patterns = {
+                'street': r'(NO\s*\d+\s*JALAN\s+[\w\s]+?)(?=,|\n|TAMAN|KAMPUNG|$)',
+                'taman': r'(TAMAN\s+[\w\s]+?)(?=,|\n|KAMPUNG|\d{5}|$)',
+                'kampung': r'(KAMPUNG\s+[\w\s]+?)(?=,|\n|\d{5}|$)', 
+                'postcode_area': r'(\d{5}\s+[\w\s]+?)(?=,|\n|[A-Z]{2,}|$)',
+                'state': r'\b(JOHOR|KEDAH|KELANTAN|MELAKA|NEGERI SEMBILAN|PAHANG|PENANG|PERAK|PERLIS|SABAH|SARAWAK|SELANGOR|TERENGGANU|KUALA LUMPUR|LABUAN|PUTRAJAYA)\b'
+            }
             
-            # Look for TAMAN
-            if 'TAMAN' in cleaned_text:
-                taman_pattern = r'TAMAN\s+\w+\s*\w*'
-                taman_match = re.search(taman_pattern, cleaned_text)
-                if taman_match:
-                    address_components.append("TAMAN DESA CORINA")
-            
-            # Look for KAMPUNG
-            if 'KAMPUNG' in cleaned_text or 'KAM' in cleaned_text:
-                address_components.append("KAMPUNG RAJA")
-            
-            # Look for postcode and area
-            postcode_pattern = r'39010'
-            if re.search(postcode_pattern, cleaned_text):
-                address_components.append("39010 C HIGHLANDS")
-            
-            # Look for state
-            if 'PAHANG' in cleaned_text:
-                address_components.append("PAHANG")
+            for component_type, pattern in patterns.items():
+                matches = re.findall(pattern, cleaned_text, re.IGNORECASE)
+                if matches:
+                    # Take the first reasonable match
+                    component = matches[0].strip()
+                    if len(component) > 2:  # Reasonable length
+                        address_components.append(component)
             
             if address_components:
                 full_address = ', '.join(address_components)
-                logger.info(f"✅ Address extracted: {full_address}")
+                logger.info(f" Address extracted: {full_address}")
                 return full_address
             
             return None
@@ -554,7 +534,7 @@ class MyKadOCR:
     def process_mykad_back(self, image: np.ndarray) -> Dict:
         """Process MyKad back image"""
         try:
-            logger.info("🔁 Starting MyKad back image processing")
+            logger.info("  Starting MyKad back image processing")
             
             processed_image = self.preprocess_image(image)
             text = pytesseract.image_to_string(processed_image, config='--oem 3 --psm 6')
@@ -575,7 +555,7 @@ class MyKadOCR:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error processing MyKad back: {str(e)}")
+            logger.error(f" Error processing MyKad back: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),

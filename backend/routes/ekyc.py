@@ -24,7 +24,7 @@ logger = setup_logger(__name__)
 # Initialize enhanced OCR
 try:
     mykad_ocr = MyKadOCR()
-    logger.info("✅ Enhanced MyKad OCR initialized")
+    logger.info("  Enhanced MyKad OCR initialized")
 except ImportError:
     logger.warning("MyKad OCR not available - using mock")
     class MockMyKadOCR:
@@ -180,16 +180,16 @@ def ekyc_mykad_verify_enhanced():
         back_valid = back_validation['is_valid'] or back_validation['validation_score'] >= 0.5
         
         if not front_valid:
-            logger.warning(f"⚠️ Front IC validation failed but continuing: score={front_validation['validation_score']}")
+            logger.warning(f" Front IC validation failed but continuing: score={front_validation['validation_score']}")
         
         if not back_valid:
-            logger.warning(f"⚠️ Back IC validation failed but continuing: score={back_validation['validation_score']}")
+            logger.warning(f" Back IC validation failed but continuing: score={back_validation['validation_score']}")
         
         # Step 2: Enhanced OCR processing
-        logger.info("📝 Processing IC front with enhanced OCR")
+        logger.info("Processing IC front with enhanced OCR")
         ocr_result = mykad_ocr.process_mykad_front(ic_front_image)
         
-        logger.info(f"📊 OCR Result: {ocr_result}")
+        logger.info(f"OCR Result: {ocr_result}")
         
         if not ocr_result['success']:
             return jsonify({
@@ -240,10 +240,10 @@ def ekyc_mykad_verify_enhanced():
             sum(supporting_factors) >= 2
         )
         
-        logger.info(f"🎯 Verification factors: {verification_factors}")
-        logger.info(f"🎯 Critical factors: {critical_factors} (all: {all(critical_factors)})")
-        logger.info(f"🎯 Supporting factors: {sum(supporting_factors)}/4")
-        logger.info(f"🎯 Final verification result: {is_verified}")
+        logger.info(f" Verification factors: {verification_factors}")
+        logger.info(f"Critical factors: {critical_factors} (all: {all(critical_factors)})")
+        logger.info(f"Supporting factors: {sum(supporting_factors)}/4")
+        logger.info(f" Final verification result: {is_verified}")
         
         # Step 4: Process back IC
         back_ocr_result = mykad_ocr.process_mykad_back(ic_back_image)
@@ -261,7 +261,7 @@ def ekyc_mykad_verify_enhanced():
                     'ic_face_front'
                 )
                 ic_face_url = face_storage_result.get('public_url', '')
-                logger.info(f"✅ IC face extracted and stored: {ic_face_url}")
+                logger.info(f"IC face extracted and stored: {ic_face_url}")
             except Exception as e:
                 logger.error(f"Error storing IC face: {str(e)}")
         
@@ -304,7 +304,7 @@ def ekyc_mykad_verify_enhanced():
         # Insert into database
         try:
             db_result = supabase_client.table('ekyc_documents').insert(ekyc_records).execute()
-            logger.info(f"✅ eKYC records stored in database")
+            logger.info(f" eKYC records stored in database")
         except Exception as e:
             logger.error(f"Database error: {e}")
             db_result = None
@@ -381,12 +381,12 @@ def ekyc_mykad_verify_enhanced():
                 "Try capturing with better camera resolution"
             ]
         
-        logger.info(f"🎯 eKYC verification complete - User: {user_id}, Verified: {is_verified}, Score: {verification_score:.3f}")
+        logger.info(f" eKYC verification complete - User: {user_id}, Verified: {is_verified}, Score: {verification_score:.3f}")
         
         return jsonify(response)
         
     except Exception as e:
-        logger.error(f"❌ Error in enhanced eKYC verification: {str(e)}", exc_info=True)
+        logger.error(f" Error in enhanced eKYC verification: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'status': 'error',
@@ -412,8 +412,8 @@ def store_ekyc_images_enhanced(user_id: str, ic_front_b64: str, ic_back_b64: str
         
         # Store back image  
         back_result = BiometricStorage.store_ekyc_document(user_id, back_data, 'mykad_back_enhanced')
-        
-        logger.info(f"✅ Enhanced eKYC images stored - Front: {front_result.get('public_url', 'failed')}, Back: {back_result.get('public_url', 'failed')}")
+    
+        logger.info(f" eKYC images stored - Front: {front_result.get('public_url', 'failed')}, Back: {back_result.get('public_url', 'failed')}")
         
         return {
             'front_url': front_result.get('public_url', ''),
@@ -453,7 +453,7 @@ def log_ekyc_verification_enhanced(user_id: str, is_verified: bool, score: float
         }
         
         supabase_client.table('login_audit').insert(log_data).execute()
-        logger.info(f"✅ Enhanced eKYC verification logged for user {user_id}")
+        logger.info(f" eKYC verification logged for user {user_id}")
         
     except Exception as e:
         logger.error(f"Error logging enhanced eKYC verification: {str(e)}")

@@ -134,7 +134,7 @@ export const exportLogsToPDF = async (type: 'login' | 'anomaly' | 'users' | 'bio
       doc.save(`ekyc-report-${timestamp}.pdf`);
     }
     
-    console.log(`✅ ${type} report exported successfully`);
+    console.log(`  ${type} report exported successfully`);
   } catch (error) {
     console.error(`Export failed:`, error);
     alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -1,5 +1,3 @@
-# backend/ml_models/liveness_detector.py
-
 import os
 import math
 import time
@@ -10,10 +8,8 @@ import numpy as np
 import face_recognition
 from scipy.spatial import distance as dist
 from collections import defaultdict, deque
-# from keras.models import load_model
 from facenet_pytorch import MTCNN
 import torch
-# from torchvision import models, transforms
 from utils.supabase_manager import SupabaseManager
 
 supabase_manager = SupabaseManager()
@@ -77,46 +73,6 @@ def initialize_models():
     except Exception as e:
         logger.error(f" MTCNN initialization failed: {e}")
         MTCNN_MODEL = None
-
-    # Initialize Anti-spoofing model with better path handling
-    # try:
-    #     model_path = r"C:\\Users\\chyey\\project\\backend\\models\\resnet18.pth"
-        
-    #     # Check if model file exists
-    #     if not os.path.exists(model_path):
-    #         logger.error(f"❌ Model file not found: {model_path}")
-    #         FAS_MODEL = None
-    #         return
-
-    #     logger.info(f"📂 Loading model from: {model_path}")
-        
-    #     # Create ResNet18 architecture
-    #     model = models.resnet18(pretrained=False)
-    #     model.fc = torch.nn.Linear(model.fc.in_features, 2)  # 2 classes: [fake, real]
-
-    #     # Load weights with better error handling
-    #     checkpoint = torch.load(model_path, map_location="cpu")
-        
-    #     # Handle different checkpoint formats
-    #     if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-    #         model.load_state_dict(checkpoint['state_dict'])
-    #     else:
-    #         model.load_state_dict(checkpoint)
-            
-    #     model.eval()
-    #     FAS_MODEL = model
-        
-    #     logger.info("✅ Anti-spoofing model loaded successfully")
-        
-    #     # Test the model with dummy input
-    #     test_input = torch.randn(1, 3, 224, 224)
-    #     with torch.no_grad():
-    #         test_output = FAS_MODEL(test_input)
-    #         logger.info(f"🧪 Model test output shape: {test_output.shape}")
-            
-    # except Exception as e:
-    #     logger.error(f"❌ Failed to load anti-spoofing model: {e}", exc_info=True)
-    #     FAS_MODEL = None
 
 # ============= Landmark Processing =============
 
@@ -204,6 +160,20 @@ class UserState:
         self.blinks_completed = False
         self.mouth_completed = False
         self.head_completed = False
+
+        # CRITICAL: Initialize these flags properly
+        self.eyes_ever_opened = False
+        self.mouth_ever_opened = False
+        self.eyes_started_closed = None  # Track initial state
+        self.mouth_started_closed = None  # Track initial state
+        
+        # Add static image detection
+        self.static_image_confirmed = False
+        self.static_check_frames = 0
+        
+        # Add noise detection for head movement
+        self.head_positions = deque(maxlen=30)
+        self.head_movement_threshold_dynamic = THRESHOLDS['HEAD_MOVEMENT_THRESHOLD']
 
         # additional
         self.blink_phase = 'open'  # Track the phase: 'open' or 'closed'
@@ -350,50 +320,7 @@ class LivenessDetector:
             score = min(1.0, score + 0.1)
         
         return float(score)
-          
-    # def _predict_fas(self, face_crop):
-    #     """Enhanced FAS prediction with proper float scoring"""
-        
-    #     if FAS_MODEL is None or face_crop.size == 0:
-    #         return 0.0  # Return 0 for no model or invalid crop
-            
-    #     try:
-    #         import torchvision.transforms as transforms
-    #         from PIL import Image
-
-    #         # Convert to PIL Image for model input
-    #         face_pil = Image.fromarray(face_crop)  # face_crop should already be RGB
-
-    #         # Preprocess for ResNet
-    #         preprocess = transforms.Compose([
-    #             transforms.Resize((224, 224)),
-    #             transforms.ToTensor(),
-    #             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-    #                                 std=[0.229, 0.224, 0.225])
-    #         ])
-            
-    #         input_tensor = preprocess(face_pil).unsqueeze(0)
-
-    #         # Model inference
-    #         with torch.no_grad():
-    #             output = FAS_MODEL(input_tensor)
-                
-    #             # Get probabilities with proper softmax
-    #             prob_tensor = torch.nn.functional.softmax(output, dim=1)
-                
-    #             # Return the "real" probability (index 0 for real, index 1 for fake)
-    #             real_prob = prob_tensor[0, 0].item()  # Real class probability
-                
-    #             # Apply slight smoothing to avoid extreme values
-    #             real_prob = max(0.01, min(0.99, real_prob))
-                
-    #             logger.info(f"🎯 FAS Real probability: {real_prob:.4f}")
-    #             return real_prob
-                
-    #     except Exception as e:
-    #         logger.error(f"❌ _predict_fas ERROR: {e}")
-    #         return 0.0
-
+ 
     def _detect_head_movement(self, landmarks, user_state):
         """Enhanced head movement detection with scoring - returns Python types"""
         if not landmarks or 'nose_tip' not in landmarks:
@@ -420,7 +347,7 @@ class LivenessDetector:
         
         # Detect significant movement
         if movement_distance > THRESHOLDS['HEAD_MOVEMENT_THRESHOLD']:
-            logger.info(f"🗣️ Head movement detected: {movement_distance:.2f} (score: {movement_score:.3f})")
+            logger.info(f" Head movement detected: {movement_distance:.2f} (score: {movement_score:.3f})")
             return True, movement_score
             
         return False, movement_score
@@ -436,195 +363,211 @@ class LivenessDetector:
         self.eyes_ever_opened = False
         self.mouth_ever_opened = False
 
+
     def process_frame_for_user(self, frame, user_id, mode='registration'):
-        
-        # Frame validation
+        """
+        Process a single frame for liveness detection with enhanced static image detection
+        and improved security measures.
+        """
+        # ============= FRAME VALIDATION =============
         if frame is None or frame.size == 0:
             logger.error("Invalid frame received")
             return self._create_error_response("Invalid frame")
 
-        logger.info(f"Processing frame for user {user_id}")
+        logger.info(f"Processing frame {user_id} - Frame #{user_state.frames_processed if 'user_state' in locals() else 0}")
 
-        # Convert to RGB and enhance
+        # ============= PREPROCESSING =============
+        # Convert to RGB and enhance contrast
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb_frame = cv2.convertScaleAbs(rgb_frame, alpha=1.1, beta=5)
 
-        # Initialization checks
+        # Model initialization check
         if MTCNN_MODEL is None:
+            logger.error("MTCNN model not initialized")
             return self._create_error_response("MTCNN model not initialized")
 
+        # ============= USER STATE MANAGEMENT =============
         user_state = self.get_user_state(user_id, mode)
         user_state.frames_processed += 1
 
+        # ============= FACE DETECTION =============
         boxes, probs = self._detect_face_with_retries(rgb_frame)
 
-        all_requirements_met = (
-            user_state.total_blinks >= user_state.required_blinks and
-            user_state.total_mouth_open >= user_state.required_mouth_opens and
-            user_state.total_head_movements >= user_state.required_head_movements
-        )
-
+        # No face detected
         if boxes is None or len(boxes) == 0:
             user_state.no_face_frames += 1
-            logger.warning("No face detected")
-            return {
-                "success": False,
-                "face_detected": False,
-                "error": "No face detected. Please position your face in the camera.",
-                "alert_type": "no_face",
-                "blink_count": int(user_state.total_blinks),
-                "mouth_open_count": int(user_state.total_mouth_open),
-                "head_movement_count": int(user_state.total_head_movements),
-                "face_real_score": 0.0,
-                "liveness_passed": False,
-                "liveness_score": 0.0,
-                "sequential_state": {
-                    "current_phase": user_state.current_detection_phase,
-                    "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
-                    "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
-                    "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
-                    "all_phases_complete": all_requirements_met,  # ✅ NOW DEFINED
-                    "challenge_order": user_state.challenge_order,
-                    "requirements": {
-                        "blinks": user_state.required_blinks,
-                        "mouth": user_state.required_mouth_opens,
-                        "head": user_state.required_head_movements
-                    }
-                },
-            }
+            logger.warning(f"No face detected - consecutive frames: {user_state.no_face_frames}")
+            
+            # If no face for too many frames, might be attack attempt
+            if user_state.no_face_frames > 30:
+                logger.error("Excessive no-face frames - possible attack")
+                
+            return self._create_no_face_response(user_state)
 
-        # Check for multiple faces
+        # Multiple faces detected - security risk
         if len(boxes) > 1:
+            logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
+            
+            # Reset all progress when multiple faces detected
+            self._reset_user_state_counters(user_state)
             user_state.multiple_faces_detected = True
-            logger.warning(f"Multiple faces detected: {len(boxes)}")
             
-            # Reset all counters when multiple faces detected
-            user_state.total_blinks = 0
-            user_state.total_mouth_open = 0
-            user_state.total_head_movements = 0
-            user_state.current_detection_phase = "ready"
-            
-            return {
-                "success": False,
-                "face_detected": True,
-                "error": f"Multiple faces detected ({len(boxes)}). Please ensure only one person is in view.",
-                "alert_type": "multiple_faces",
-                "faces_count": len(boxes),
-                "blink_count": 0,
-                "mouth_open_count": 0,
-                "head_movement_count": 0,
-                "face_real_score": 0.0,
-                "liveness_passed": False,
-                "liveness_score": 0.0,
-                "sequential_state": {
-                    "current_phase": "ready",
-                    "blinks_completed": False,
-                    "mouth_completed": False,
-                    "head_completed": False,
-                    "all_phases_complete": False,  
-                    "requirements": {
-                        "blinks": user_state.required_blinks,
-                        "mouth": user_state.required_mouth_opens,
-                        "head": user_state.required_head_movements
-                    }
-                }
-            }
+            return self._create_multiple_faces_response(user_state, len(boxes))
 
+        # ============= SINGLE FACE PROCESSING =============
         # Reset error counters on successful single face detection
         user_state.no_face_frames = 0
         user_state.multiple_faces_detected = False
 
-        # Process detected face
+        # Get best face
         face_detected = True
         best_idx = 0 if probs is None else np.argmax(probs)
         x1, y1, x2, y2 = [int(v) for v in boxes[best_idx]]
         
-        # Add padding
+        # Add padding for better landmark detection
         h, w = rgb_frame.shape[:2]
         padding = 20
         x1, y1 = max(0, x1 - padding), max(0, y1 - padding)
         x2, y2 = min(w, x2 + padding), min(h, y2 + padding)
 
-        # Landmark detection
+        # ============= LANDMARK DETECTION =============
         face_locations = [(y1, x2, y2, x1)]
         landmarks = face_recognition.face_landmarks(rgb_frame, face_locations)
         
+        # Initialize tracking variables
         current_eye_closed = False
         current_mouth_open = False
         ear_value = 0.0
         mar_value = 0.0
+        static_indicators = 0
         
-        if landmarks:
+        if landmarks and len(landmarks) > 0:
             lmarks = landmarks[0]
             
+            # ============= EYE ASPECT RATIO PROCESSING =============
             ear = get_eye_aspect_ratio(lmarks)
             if ear is not None:
                 ear_value = float(ear)
                 user_state.current_ear = ear_value
                 user_state.ear_history.append(ear_value)
                 
-                EAR_OPEN_THRESHOLD = 0.3  
+                # Track initial eye state (first few frames)
+                if user_state.frames_processed <= 5 and user_state.eyes_started_closed is None:
+                    user_state.eyes_started_closed = ear <= 0.25
+                    logger.info(f"Initial eye state set: {'closed' if user_state.eyes_started_closed else 'open'} (EAR: {ear:.3f})")
+                
+                # Check if eyes have ever been properly opened
+                EAR_OPEN_THRESHOLD = 0.3  # Clear open state
                 if ear > EAR_OPEN_THRESHOLD:
                     user_state.eyes_ever_opened = True
+                    logger.debug(f"Eyes confirmed open (EAR: {ear:.3f})")
                 
-                EAR_THRESHOLD = 0.25  
-                current_eye_closed = ear <= EAR_THRESHOLD
+                # Determine current eye state
+                EAR_CLOSED_THRESHOLD = 0.25
+                current_eye_closed = ear <= EAR_CLOSED_THRESHOLD
                 
+                # Process blinks only if in blinking phase AND eyes have opened before
                 phase = user_state.get_current_phase()
-                if phase == "blinking":
+                if phase == "blinking" and user_state.eyes_ever_opened:
                     self._process_blink_detection(user_state, ear)
+                elif phase == "blinking" and not user_state.eyes_ever_opened:
+                    logger.warning("Cannot process blinks - eyes never opened")
             
+            # ============= MOUTH ASPECT RATIO PROCESSING =============
             mar = get_mouth_aspect_ratio(lmarks)
             if mar is not None:
                 mar_value = float(mar)
                 user_state.current_mar = mar_value
                 user_state.mar_history.append(mar_value)
                 
-                MAR_THRESHOLD = 0.6
-                current_mouth_open = mar > MAR_THRESHOLD
+                # Track initial mouth state
+                if user_state.frames_processed <= 5 and user_state.mouth_started_closed is None:
+                    user_state.mouth_started_closed = mar <= 0.6
+                    logger.info(f"Initial mouth state set: {'closed' if user_state.mouth_started_closed else 'open'} (MAR: {mar:.3f})")
+                
+                # Check if mouth has ever been properly opened
+                MAR_OPEN_THRESHOLD = 0.6
+                current_mouth_open = mar > MAR_OPEN_THRESHOLD
                 if current_mouth_open:
                     user_state.mouth_ever_opened = True
+                    logger.debug(f"Mouth confirmed open (MAR: {mar:.3f})")
                 
+                # Process mouth opening only if in mouth phase AND mouth has moved before
                 phase = user_state.get_current_phase()
-                if phase == "mouth":
+                if phase == "mouth" and user_state.mouth_ever_opened:
                     self._process_mouth_detection(user_state, current_mouth_open)
+                elif phase == "mouth" and not user_state.mouth_ever_opened:
+                    logger.warning("Cannot process mouth - mouth never opened")
             
-            # Head movement detection (only in head phase)
+            # ============= HEAD MOVEMENT PROCESSING =============
             phase = user_state.get_current_phase()
             if phase == "head":
+                # Store head position for static detection
+                if 'nose_tip' in lmarks:
+                    nose_tip = lmarks['nose_tip'][2]
+                    user_state.head_positions.append(nose_tip)
+                
+                # Process head movement with noise filtering
                 head_moved, head_score = self._detect_head_movement(lmarks, user_state)
                 if head_moved and user_state.total_head_movements < user_state.required_head_movements:
                     user_state.total_head_movements += 1
-                    logger.info(f"Head movement detected: {user_state.total_head_movements}/{user_state.required_head_movements}")
-
-        # Update detection phase
+                    logger.info(f"Head movement #{user_state.total_head_movements}/{user_state.required_head_movements} detected")
+        
+        # ============= STATIC IMAGE DETECTION =============
+        is_static_image = self._detect_static_image_comprehensive(user_state)
+        
+        # Early exit if static image detected after sufficient frames
+        if user_state.frames_processed > 20 and is_static_image:
+            logger.error(f"STATIC IMAGE CONFIRMED at frame {user_state.frames_processed}")
+            return {
+                "success": False,
+                "face_detected": True,
+                "error": "Static image or photo detected. Please use live camera feed.",
+                "alert_type": "static_image",
+                "blink_count": 0,
+                "mouth_open_count": 0,
+                "head_movement_count": 0,
+                "face_real_score": 0.0,
+                "liveness_passed": False,
+                "liveness_score": 0.0,
+                "sequential_state": self._get_sequential_state(user_state, False),
+                "validation": {
+                    "static_image_detected": True,
+                    "eyes_ever_opened": user_state.eyes_ever_opened,
+                    "mouth_ever_opened": user_state.mouth_ever_opened,
+                    "frames_processed": user_state.frames_processed
+                }
+            }
+        
+        # ============= PHASE PROGRESSION =============
+        # Update detection phase based on completed actions
         self._update_detection_phase(user_state)
         
-        # Static image detection
-        is_static_image = False
-        if user_state.frames_processed > 30:  # After 30 frames (~1 second)
-            if not user_state.eyes_ever_opened or not user_state.mouth_ever_opened:
-                is_static_image = True
-                logger.warning(f"Static image detected: eyes_opened={user_state.eyes_ever_opened}, mouth_opened={user_state.mouth_ever_opened}")
-        
-        # 🔧 FIX: Recalculate all_requirements_met with static image check
+        # ============= FINAL VALIDATION =============
+        # Comprehensive requirements check
         all_requirements_met = (
             user_state.total_blinks >= user_state.required_blinks and
             user_state.total_mouth_open >= user_state.required_mouth_opens and
             user_state.total_head_movements >= user_state.required_head_movements and
-            not is_static_image
+            not is_static_image and
+            user_state.eyes_ever_opened and  # Must have opened eyes at least once
+            user_state.mouth_ever_opened and  # Must have opened mouth at least once
+            user_state.frames_processed >= 30  # Minimum frames for validation
         )
         
+        # Update completion status
         if all_requirements_met:
             user_state.current_detection_phase = "complete"
             user_state.blinks_completed = True
             user_state.mouth_completed = True
             user_state.head_completed = True
+            logger.info(f"LIVENESS DETECTION PASSED for user {user_id}")
         
-        # Calculate simple liveness score based on progress
-        liveness_score = self._calculate_simple_liveness_score(user_state, is_static_image)
+        # ============= SCORING =============
+        # Calculate liveness score with static image penalty
+        liveness_score = self._calculate_comprehensive_liveness_score(user_state, is_static_image)
         
-        # Build response
+        # ============= BUILD RESPONSE =============
         return {
             "success": True,
             "face_detected": bool(face_detected),
@@ -635,23 +578,11 @@ class LivenessDetector:
             "liveness_passed": bool(all_requirements_met),
             "liveness_score": float(liveness_score),
             "processing_time": 0.0,
-            "sequential_state": {
-                    "current_phase": user_state.current_detection_phase,
-                    "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
-                    "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
-                    "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
-                    "all_phases_complete": all_requirements_met,  # ✅ NOW PROPERLY DEFINED
-                    "challenge_order": user_state.challenge_order,
-                    "requirements": {
-                        "blinks": user_state.required_blinks,
-                        "mouth": user_state.required_mouth_opens,
-                        "head": user_state.required_head_movements
-                    }
-                },
+            "sequential_state": self._get_sequential_state(user_state, all_requirements_met),
             "progress": {
-                "blinks": f"{user_state.total_blinks}/{THRESHOLDS['MIN_BLINKS']}",
-                "mouth_opens": f"{user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']}", 
-                "head_movements": f"{user_state.total_head_movements}/{THRESHOLDS['MIN_HEAD_MOVEMENTS']}",
+                "blinks": f"{user_state.total_blinks}/{user_state.required_blinks}",
+                "mouth_opens": f"{user_state.total_mouth_open}/{user_state.required_mouth_opens}", 
+                "head_movements": f"{user_state.total_head_movements}/{user_state.required_head_movements}",
                 "current_requirement": self._get_current_requirement(user_state)
             },
             "current_state": {
@@ -662,12 +593,180 @@ class LivenessDetector:
                 "mar": float(mar_value),
                 "head_movement_score": float(user_state.current_head_movement_score),
                 "static_image_detected": bool(is_static_image)
+            },
+            "validation": {
+                "static_image_detected": bool(is_static_image),
+                "eyes_ever_opened": bool(user_state.eyes_ever_opened),
+                "mouth_ever_opened": bool(user_state.mouth_ever_opened),
+                "eyes_started_closed": bool(user_state.eyes_started_closed) if user_state.eyes_started_closed is not None else None,
+                "mouth_started_closed": bool(user_state.mouth_started_closed) if user_state.mouth_started_closed is not None else None,
+                "variance_ear": float(np.var(list(user_state.ear_history))) if len(user_state.ear_history) > 5 else None,
+                "variance_mar": float(np.var(list(user_state.mar_history))) if len(user_state.mar_history) > 5 else None
             }
+        }
+
+    # ============= HELPER METHODS TO ADD =============
+
+    def _detect_static_image_comprehensive(self, user_state):
+        """Comprehensive static image detection with multiple indicators"""
+        # Need minimum frames for detection
+        if user_state.frames_processed < 15:
+            return False
+        
+        static_indicators = 0
+        reasons = []
+        
+        # 1. Check if eyes/mouth never opened (strongest indicator)
+        if not user_state.eyes_ever_opened:
+            static_indicators += 3
+            reasons.append("eyes never opened")
+        
+        if not user_state.mouth_ever_opened:
+            static_indicators += 3
+            reasons.append("mouth never opened")
+        
+        # 2. Check if started closed and stayed closed
+        if user_state.eyes_started_closed and not user_state.eyes_ever_opened:
+            static_indicators += 2
+            reasons.append("eyes started and stayed closed")
+        
+        if user_state.mouth_started_closed and not user_state.mouth_ever_opened:
+            static_indicators += 2
+            reasons.append("mouth started and stayed closed")
+        
+        # 3. Check variance in measurements (low variance = static)
+        if len(user_state.ear_history) >= 10:
+            ear_variance = np.var(list(user_state.ear_history))
+            if ear_variance < 0.0005:  # Very low variance threshold
+                static_indicators += 2
+                reasons.append(f"low EAR variance: {ear_variance:.6f}")
+        
+        if len(user_state.mar_history) >= 10:
+            mar_variance = np.var(list(user_state.mar_history))
+            if mar_variance < 0.0005:
+                static_indicators += 2
+                reasons.append(f"low MAR variance: {mar_variance:.6f}")
+        
+        # 4. Check head position stability
+        if len(user_state.head_positions) >= 15:
+            positions = np.array(list(user_state.head_positions))
+            position_variance = np.var(positions, axis=0)
+            avg_variance = np.mean(position_variance)
+            if avg_variance < 0.3:  # Very stable position
+                static_indicators += 1
+                reasons.append(f"stable head position: {avg_variance:.3f}")
+        
+        # 5. Frame-to-frame consistency check
+        if hasattr(user_state, 'landmark_movements') and len(user_state.landmark_movements) > 5:
+            avg_movement = np.mean(list(user_state.landmark_movements))
+            if avg_movement < 0.1:
+                static_indicators += 1
+                reasons.append(f"low landmark movement: {avg_movement:.3f}")
+        
+        # Determine if static (threshold of 3 indicators)
+        is_static = static_indicators >= 3
+        
+        if is_static:
+            user_state.static_image_confirmed = True
+            logger.warning(f"STATIC IMAGE DETECTED - Score: {static_indicators}, Reasons: {', '.join(reasons)}")
+        
+        return is_static
+
+    def _calculate_comprehensive_liveness_score(self, user_state, is_static_image):
+        """Calculate liveness score with static image penalties"""
+        if is_static_image:
+            return 0.0  # Immediate fail for static images
+        
+        # Base scores for each component
+        blink_score = min(1.0, user_state.total_blinks / max(1, user_state.required_blinks))
+        mouth_score = min(1.0, user_state.total_mouth_open / max(1, user_state.required_mouth_opens))
+        head_score = min(1.0, user_state.total_head_movements / max(1, user_state.required_head_movements))
+        
+        # Penalties
+        penalty = 0.0
+        
+        # Penalty if eyes/mouth never opened
+        if not user_state.eyes_ever_opened:
+            penalty += 0.3
+        if not user_state.mouth_ever_opened:
+            penalty += 0.3
+        
+        # Penalty for low variance
+        if len(user_state.ear_history) > 10:
+            ear_var = np.var(list(user_state.ear_history))
+            if ear_var < 0.001:
+                penalty += 0.2
+        
+        # Calculate final score
+        base_score = (blink_score * 0.4 + mouth_score * 0.3 + head_score * 0.3)
+        final_score = max(0.0, base_score - penalty)
+        
+        # Bonus for completing all phases
+        if user_state.current_detection_phase == "complete":
+            final_score = min(1.0, final_score + 0.1)
+        
+        return float(final_score)
+
+    def _reset_user_state_counters(self, user_state):
+        """Reset all user state counters"""
+        user_state.total_blinks = 0
+        user_state.total_mouth_open = 0
+        user_state.total_head_movements = 0
+        user_state.current_detection_phase = user_state.challenge_order[0]
+        user_state.blinks_completed = False
+        user_state.mouth_completed = False
+        user_state.head_completed = False
+
+    def _get_sequential_state(self, user_state, all_requirements_met):
+        """Get sequential state information"""
+        return {
+            "current_phase": user_state.current_detection_phase,
+            "blinks_completed": user_state.total_blinks >= user_state.required_blinks,
+            "mouth_completed": user_state.total_mouth_open >= user_state.required_mouth_opens,
+            "head_completed": user_state.total_head_movements >= user_state.required_head_movements,
+            "all_phases_complete": all_requirements_met,
+            "challenge_order": user_state.challenge_order,
+            "requirements": {
+                "blinks": user_state.required_blinks,
+                "mouth": user_state.required_mouth_opens,
+                "head": user_state.required_head_movements
+            }
+        }
+
+    def _create_no_face_response(self, user_state):
+        """Create response for no face detected"""
+        return {
+            "success": False,
+            "face_detected": False,
+            "error": "No face detected. Please position your face in the camera.",
+            "alert_type": "no_face",
+            "blink_count": int(user_state.total_blinks),
+            "mouth_open_count": int(user_state.total_mouth_open),
+            "head_movement_count": int(user_state.total_head_movements),
+            "face_real_score": 0.0,
+            "liveness_passed": False,
+            "liveness_score": 0.0,
+            "sequential_state": self._get_sequential_state(user_state, False)
+        }
+
+    def _create_multiple_faces_response(self, user_state, face_count):
+        """Create response for multiple faces detected"""
+        return {
+            "success": False,
+            "face_detected": True,
+            "error": f"Multiple faces detected ({face_count}). Please ensure only one person is in view.",
+            "alert_type": "multiple_faces",
+            "faces_count": face_count,
+            "blink_count": 0,
+            "mouth_open_count": 0,
+            "head_movement_count": 0,
+            "face_real_score": 0.0,
+            "liveness_passed": False,
+            "liveness_score": 0.0,
+            "sequential_state": self._get_sequential_state(user_state, False)
         }
     
     def _update_detection_phase(self, user_state):
-        """Update detection phase based on real progress and random order"""
-        # Get current position in challenge order
         current_phase_index = -1
         for i, phase in enumerate(user_state.challenge_order):
             if phase == "blinking" and user_state.total_blinks < user_state.required_blinks:

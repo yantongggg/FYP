@@ -41,7 +41,6 @@ LOCKOUT_DURATION_MINUTES = 15
 OTP_EXPIRY_MINUTES = 10
 
 class SupabaseManager:
-    """FIXED: Enhanced Supabase manager with proper data persistence"""
     
     def __init__(self):
         self.url = os.getenv("SUPABASE_URL")
@@ -53,27 +52,22 @@ class SupabaseManager:
             self.client = None
         else:
             self.client: Client = create_client(self.url, self.service_key)
-            logger.info("✅ Supabase client initialized")
+            logger.info("Supabase client initialized")
 
-    # ========== FIXED LOGIN AUDIT FUNCTIONALITY ==========
+    # ========== LOGIN AUDIT FUNCTIONALITY ==========
    
     def save_login_audit(self, user_id: str, email: str, success: bool, 
                  error_reason: str = None, ip_address: str = None, 
                  user_agent: str = None, biometric_scores: dict = None, 
                  face_image_url: str = None, session_duration: int = None,
                  geolocation: dict = None) -> bool:
-        """
-        FIXED: Save login audit with schema-compatible data types
-        """
         try:
             if not self.client:
                 logger.warning("No Supabase client - skipping login audit")
                 return False
             
-            # ✅ Convert user_id to string (matches text type in login_audit table)
             user_id_str = str(user_id)
 
-            # ✅ Data conversion for special types
             def convert_to_native_types(obj):
                 """Convert numpy/special types to JSON-serializable types"""
                 if obj is None:
@@ -91,7 +85,6 @@ class SupabaseManager:
                 else:
                     return obj
 
-            # ✅ Build audit payload matching login_audit schema
             audit_data = {
                 'user_id': user_id_str,
                 'event_ts': datetime.now().isoformat(),
@@ -115,26 +108,23 @@ class SupabaseManager:
                 logger.error(f"JSON serialization error: {e}")
                 return False
 
-            logger.info(f"💾 Saving login audit for user {user_id_str}")
+            logger.info(f" Saving login audit for user {user_id_str}")
 
             # Insert into Supabase
             result = self.client.table("login_audit").insert(audit_data).execute()
 
             if result.data:
-                logger.info(f"✅ Login audit saved: {result.data[0].get('id')}")
+                logger.info(f" Login audit saved: {result.data[0].get('id')}")
                 return True
-            logger.error("❌ Supabase returned no data")
+            logger.error(" Supabase returned no data")
             return False
 
         except Exception as e:
-            logger.error(f"❌ Login audit error: {e}", exc_info=True)
+            logger.error(f" Login audit error: {e}", exc_info=True)
             return False
     
     async def log_login_attempt(self, email: str, attempt_type: str, success: bool, 
                                failure_reason: str = None, ip_address: str = None) -> Dict:
-        """
-        FIXED: Log login attempts with better error handling
-        """
         try:
             if not self.client:
                 return {"success": True, "message": "No client - skipped"}
@@ -226,7 +216,7 @@ class SupabaseManager:
             logger.error(f"Check lockout error: {e}")
             return {"locked": False}
 
-    # ========== ENHANCED OTP EMAIL FUNCTIONALITY ==========
+    # ==========  OTP EMAIL FUNCTIONALITY ==========
     
     async def send_otp_email(self, email: str, purpose: str = 'login_fallback', user_id: str = None) -> Dict:
         try:
@@ -295,20 +285,20 @@ class SupabaseManager:
                 server.login(sender, smtp_password)
                 server.send_message(msg)
 
-            logger.info(f"✅ Email sent via SMTP to {email}")
+            logger.info(f" Email sent via SMTP to {email}")
             return "smtp"
         except Exception as e:
-            logger.error(f"❌ SMTP fallback failed: {e}")
-            logger.info(f"🔐 Fallback OTP for {email}: {otp_code}")
+            logger.error(f" SMTP fallback failed: {e}")
+            logger.info(f" Fallback OTP for {email}: {otp_code}")
             return "development_log"
 
     def _compose_email(self, purpose: str, otp_code: str) -> Tuple[str, str]:
         """Compose email content based on purpose"""
         subject_map = {
-            'login_fallback': "🔐 Login Verification Code",
-            'email_verification': "📧 Verify Your Email Address"
+            'login_fallback': " Login Verification Code",
+            'email_verification': " Verify Your Email Address"
         }
-        subject = subject_map.get(purpose, "🔑 Verification Code")
+        subject = subject_map.get(purpose, " Verification Code")
         color = {'login_fallback': '#2563eb', 'email_verification': '#059669'}.get(purpose, '#7c3aed')
 
         html = f"""
@@ -373,7 +363,7 @@ class SupabaseManager:
                     .eq("id", otp_record['user_id']) \
                     .execute()
 
-            logger.info(f"✅ OTP verified successfully for {email}")
+            logger.info(f" OTP verified successfully for {email}")
             
             return {
                 "success": True,
@@ -385,12 +375,9 @@ class SupabaseManager:
             logger.error(f"Verify OTP error: {e}")
             return {"success": False, "error": str(e)}
 
-    # ========== FIXED FACE IMAGE UPLOAD ==========
+    # ==========  FACE IMAGE UPLOAD ==========
     
     def upload_debug_face_file(self, user_id: str, binary_data: bytes, timestamp: int) -> str:
-        """
-        CRITICAL FIX: Upload binary image data to Supabase Storage with GUARANTEED success
-        """
         try:
             if not self.client:
                 logger.error("No Supabase client available for file upload")
@@ -417,7 +404,7 @@ class SupabaseManager:
                 if storage_result:
                     public_url_result = self.client.storage.from_(bucket_name).get_public_url(filename)
                     public_url = public_url_result
-                    logger.info(f"✅ Face uploaded via Python client: {public_url}")
+                    logger.info(f"Face uploaded via Python client: {public_url}")
                     return public_url
                     
             except Exception as client_error:
@@ -437,14 +424,14 @@ class SupabaseManager:
 
             if response.status_code in [200, 201]:
                 public_url = f"{self.url}/storage/v1/object/public/{bucket_name}/{filename}"
-                logger.info(f"✅ Face uploaded via REST API: {public_url}")
+                logger.info(f" Face uploaded via REST API: {public_url}")
                 return public_url
             else:
-                logger.error(f"❌ REST API upload failed: {response.status_code} - {response.text}")
+                logger.error(f" REST API upload failed: {response.status_code} - {response.text}")
                 return ""
 
         except Exception as e:
-            logger.error(f"❌ CRITICAL: Face upload error: {str(e)}", exc_info=True)
+            logger.error(f" CRITICAL: Face upload error: {str(e)}", exc_info=True)
             return ""
 
     def upload_ekyc_document(self, user_id: str, binary_data: bytes, document_type: str, timestamp: int = None) -> str:
@@ -472,7 +459,7 @@ class SupabaseManager:
 
             if response.status_code in [200, 201]:
                 public_url = f"{self.url}/storage/v1/object/public/ekycdoc/{filename}"
-                logger.info(f"✅ eKYC document uploaded: {public_url}")
+                logger.info(f" eKYC document uploaded: {public_url}")
                 return public_url
             else:
                 logger.error(f"eKYC upload failed: {response.status_code} - {response.text}")
@@ -482,12 +469,9 @@ class SupabaseManager:
             logger.error(f"eKYC upload error: {str(e)}")
             return ""
 
-    # ========== CRITICAL FIX: Database Health Check ==========
+    # ========== Database Health Check ==========
     
     def test_database_connection(self) -> Dict:
-        """
-        CRITICAL FIX: Test database connection and table accessibility
-        """
         try:
             if not self.client:
                 return {
@@ -511,9 +495,9 @@ class SupabaseManager:
                 try:
                     test_result = self.client.table(table_name).select("id").limit(1).execute()
                     tables_accessible[table_name] = True
-                    logger.info(f"✅ Table {table_name} accessible")
+                    logger.info(f" Table {table_name} accessible")
                 except Exception as table_error:
-                    logger.error(f"❌ Table {table_name} not accessible: {table_error}")
+                    logger.error(f" Table {table_name} not accessible: {table_error}")
             
             return {
                 'connected': True,
@@ -522,14 +506,13 @@ class SupabaseManager:
             }
             
         except Exception as e:
-            logger.error(f"❌ Database connection test failed: {e}")
+            logger.error(f" Database connection test failed: {e}")
             return {
                 'connected': False,
                 'error': str(e)
             }
     # ========== USER CREDENTIALS ==========
-    
-        # ========== CRITICAL FIX: User ID Consistency ==========
+
     
     def ensure_user_id_consistency(self, user_id: str) -> str:
         """
@@ -555,7 +538,6 @@ class SupabaseManager:
 
 
     async def store_user_credentials(self, user_data: Dict) -> Dict:
-        """FIXED: Store user credentials with proper validation"""
         try:
             if not self.client:
                 user_id = f"mock_user_{int(time.time())}"
@@ -606,7 +588,7 @@ class SupabaseManager:
             }
             
             result = self.client.table("users").insert(user_record).execute()
-            logger.info(f"✅ New user credentials stored for {user_id}")
+            logger.info(f" New user credentials stored for {user_id}")
             
             return {
                 "success": True,
@@ -620,11 +602,10 @@ class SupabaseManager:
             return {"success": False, "error": str(e)}
 
     # ========== BIOMETRIC DATA ==========
-        # ========== CRITICAL FIX: Enhanced Data Saving Methods ==========
     
     def save_behavioral_session_guaranteed(self, session_data: Dict) -> bool:
         """
-        CRITICAL FIX: Save behavioral session with GUARANTEED persistence
+        Save behavioral session with GUARANTEED persistence
         """
         try:
             if not self.client:
@@ -648,43 +629,43 @@ class SupabaseManager:
             if 'created_at' not in session_data:
                 session_data['created_at'] = datetime.now().isoformat()
             
-            logger.info(f"💾 Saving behavioral session: {session_data.get('session_id', 'unknown')}")
+            logger.info(f" Saving behavioral session: {session_data.get('session_id', 'unknown')}")
             
             result = self.client.table("behavioral_sessions").insert(session_data).execute()
             
             if result.data and len(result.data) > 0:
-                logger.info(f"✅ Behavioral session saved: {result.data[0]['id']}")
+                logger.info(f" Behavioral session saved: {result.data[0]['id']}")
                 return True
             else:
-                logger.error(f"❌ Failed to save behavioral session - no data returned")
+                logger.error(f" Failed to save behavioral session - no data returned")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ CRITICAL: Error saving behavioral session: {e}", exc_info=True)
+            logger.error(f" CRITICAL: Error saving behavioral session: {e}", exc_info=True)
             logger.error(f"Session data: {session_data}")
             return False
 
 
     def save_anomaly_guaranteed(self, anomaly_data: Dict) -> bool:
         """
-        CRITICAL FIX: Save anomaly with GUARANTEED persistence and proper schema matching
+       Save anomaly with GUARANTEED persistence and proper schema matching
         """
         try:
             if not self.client:
                 logger.warning("No Supabase client - cannot save anomaly")
                 return False
             
-            # ✅ CRITICAL: Convert user_id to UUID format for anomaly_audit table
+            # Convert user_id to UUID format for anomaly_audit table
             user_id = anomaly_data.get('user_id', '')
             try:
                 # Ensure user_id is in UUID format
                 uuid_obj = uuid.UUID(user_id)
                 user_id_uuid = str(uuid_obj)
             except ValueError:
-                logger.error(f"❌ Invalid UUID format for user_id: {user_id}")
+                logger.error(f" Invalid UUID format for user_id: {user_id}")
                 return False
             
-            # ✅ CRITICAL: Build anomaly payload matching exact schema
+            # Build anomaly payload matching exact schema
             current_time = datetime.now()
             
             # Prepare the anomaly record with ALL required fields
@@ -710,25 +691,24 @@ class SupabaseManager:
                 'user_id', 'session_id', 'anomaly_type', 'anomaly_score', 'severity', 'action_taken'
             ]}
             
-            logger.info(f"💾 Saving anomaly to anomaly_audit table: {cleaned_record.get('anomaly_type')} for user {user_id_uuid}")
+            logger.info(f" Saving anomaly to anomaly_audit table: {cleaned_record.get('anomaly_type')} for user {user_id_uuid}")
             
             # Insert into anomaly_audit table
             result = self.client.table("anomaly_audit").insert(cleaned_record).execute()
             
             if result.data and len(result.data) > 0:
                 anomaly_id = result.data[0]['id']
-                logger.info(f"✅ Anomaly saved successfully: {anomaly_id}")
-                
-                # ✅ CRITICAL: Trigger real-time update event
+                logger.info(f" Anomaly saved successfully: {anomaly_id}")
+            
                 self._trigger_anomaly_update_event(user_id_uuid, anomaly_id, cleaned_record)
                 
                 return True
             else:
-                logger.error(f"❌ Failed to save anomaly - no data returned from Supabase")
+                logger.error(f" Failed to save anomaly - no data returned from Supabase")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ CRITICAL: Error saving anomaly: {e}", exc_info=True)
+            logger.error(f" CRITICAL: Error saving anomaly: {e}", exc_info=True)
             logger.error(f"Anomaly data: {anomaly_data}")
             return False
 
@@ -749,18 +729,16 @@ class SupabaseManager:
             }
             
             # This would trigger any real-time listeners
-            logger.info(f"🔄 Triggered anomaly update event for user {user_id}")
+            logger.info(f" Triggered anomaly update event for user {user_id}")
             
         except Exception as e:
             logger.error(f"Error triggering anomaly update event: {e}")
 
 
-    # ========== CRITICAL FIX: Data Retrieval Methods ==========
+    # ========== Data Retrieval Methods ==========
     
     def get_user_behavioral_sessions_guaranteed(self, user_id: str, limit: int = 20) -> List[Dict]:
-        """
-        CRITICAL FIX: Get user behavioral sessions with comprehensive error handling
-        """
+  
         try:
             if not self.client:
                 logger.warning("No Supabase client - returning empty list")
@@ -769,7 +747,7 @@ class SupabaseManager:
             # Convert user_id to string for behavioral_sessions table
             user_id_str = str(user_id)
             
-            logger.info(f"🔍 Fetching behavioral sessions for user: {user_id_str}")
+            logger.info(f" Fetching behavioral sessions for user: {user_id_str}")
             
             result = self.client.table("behavioral_sessions") \
                 .select("*") \
@@ -779,12 +757,12 @@ class SupabaseManager:
                 .execute()
             
             sessions = result.data or []
-            logger.info(f"✅ Retrieved {len(sessions)} behavioral sessions for user {user_id_str}")
+            logger.info(f" Retrieved {len(sessions)} behavioral sessions for user {user_id_str}")
             
             return sessions
             
         except Exception as e:
-            logger.error(f"❌ Error fetching behavioral sessions: {e}", exc_info=True)
+            logger.error(f" Error fetching behavioral sessions: {e}", exc_info=True)
             return []
 
     def save_behavioral_test_results(self, user_id: str, test_results: Dict) -> bool:
@@ -804,16 +782,16 @@ class SupabaseManager:
                 if self.save_anomaly_guaranteed(test_results['anomaly_data']):
                     success_count += 1
             
-            logger.info(f"✅ Saved {success_count} behavioral test records for user {user_id}")
+            logger.info(f" Saved {success_count} behavioral test records for user {user_id}")
             return success_count > 0
             
         except Exception as e:
-            logger.error(f"❌ Error saving behavioral test results: {e}")
+            logger.error(f" Error saving behavioral test results: {e}")
             return False
 
     def get_user_anomalies_guaranteed(self, user_id: str, limit: int = 10) -> List[Dict]:
         """
-        CRITICAL FIX: Get user anomalies with comprehensive error handling
+        : Get user anomalies with comprehensive error handling
         """
         try:
             if not self.client:
@@ -825,10 +803,10 @@ class SupabaseManager:
                 uuid_obj = uuid.UUID(user_id)
                 user_id_uuid = str(uuid_obj)
             except ValueError:
-                logger.error(f"❌ Invalid UUID format for anomaly query: {user_id}")
+                logger.error(f" Invalid UUID format for anomaly query: {user_id}")
                 return []
             
-            logger.info(f"🚨 Fetching anomalies for user: {user_id_uuid}")
+            logger.info(f" Fetching anomalies for user: {user_id_uuid}")
             
             result = self.client.table("anomaly_audit") \
                 .select("*") \
@@ -838,17 +816,17 @@ class SupabaseManager:
                 .execute()
             
             anomalies = result.data or []
-            logger.info(f"✅ Retrieved {len(anomalies)} anomalies for user {user_id_uuid}")
+            logger.info(f"Retrieved {len(anomalies)} anomalies for user {user_id_uuid}")
             
             return anomalies
             
         except Exception as e:
-            logger.error(f"❌ Error fetching anomalies: {e}", exc_info=True)
+            logger.error(f" Error fetching anomalies: {e}", exc_info=True)
             return []
 
     def get_user_login_audit_guaranteed(self, user_id: str, limit: int = 10) -> List[Dict]:
         """
-        CRITICAL FIX: Get user login audit with comprehensive error handling
+        Get user login audit with comprehensive error handling
         """
         try:
             if not self.client:
@@ -860,10 +838,10 @@ class SupabaseManager:
                 uuid.UUID(user_id)
                 uuid_user_id = user_id
             except ValueError:
-                logger.error(f"❌ Invalid UUID format for login audit query: {user_id}")
+                logger.error(f" Invalid UUID format for login audit query: {user_id}")
                 return []
             
-            logger.info(f"🔐 Fetching login audit for user: {uuid_user_id}")
+            logger.info(f" Fetching login audit for user: {uuid_user_id}")
             
             result = self.client.table("login_audit") \
                 .select("*") \
@@ -873,17 +851,17 @@ class SupabaseManager:
                 .execute()
             
             login_records = result.data or []
-            logger.info(f"✅ Retrieved {len(login_records)} login records for user {uuid_user_id}")
+            logger.info(f" Retrieved {len(login_records)} login records for user {uuid_user_id}")
             
             return login_records
             
         except Exception as e:
-            logger.error(f"❌ Error fetching login audit: {e}", exc_info=True)
+            logger.error(f" Error fetching login audit: {e}", exc_info=True)
             return []
 
 
     async def store_biometric_data(self, user_id: str, biometric_data: Dict, user_agent: str = "unknown") -> Dict:
-        """FIXED: Store biometric data with proper structure"""
+        """ Store biometric data with proper structure"""
         try:
             logger.info(f"Storing biometric data for user {user_id}")
 
@@ -920,7 +898,7 @@ class SupabaseManager:
                     "last_face_enrolled_at": datetime.now().isoformat()
                 }).eq("id", user_id).execute()
                 
-                logger.info(f"✅ Biometric data stored successfully for user {user_id}")
+                logger.info(f" Biometric data stored successfully for user {user_id}")
 
             return {
                 "success": True,
@@ -968,7 +946,7 @@ class SupabaseManager:
                     "last_behavioral_enrolled_at": datetime.now().isoformat()
                 }).eq("id", user_id).execute()
                 
-                logger.info(f"✅ Behavioral pattern stored for {user_id}")
+                logger.info(f" Behavioral pattern stored for {user_id}")
             
             return {
                 "success": True,
@@ -1005,7 +983,7 @@ class SupabaseManager:
                     "error": "Both front and back IC images are required"
                 }
             
-            logger.info(f"🔍 Processing eKYC documents for user {user_id}")
+            logger.info(f" Processing eKYC documents for user {user_id}")
             
             # Decode images
             try:
@@ -1035,7 +1013,7 @@ class SupabaseManager:
             back_validation = {"is_valid": True, "validation_score": 1.0}
             
             # Process with OCR
-            logger.info("📝 Processing IC with OCR")
+            logger.info(" Processing IC with OCR")
             mykad_ocr = MyKadOCR()
             ocr_result = mykad_ocr.process_mykad_front(front_image_rgb)
             verification_results['ocr_result'] = ocr_result
@@ -1106,7 +1084,7 @@ class SupabaseManager:
                 for record in ekyc_records:
                     self.client.table("ekyc_documents").insert(record).execute()
                 
-                logger.info(f"✅ eKYC documents processed and stored for {user_id}")
+                logger.info(f" eKYC documents processed and stored for {user_id}")
             
             return {
                 "success": True,
@@ -1365,7 +1343,7 @@ class SupabaseManager:
                 front_url = self.upload_ekyc_document(user_id, front_binary, "ic_front", timestamp)
                 if front_url:
                     storage_results['front_url'] = front_url
-                    logger.info(f"✅ IC front image uploaded: {front_url}")
+                    logger.info(f" IC front image uploaded: {front_url}")
             except Exception as e:
                 logger.error(f"Failed to upload front IC: {e}")
             
@@ -1374,7 +1352,7 @@ class SupabaseManager:
                 back_url = self.upload_ekyc_document(user_id, back_binary, "ic_back", timestamp)
                 if back_url:
                     storage_results['back_url'] = back_url
-                    logger.info(f"✅ IC back image uploaded: {back_url}")
+                    logger.info(f" IC back image uploaded: {back_url}")
             except Exception as e:
                 logger.error(f"Failed to upload back IC: {e}")
             

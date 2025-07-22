@@ -113,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('currentUser', JSON.stringify(demoUser));
         localStorage.setItem('auth_token', 'demo-token');
         
-        console.log('✅ Demo login successful');
+        console.log('  Demo login successful');
         return;
       }
 
@@ -161,10 +161,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('Failed to update last login:', dbError);
       }
 
-      console.log('✅ Login successful');
+      console.log('  Login successful');
 
     } catch (error) {
-      console.error('❌ Login error:', error);
+      console.error('  Login error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -256,10 +256,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('currentUser', JSON.stringify(userData));
       localStorage.setItem('auth_token', 'user-token-' + newUser.id);
 
-      console.log('✅ Registration successful');
+      console.log('  Registration successful');
 
     } catch (error) {
-      console.error('❌ Registration error:', error);
+      console.error('  Registration error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -280,10 +280,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(null);
       setUserData(null);
       
-      console.log('✅ Logout successful');
+      console.log('  Logout successful');
       
     } catch (error) {
-      console.error('❌ Logout error:', error);
+      console.error('  Logout error:', error);
     } finally {
       setLoading(false);
     }
@@ -318,10 +318,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       localStorage.setItem('currentUser', JSON.stringify(updatedUserData));
 
-      console.log('✅ User data updated');
+      console.log('  User data updated');
 
     } catch (error) {
-      console.error('❌ Error updating user data:', error);
+      console.error('  Error updating user data:', error);
       throw error;
     }
   };

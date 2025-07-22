@@ -906,7 +906,7 @@ def update_profile():
         email = data.get('email')
         new_password = data.get('new_password')
         
-        logger.info(f"🔄 Updating profile for user {user_id}")
+        logger.info(f" Updating profile for user {user_id}")
         
         if not user_id:
             return jsonify({'success': False, 'error': 'User ID required'}), 400
@@ -979,7 +979,7 @@ def update_profile():
             .execute()
         
         if result.data:
-            logger.info(f"✅ Profile updated for user {user_id}: {list(update_data.keys())}")
+            logger.info(f" Profile updated for user {user_id}: {list(update_data.keys())}")
             
             # Log the profile update for audit
             try:
@@ -992,7 +992,7 @@ def update_profile():
                     request.remote_addr
                 ))
             except:
-                pass  # Don't fail if logging fails
+                pass 
             
             return jsonify({
                 'success': True,
@@ -1045,7 +1045,7 @@ def admin_get_users():
                 'trust_score': user.get('trust_score', 85)
             })
         
-        logger.info(f"✅ Loaded {len(users)} users for admin")
+        logger.info(f" Loaded {len(users)} users for admin")
         
         return jsonify({
             'success': True,
@@ -1114,7 +1114,7 @@ def admin_update_user():
         trust_score = data.get('trust_score')
         is_active = data.get('is_active')
         
-        logger.info(f"🛡️ Admin updating user {user_id}")
+        logger.info(f" Admin updating user {user_id}")
         
         if not user_id:
             return jsonify({'success': False, 'error': 'User ID required'}), 400
@@ -1145,7 +1145,7 @@ def admin_update_user():
             .execute()
         
         if result.data:
-            logger.info(f"✅ Admin updated user {user_id}: {list(update_data.keys())}")
+            logger.info(f" Admin updated user {user_id}: {list(update_data.keys())}")
             
             return jsonify({
                 'success': True,
@@ -1168,7 +1168,7 @@ def admin_toggle_user_status():
         user_id = data.get('user_id')
         is_active = data.get('is_active')
         
-        logger.info(f"🛡️ Admin toggling user status: {user_id} -> {is_active}")
+        logger.info(f" Admin toggling user status: {user_id} -> {is_active}")
         
         if not user_id:
             return jsonify({'success': False, 'error': 'User ID required'}), 400
@@ -1184,7 +1184,7 @@ def admin_toggle_user_status():
         
         if result.data:
             status_text = "activated" if is_active else "deactivated"
-            logger.info(f"✅ User {user_id} {status_text}")
+            logger.info(f" User {user_id} {status_text}")
             
             return jsonify({
                 'success': True,
@@ -1235,7 +1235,7 @@ def continuous_behavioral_monitor_fixed():
         try:
             current_features = calculate_simple_behavioral_features(keystrokes, mouse_movements)
         except Exception as e:
-            logger.error(f"❌ Error calculating features: {e}")
+            logger.error(f" Error calculating features: {e}")
             current_features = {
                 'typing_speed': 40.0,
                 'avg_velocity': 100.0,
@@ -1386,7 +1386,7 @@ def behavioral_verify_adapted():
                 'received': typed_text
             }), 400
         
-        logger.info(f"🔍 Starting behavioral verification for {user_id} (type: {verification_type})")
+        logger.info(f" Starting behavioral verification for {user_id} (type: {verification_type})")
         
         # Enhanced verification with anomaly detection
         result = run_async(
@@ -1691,7 +1691,7 @@ def extract_mouse_velocity(movements: list) -> float:
 @app.route('/api/admin/anomalies/recent', methods=['GET'])
 @cross_origin()
 def get_recent_anomalies_enhanced():
-    """ENHANCED: Get recent anomalies with better error handling and real-time updates"""
+    """Get recent anomalies with better error handling and real-time updates"""
     try:
         limit = request.args.get('limit', 50, type=int)
         severity_filter = request.args.get('severity', 'all')
@@ -1705,7 +1705,7 @@ def get_recent_anomalies_enhanced():
                 'mock': True
             })
         
-        logger.info(f"🔍 ENHANCED: Fetching recent anomalies (limit: {limit}, severity: {severity_filter})")
+        logger.info(f" Fetching recent anomalies (limit: {limit}, severity: {severity_filter})")
         
         # Build query with proper error handling
         try:
@@ -1743,7 +1743,7 @@ def get_recent_anomalies_enhanced():
                 
                 enhanced_anomalies.append(anomaly)
             
-            logger.info(f"✅ ENHANCED: Retrieved {len(enhanced_anomalies)} anomalies")
+            logger.info(f"Retrieved {len(enhanced_anomalies)} anomalies")
             
             return jsonify({
                 'success': True,
@@ -1754,7 +1754,7 @@ def get_recent_anomalies_enhanced():
             })
             
         except Exception as query_error:
-            logger.error(f"❌ Query error: {query_error}")
+            logger.error(f" Query error: {query_error}")
             # Fallback to basic query
             try:
                 fallback_result = supabase_manager.client.table("anomaly_audit") \
@@ -1771,14 +1771,14 @@ def get_recent_anomalies_enhanced():
                     'error': 'Used fallback query due to enhanced query failure'
                 })
             except Exception as fallback_error:
-                logger.error(f"❌ Even fallback query failed: {fallback_error}")
+                logger.error(f" Even fallback query failed: {fallback_error}")
                 return jsonify({
                     'success': False,
                     'error': f'Database query failed: {str(fallback_error)}'
                 }), 500
         
     except Exception as e:
-        logger.error(f"❌ ENHANCED: Error fetching anomalies: {e}", exc_info=True)
+        logger.error(f" Error fetching anomalies: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': f'Internal server error: {str(e)}'
@@ -1788,7 +1788,7 @@ def get_recent_anomalies_enhanced():
 @cross_origin()
 def get_user_anomalies_fixed(user_id):
     """
-    CRITICAL FIX: Get anomalies with proper UUID handling
+     Get anomalies with proper UUID handling
     """
     try:
         limit = request.args.get('limit', 10, type=int)
@@ -1802,7 +1802,7 @@ def get_user_anomalies_fixed(user_id):
                 'mock': True
             })
         
-        logger.info(f"🚨 FIXED: Fetching anomalies for user {user_id}")
+        logger.info(f" Fetching anomalies for user {user_id}")
         
         # CRITICAL: Ensure proper UUID format
         user_id_uuid = ensure_uuid_format(user_id)
@@ -1819,7 +1819,7 @@ def get_user_anomalies_fixed(user_id):
                     .execute()
                 
                 anomalies = result.data or []
-                logger.info(f"✅ FIXED: Found {len(anomalies)} anomalies for user {user_id_uuid} on attempt {attempt + 1}")
+                logger.info(f"Found {len(anomalies)} anomalies for user {user_id_uuid} on attempt {attempt + 1}")
                 
                 return jsonify({
                     'success': True,
@@ -1831,7 +1831,7 @@ def get_user_anomalies_fixed(user_id):
                 })
                 
             except Exception as e:
-                logger.error(f"❌ Attempt {attempt + 1} failed: {e}")
+                logger.error(f" Attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
                     return jsonify({
                         'success': False,
@@ -1841,7 +1841,7 @@ def get_user_anomalies_fixed(user_id):
                 time.sleep(0.5)
         
     except Exception as e:
-        logger.error(f"❌ FIXED: Error fetching anomalies: {e}", exc_info=True)
+        logger.error(f" Error fetching anomalies: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': f'Internal server error: {str(e)}'
@@ -1851,7 +1851,7 @@ def get_user_anomalies_fixed(user_id):
 @cross_origin()
 def get_user_behavioral_sessions_fixed(user_id):
     """
-    CRITICAL FIX: Get behavioral sessions with proper UUID handling
+     Get behavioral sessions with proper UUID handling
     """
     try:
         limit = request.args.get('limit', 20, type=int)
@@ -1865,12 +1865,12 @@ def get_user_behavioral_sessions_fixed(user_id):
                 'mock': True
             })
         
-        logger.info(f"🔍 FIXED: Fetching behavioral sessions for user {user_id}")
+        logger.info(f" Fetching behavioral sessions for user {user_id}")
         
-        # CRITICAL: Ensure proper UUID format
+        # Ensure proper UUID format
         user_id_uuid = ensure_uuid_format(user_id)
         
-        # Enhanced query with retry logic
+        #  retry logic
         max_retries = 2
         for attempt in range(max_retries):
             try:
@@ -1882,7 +1882,7 @@ def get_user_behavioral_sessions_fixed(user_id):
                     .execute()
                 
                 sessions = result.data or []
-                logger.info(f"✅ FIXED: Found {len(sessions)} sessions for user {user_id_uuid} on attempt {attempt + 1}")
+                logger.info(f" Found {len(sessions)} sessions for user {user_id_uuid} on attempt {attempt + 1}")
                 
                 return jsonify({
                     'success': True,
@@ -1894,7 +1894,7 @@ def get_user_behavioral_sessions_fixed(user_id):
                 })
                 
             except Exception as e:
-                logger.error(f"❌ Attempt {attempt + 1} failed: {e}")
+                logger.error(f"Attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
                     return jsonify({
                         'success': False,
@@ -1904,7 +1904,7 @@ def get_user_behavioral_sessions_fixed(user_id):
                 time.sleep(0.5)
         
     except Exception as e:
-        logger.error(f"❌ FIXED: Error fetching behavioral sessions: {e}", exc_info=True)
+        logger.error(f"Error fetching behavioral sessions: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': f'Internal server error: {str(e)}'
@@ -1913,7 +1913,7 @@ def get_user_behavioral_sessions_fixed(user_id):
 @app.route('/api/save-behavioral-session', methods=['POST'])
 @cross_origin()
 def save_behavioral_session_enhanced():
-    """ENHANCED: Save behavioral session with guaranteed persistence"""
+    """ Save behavioral session with guaranteed persistence"""
     try:
         data = request.get_json()
         
@@ -1930,7 +1930,7 @@ def save_behavioral_session_enhanced():
                 'error': 'user_id is required'
             }), 400
         
-        logger.info(f"💾 ENHANCED: Saving behavioral session for user {user_id}")
+        logger.info(f"  ENHANCED: Saving behavioral session for user {user_id}")
         
         # Build comprehensive session record
         current_time = datetime.now()
@@ -1976,7 +1976,7 @@ def save_behavioral_session_enhanced():
                 
                 if result.data and len(result.data) > 0:
                     session_db_id = result.data[0]['id']
-                    logger.info(f"✅ ENHANCED: Behavioral session saved on attempt {attempt + 1}: {session_db_id}")
+                    logger.info(f" Behavioral session saved on attempt {attempt + 1}: {session_db_id}")
                     
                     return jsonify({
                         "success": True, 
@@ -1989,9 +1989,9 @@ def save_behavioral_session_enhanced():
                     raise Exception("No data returned from Supabase insert")
                     
             except Exception as e:
-                logger.error(f"❌ Attempt {attempt + 1} failed to save session: {e}")
+                logger.error(f" Attempt {attempt + 1} failed to save session: {e}")
                 if attempt == max_retries - 1:
-                    logger.error(f"❌ CRITICAL: All {max_retries} attempts failed to save session")
+                    logger.error(f" All {max_retries} attempts failed to save session")
                     return jsonify({
                         "success": False, 
                         "error": f"Failed to save session after {max_retries} attempts: {str(e)}"
@@ -2002,7 +2002,7 @@ def save_behavioral_session_enhanced():
                 time.sleep(0.5 * (attempt + 1))
         
     except Exception as e:
-        logger.error(f"❌ CRITICAL: Enhanced save session error: {e}", exc_info=True)
+        logger.error(f"save session error: {e}", exc_info=True)
         return jsonify({
             "success": False, 
             "error": f"Internal server error: {str(e)}"
@@ -2019,28 +2019,28 @@ def sequential_liveness_detect_optimized():
         current_step = data.get("current_step", "ready")
         face_image_b64 = data.get("face_image")
 
-        logger.info(f"🔍 [API] Request: user={user_id}, mode={mode}, step={current_step}, reset={reset_counters}")
+        logger.info(f"[API] Request: user={user_id}, mode={mode}, step={current_step}, reset={reset_counters}")
 
         if not face_image_b64:
-            logger.error("❌ [API] No face image provided")
+            logger.error(" [API] No face image provided")
             return jsonify({'success': False, 'error': 'Face image required'}), 400
 
-        # ✅ FIXED: Proper session creation with all required fields
+        #  Proper session creation with all required fields
         with session_lock:
             if reset_counters or user_id not in USER_SESSIONS:
-                logger.info(f"🔄 [SESSION] Creating new session for user {user_id}")
+                logger.info(f"[SESSION] Creating new session for user {user_id}")
                 
-                # ✅ EXPLICIT: Create session with ALL fields initialized
+                #  Create session with ALL fields initialized
                 session = EnhancedLivenessSession(
                     user_id=user_id,
                     start_time=time.time(),
                     mode=mode,
                     current_step=current_step,
-                    required_blinks=2,           # ✅ FIXED: Always 2
-                    required_mouth=1,            # ✅ FIXED: Always 1  
-                    required_head=1,             # ✅ FIXED: Always 1
+                    required_blinks=2,          
+                    required_mouth=1,           
+                    required_head=1,           
                     required_score=0.2,
-                    all_requirements_met=False,  # ✅ CRITICAL: Explicit initialization
+                    all_requirements_met=False,  
                     completion_time=0.0,
                     last_face_score=0.0,
                     last_enhanced_score=0.0,
@@ -2052,32 +2052,29 @@ def sequential_liveness_detect_optimized():
                 if 'DETECTOR' in globals():
                     DETECTOR.reset_user_counters(user_id)
                     
-                logger.info(f"✅ [SESSION] Created: {session}")
+                logger.info(f"[SESSION] Created: {session}")
             else:
                 session = USER_SESSIONS[user_id]
                 session.current_step = current_step
                 
-                # ✅ SAFETY: Ensure all attributes exist (defensive programming)
                 if not hasattr(session, 'all_requirements_met'):
-                    logger.warning(f"⚠️ [FIX] Adding missing all_requirements_met to session")
+                    logger.warning(f"[FIX] Adding missing all_requirements_met to session")
                     session.all_requirements_met = False
                 if not hasattr(session, 'last_face_score'):
                     session.last_face_score = 0.0
                 if not hasattr(session, 'last_enhanced_score'):
                     session.last_enhanced_score = 0.0
 
-        # ✅ DEBUG: Log session state
-        logger.info(f"📊 [SESSION] State - all_met: {getattr(session, 'all_requirements_met', 'MISSING')}")
+        logger.info(f" [SESSION] State - all_met: {getattr(session, 'all_requirements_met', 'MISSING')}")
 
-        # ✅ SAFE: Check if already completed
         if getattr(session, 'all_requirements_met', False):
-            logger.info(f"✅ [CACHE] Returning cached completion for user {user_id}")
+            logger.info(f" [CACHE] Returning cached completion for user {user_id}")
             return jsonify({
                 'success': True,
                 'face_detected': True,
-                'blink_count': 2,  # ✅ Fixed requirement
-                'mouth_open_count': 1,  # ✅ Fixed requirement
-                'head_movement_count': 1,  # ✅ Fixed requirement
+                'blink_count': 2,  
+                'mouth_open_count': 1, 
+                'head_movement_count': 1,
                 'face_real_score': getattr(session, 'last_face_score', 0.9),
                 'enhanced_face_score': getattr(session, 'last_enhanced_score', 0.9),
                 'sequential_state': {
@@ -2100,16 +2097,13 @@ def sequential_liveness_detect_optimized():
                 'cached_response': True
             })
 
-        # ✅ PROCESS: Frame processing
-        logger.info(f"🔄 [PROCESSING] Processing frame for user {user_id}")
+        logger.info(f"  [PROCESSING] Processing frame for user {user_id}")
         result = process_frame_api(face_image_b64, user_id, reset_counters)
 
         if result['success']:
-            # ✅ SAFE: Update session attributes
             session.last_face_score = result.get('liveness_score', 0.0)
             session.last_enhanced_score = result.get('enhanced_face_score', result.get('liveness_score', 0.0))
             
-            # ✅ CAPPED: Ensure counts don't exceed requirements
             raw_blinks = result.get('blink_count', 0)
             raw_mouth = result.get('mouth_open_count', 0)
             raw_head = result.get('head_movement_count', 0)
@@ -2118,9 +2112,8 @@ def sequential_liveness_detect_optimized():
             capped_mouth = min(raw_mouth, 1)
             capped_head = min(raw_head, 1)
             
-            logger.info(f"📊 [COUNTS] Raw: B{raw_blinks}/M{raw_mouth}/H{raw_head} → Capped: B{capped_blinks}/M{capped_mouth}/H{capped_head}")
+            logger.info(f"[COUNTS] Raw: B{raw_blinks}/M{raw_mouth}/H{raw_head} → Capped: B{capped_blinks}/M{capped_mouth}/H{capped_head}")
             
-            # ✅ CHECK: Requirements completion
             step_requirements = {
                 'blinks_met': capped_blinks >= 2,
                 'mouth_met': capped_mouth >= 1,
@@ -2130,13 +2123,11 @@ def sequential_liveness_detect_optimized():
             
             all_met = all(step_requirements.values())
             
-            # ✅ SAFE: Update completion status
             if all_met and not getattr(session, 'all_requirements_met', False):
                 session.all_requirements_met = True
                 session.completion_time = time.time() - session.start_time
-                logger.info(f"🎉 [COMPLETE] User {user_id} completed in {session.completion_time:.2f}s")
+                logger.info(f" [COMPLETE] User {user_id} completed in {session.completion_time:.2f}s")
 
-            # ✅ PHASE: Determine current phase
             if all_met:
                 current_phase = "complete"
             elif capped_blinks < 2:
@@ -2146,7 +2137,7 @@ def sequential_liveness_detect_optimized():
             elif capped_head < 1:
                 current_phase = "head"
             else:
-                current_phase = "head"  # Stay until backend confirms
+                current_phase = "head" 
 
             sequential_state = {
                 'current_phase': current_phase,
@@ -2156,13 +2147,12 @@ def sequential_liveness_detect_optimized():
                 'all_phases_complete': all_met
             }
 
-            # ✅ RESPONSE: Build response with capped counts
             response_data = {
                 'success': True,
                 'face_detected': result.get('face_detected', True),
-                'blink_count': capped_blinks,        # ✅ Never exceeds 2
-                'mouth_open_count': capped_mouth,    # ✅ Never exceeds 1
-                'head_movement_count': capped_head,  # ✅ Never exceeds 1
+                'blink_count': capped_blinks,        
+                'mouth_open_count': capped_mouth,  
+                'head_movement_count': capped_head, 
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': session.last_enhanced_score,
                 'sequential_state': sequential_state,
@@ -2180,10 +2170,10 @@ def sequential_liveness_detect_optimized():
                 }
             }
 
-            logger.info(f"📤 [RESPONSE] Success: phase={current_phase}, all_met={all_met}")
+            logger.info(f" [RESPONSE] Success: phase={current_phase}, all_met={all_met}")
             return jsonify(response_data)
         else:
-            logger.error(f"❌ [PROCESSING] Failed: {result.get('error', 'Unknown')}")
+            logger.error(f" [PROCESSING] Failed: {result.get('error', 'Unknown')}")
             return jsonify({
                 'success': False,
                 'face_detected': result.get('face_detected', False),
@@ -2205,7 +2195,7 @@ def sequential_liveness_detect_optimized():
             }), 400
             
     except Exception as e:
-        logger.error(f"💥 [FATAL ERROR] Detection error: {e}", exc_info=True)
+        logger.error(f" [FATAL ERROR] Detection error: {e}", exc_info=True)
         return jsonify({
             'success': False, 
             'error': f'Internal server error: {str(e)}',
@@ -2227,7 +2217,7 @@ def enhanced_behavioral_check_fixed():
         if not user_id or not behavioral_data:
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
-        logger.info(f" FIXED:  behavioral check for user {user_id}")
+        logger.info(f"  behavioral check for user {user_id}")
         
         try:
             validated_data = validate_enhanced_behavioral_data(behavioral_data)
@@ -2259,11 +2249,11 @@ def enhanced_behavioral_check_fixed():
                 'monitoring_updated': True
             })
         
-        # ✅ FIXED: Extract features with proper error handling
+        # Extract features with proper error handling
         try:
             current_features = extract_basic_behavioral_features(validated_data)
         except Exception as e:
-            logger.error(f"❌ Feature extraction error: {e}")
+            logger.error(f"Feature extraction error: {e}")
             # Use fallback feature calculation
             current_features = {
                 'keystroke_features': {
@@ -2278,12 +2268,12 @@ def enhanced_behavioral_check_fixed():
         # Get stored pattern with error handling
         stored_pattern = get_stored_pattern_safe(user_id)
         
-        # ✅ FIXED: Calculate similarity with proper error handling
+        # Calculate similarity with proper error handling
         try:
             similarity_results = calculate_enhanced_similarity_safe(current_features, stored_pattern)
             overall_similarity = similarity_results['overall_similarity']
         except Exception as e:
-            logger.error(f"❌ Similarity calculation error: {e}")
+            logger.error(f" Similarity calculation error: {e}")
             overall_similarity = 0.5  # Default safe score
             similarity_results = {
                 'overall_similarity': 0.5,
@@ -2308,7 +2298,7 @@ def enhanced_behavioral_check_fixed():
             action_taken = 'passed'
             severity = 'low'
         
-        # ✅ FIXED: Update monitoring state for real-time updates
+        # Update monitoring state for real-time updates
         update_global_monitoring_state(user_id, {
             'similarity_score': overall_similarity,
             'keystroke_count': len(keystrokes),
@@ -2318,7 +2308,7 @@ def enhanced_behavioral_check_fixed():
             'action_taken': action_taken
         }, anomaly_detected=is_anomaly)
         
-        # ✅ FIXED: Save data with guaranteed persistence
+        #  Save data with guaranteed persistence
         session_saved = save_behavioral_session_safe(user_id, session_id, {
             'similarity_score': overall_similarity,
             'keystroke_count': len(keystrokes),
@@ -2340,7 +2330,7 @@ def enhanced_behavioral_check_fixed():
                 'page_context': page_context
             })
         
-        logger.info(f"✅ FIXED: Enhanced behavioral check completed - similarity: {overall_similarity:.3f}, anomaly: {is_anomaly}")
+        logger.info(f" behavioral check completed - similarity: {overall_similarity:.3f}, anomaly: {is_anomaly}")
         
         return jsonify({
             'success': True,
@@ -2360,7 +2350,7 @@ def enhanced_behavioral_check_fixed():
         })
         
     except Exception as e:
-        logger.error(f"❌ FIXED: Enhanced behavioral check error: {e}", exc_info=True)
+        logger.error(f" behavioral check error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e),
@@ -2380,7 +2370,7 @@ def ekyc_process():
         if not base64_image:
             return jsonify({"success": False, "error": "No image provided"}), 400
 
-        logger.info(f"🔍 Processing eKYC for user: {user_id} ({side} side)")
+        logger.info(f"  Processing eKYC for user: {user_id} ({side} side)")
 
         # Decode image
         if ',' in base64_image:
@@ -2392,35 +2382,31 @@ def ekyc_process():
         if img is None:
             return jsonify({"success": False, "error": "Invalid image format"}), 400
 
-        logger.info("📝 Starting MyKad OCR processing...")
+        logger.info(" Starting MyKad OCR processing...")
 
-        # ✅ CRITICAL: Use FIXED process_mykad_front method
         if side == "front":
             ocr_result = mykad_ocr.process_mykad_front(img)
         else:
             ocr_result = mykad_ocr.process_mykad_back(img)
 
-        logger.info(f"📝 OCR result: {ocr_result.get('success', False)}")
+        logger.info(f" OCR result: {ocr_result.get('success', False)}")
         
         if ocr_result.get('success'):
             ic_number = ocr_result.get('ic_number_back') if side == 'back' else ocr_result.get('extracted_info', {}).get('ic_number')
-            logger.info(f"✅ IC number extracted: {ic_number}")
+            logger.info(f"IC number extracted: {ic_number}")
             
-            # ✅ CRITICAL: Enhanced response for front side
             if side == 'front':
                 extracted_info = ocr_result.get('extracted_info', {})
                 authenticity = ocr_result.get('authenticity', {})
                 
-                # Fix the success determination
                 overall_success = bool(ic_number) and authenticity.get('authenticity_score', 0) >= 0.35
                 
-                # Ensure gender is extracted if missing
                 if not extracted_info.get('gender') and ic_number:
                     try:
                         last_digit = int(ic_number[-1])
                         gender = "LELAKI" if last_digit % 2 == 1 else "PEREMPUAN"
                         extracted_info['gender'] = gender
-                        logger.info(f"✅ Gender extracted from IC: {gender} (last digit: {last_digit})")
+                        logger.info(f"Gender extracted from IC: {gender} (last digit: {last_digit})")
                     except Exception as e:
                         logger.error(f"Error extracting gender from IC: {e}")
                 
@@ -2447,7 +2433,7 @@ def ekyc_process():
                     'side': side
                 })
         else:
-            logger.warning(f"❌ OCR failed: {ocr_result.get('error', 'Unknown error')}")
+            logger.warning(f" OCR failed: {ocr_result.get('error', 'Unknown error')}")
             return jsonify({
                 'success': False,
                 'error': ocr_result.get('error', 'OCR processing failed'),
@@ -2565,7 +2551,6 @@ def biometric_login_verify():
 
         user_email = user_result.data['email'] if user_result.data else 'unknown'
         
-        # 🔥 FIXED: Save face image for audit trail
         face_image_url = ''
         try:
             # Convert base64 to binary for storage
@@ -2587,7 +2572,6 @@ def biometric_login_verify():
             logger.error(f"Failed to save login face image: {upload_error}")
             # Continue with verification even if image save fails
 
-        # 🔥 FIXED: Load enrolled biometric data
         enrolled_biometric = supabase_manager.client.table("biometric_data") \
             .select("*") \
             .eq("user_id", user_id) \
@@ -2615,7 +2599,6 @@ def biometric_login_verify():
         enrolled_face = enrolled_biometric.data[0]
         stored_embedding = enrolled_face.get('face_embedding', [])
         
-        # 🔥 FIXED: Use corrected face verification
         if not face_verifier:
             logger.error("Face verifier not initialized")
             return jsonify({'success': False, 'error': 'Face verification service unavailable'}), 500
@@ -2642,23 +2625,23 @@ def biometric_login_verify():
         )
         
         if is_match:
-            logger.info(f"✅ Biometric login successful for user {user_id}")
+            logger.info(f"Biometric login successful for user {user_id}")
             return jsonify({
                 'success': True,
                 'similarity_score': similarity_score,
                 'message': 'Biometric verification successful'
             })
         else:
-            logger.warning(f"❌ Biometric login failed for user {user_id} - similarity: {similarity_score:.3f}")
+            logger.warning(f" Biometric login failed for user {user_id} - similarity: {similarity_score:.3f}")
             return jsonify({
                 'success': False,
                 'error': 'Face verification failed',
                 'similarity_score': similarity_score,
-                'message': f'Face similarity ({similarity_score:.3f}) below threshold ({face_verifier.LOGIN_THRESHOLD})'
+                # 'message': f'Face similarity ({similarity_score:.3f}) below threshold ({face_verifier.LOGIN_THRESHOLD})'
             }), 401
 
     except Exception as e:
-        logger.error(f"❌ Error in biometric login verification: {str(e)}", exc_info=True)
+        logger.error(f"Error in biometric login verification: {str(e)}", exc_info=True)
         
         # Try to save failed audit if possible
         try:
@@ -2698,13 +2681,13 @@ def behavioral_test_simple():
                 'error': 'Missing required fields: user_id and behavioralData'
             }), 400
         
-        logger.info(f"🧪 SIMPLE: Running behavioral test for user {user_id}")
+        logger.info(f" SIMPLE: Running behavioral test for user {user_id}")
         
         # Extract data
         keystrokes = behavioral_data.get('keystrokes', [])
         mouse_movements = behavioral_data.get('mouseMovements', [])
         
-        print(f"📊 DATA RECEIVED: {len(keystrokes)} keystrokes, {len(mouse_movements)} mouse events")
+        print(f"DATA RECEIVED: {len(keystrokes)} keystrokes, {len(mouse_movements)} mouse events")
         
         if len(keystrokes) < 5:
             return jsonify({
@@ -2721,7 +2704,7 @@ def behavioral_test_simple():
         # SIMPLIFIED: Calculate similarity
         similarity_score = calculate_simple_similarity(current_features, stored_pattern)
         
-        print(f"📈 SIMILARITY CALCULATED: {similarity_score:.3f}")
+        print(f"SIMILARITY CALCULATED: {similarity_score:.3f}")
         
         # SIMPLIFIED: Anomaly detection with LOWER thresholds for easier testing
         ANOMALY_THRESHOLD = 0.6   # 60% similarity threshold (easier to trigger)
@@ -2741,7 +2724,7 @@ def behavioral_test_simple():
             action_taken = 'passed'
             severity = 'low'
         
-        print(f"🚨 ANOMALY STATUS: is_anomaly={is_anomaly}, action={action_taken}, severity={severity}")
+        print(f"ANOMALY STATUS: is_anomaly={is_anomaly}, action={action_taken}, severity={severity}")
         
         # STEP 1: Save behavioral session (GUARANTEED)
         session_saved = save_behavioral_session_simple(user_id, session_id, {
@@ -2764,7 +2747,7 @@ def behavioral_test_simple():
                 'mouse_count': len(mouse_movements)
             })
             
-            print(f"💾 ANOMALY SAVE RESULT: {anomaly_saved}")
+            print(f" ANOMALY SAVE RESULT: {anomaly_saved}")
         
         # Return comprehensive results
         result = {
@@ -2784,12 +2767,12 @@ def behavioral_test_simple():
             }
         }
         
-        print(f"✅ BEHAVIORAL TEST COMPLETE: similarity={similarity_score:.3f}, anomaly={is_anomaly}")
+        print(f"BEHAVIORAL TEST COMPLETE: similarity={similarity_score:.3f}, anomaly={is_anomaly}")
         
         return jsonify(result)
         
     except Exception as e:
-        logger.error(f"❌ SIMPLE: Behavioral test error: {e}", exc_info=True)
+        logger.error(f" SIMPLE: Behavioral test error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -2814,7 +2797,7 @@ def behavioral_test_fixed():
                 'error': 'Missing required fields: user_id and behavioralData'
             }), 400
         
-        logger.info(f"🧪 FIXED: Running enhanced behavioral test for user {user_id}")
+        logger.info(f"Running enhanced behavioral test for user {user_id}")
         
         # CRITICAL: Ensure UUID format
         user_id_uuid = ensure_uuid_format(user_id)
@@ -2854,11 +2837,11 @@ def behavioral_test_fixed():
                 
                 if pattern_result.data:
                     stored_pattern = pattern_result.data[0]['pattern_data']
-                    logger.info(f"✅ FIXED: Found stored behavioral pattern for user {user_id_uuid}")
+                    logger.info(f" Found stored behavioral pattern for user {user_id_uuid}")
                 else:
-                    logger.warning(f"⚠️ FIXED: No stored pattern found for user {user_id_uuid}")
+                    logger.warning(f" No stored pattern found for user {user_id_uuid}")
             except Exception as e:
-                logger.error(f"❌ Error getting stored pattern: {e}")
+                logger.error(f"Error getting stored pattern: {e}")
         
         # Use enhanced baseline if no stored pattern
         if not stored_pattern:
@@ -2953,9 +2936,9 @@ def behavioral_test_fixed():
             logger.info(f"Anomaly save result: {anomaly_saved}")
             
             if anomaly_saved:
-                logger.info(f"🚨 FIXED: Anomaly saved for test: user={user_id_uuid}, similarity={overall_similarity:.3f}")
+                logger.info(f" Anomaly saved for test: user={user_id_uuid}, similarity={overall_similarity:.3f}")
             else:
-                logger.error(f"❌ FIXED: Failed to save anomaly for test: user={user_id_uuid}")
+                logger.error(f" Failed to save anomaly for test: user={user_id_uuid}")
         
         # CRITICAL: Auto-lock user if critical anomaly
         if is_critical and supabase_manager.client:
@@ -2964,9 +2947,9 @@ def behavioral_test_fixed():
                     .update({"status": "suspended", "suspension_reason": f"Critical behavioral test anomaly: {overall_similarity:.3f}"}) \
                     .eq("id", user_id_uuid) \
                     .execute()
-                logger.warning(f"🚨 FIXED: User {user_id_uuid} auto-locked due to critical behavioral anomaly")
+                logger.warning(f" User {user_id_uuid} auto-locked due to critical behavioral anomaly")
             except Exception as e:
-                logger.error(f"❌ Failed to auto-lock user: {e}")
+                logger.error(f" Failed to auto-lock user: {e}")
         
         # Return comprehensive results
         result = {
@@ -2996,12 +2979,12 @@ def behavioral_test_fixed():
             }
         }
         
-        logger.info(f"✅ FIXED: Behavioral test completed for user {user_id_uuid}: similarity={overall_similarity:.3f}, anomaly={is_anomaly}")
+        logger.info(f" Behavioral test completed for user {user_id_uuid}: similarity={overall_similarity:.3f}, anomaly={is_anomaly}")
         
         return jsonify(result)
         
     except Exception as e:
-        logger.error(f"❌ FIXED: Behavioral test error: {e}", exc_info=True)
+        logger.error(f" Behavioral test error: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e),
@@ -3037,13 +3020,13 @@ def save_anomaly_enhanced():
             uuid_obj = uuid.UUID(user_id)
             user_id_uuid = str(uuid_obj)
         except ValueError:
-            logger.error(f"❌ Invalid UUID format for user_id: {user_id}")
+            logger.error(f" Invalid UUID format for user_id: {user_id}")
             return jsonify({
                 'success': False,
                 'error': 'Invalid user_id format - must be UUID'
             }), 400
         
-        logger.info(f"🚨 ENHANCED: Saving anomaly for user {user_id_uuid}")
+        logger.info(f" Saving anomaly for user {user_id_uuid}")
         
         # Build comprehensive anomaly record matching exact schema
         current_time = datetime.now()
@@ -3097,7 +3080,7 @@ def save_anomaly_enhanced():
                 
                 if result.data and len(result.data) > 0:
                     anomaly_id = result.data[0]['id']
-                    logger.info(f"✅ ENHANCED: Anomaly saved successfully on attempt {attempt + 1}: {anomaly_id}")
+                    logger.info(f"Anomaly saved successfully on attempt {attempt + 1}: {anomaly_id}")
                     
                     # Trigger real-time notification
                     trigger_anomaly_notification(user_id_uuid, anomaly_id, cleaned_record)
@@ -3112,9 +3095,9 @@ def save_anomaly_enhanced():
                     raise Exception("No data returned from Supabase insert")
                     
             except Exception as e:
-                logger.error(f"❌ Attempt {attempt + 1} failed to save anomaly: {e}")
+                logger.error(f"Attempt {attempt + 1} failed to save anomaly: {e}")
                 if attempt == max_retries - 1:  # Last attempt
-                    logger.error(f"❌ CRITICAL: All {max_retries} attempts failed to save anomaly")
+                    logger.error(f"CRITICAL: All {max_retries} attempts failed to save anomaly")
                     return jsonify({
                         "success": False, 
                         "error": f"Failed to save anomaly after {max_retries} attempts: {str(e)}"
@@ -3125,7 +3108,7 @@ def save_anomaly_enhanced():
                 time.sleep(0.5 * (attempt + 1))
         
     except Exception as e:
-        logger.error(f"❌ CRITICAL: Enhanced save anomaly error: {e}", exc_info=True)
+        logger.error(f"CRITICAL: Enhanced save anomaly error: {e}", exc_info=True)
         return jsonify({
             "success": False, 
             "error": f"Internal server error: {str(e)}"
@@ -3154,12 +3137,12 @@ def trigger_anomaly_notification(user_id: str, anomaly_id: str, anomaly_data: di
             try:
                 # You could implement real-time notifications here
                 # For now, we'll just log it
-                logger.info(f"🔔 Real-time notification triggered for anomaly {anomaly_id}")
+                logger.info(f"Real-time notification triggered for anomaly {anomaly_id}")
             except Exception as e:
                 logger.error(f"Failed to send real-time notification: {e}")
         
         # Trigger browser event for immediate UI updates
-        logger.info(f"🔄 Anomaly notification prepared for user {user_id}")
+        logger.info(f" Anomaly notification prepared for user {user_id}")
         
     except Exception as e:
         logger.error(f"Error triggering anomaly notification: {e}")
@@ -3167,7 +3150,6 @@ def trigger_anomaly_notification(user_id: str, anomaly_id: str, anomaly_data: di
 # ============= HELPER FUNCTIONS =============
 
 def calculate_simple_behavioral_features(keystrokes: List, mouse_movements: List) -> Dict:
-    """✅ FIXED: Calculate simple behavioral features with error handling"""
     features = {
         'typing_speed': 0.0,
         'avg_velocity': 0.0,
@@ -3212,7 +3194,6 @@ def calculate_simple_behavioral_features(keystrokes: List, mouse_movements: List
     return features
 
 def calculate_basic_similarity(current_features: Dict, user_id: str) -> float:
-    """✅ FIXED: Calculate basic similarity with error handling"""
     try:
         stored_pattern = get_stored_pattern_safe(user_id)
         
@@ -3239,11 +3220,10 @@ def calculate_basic_similarity(current_features: Dict, user_id: str) -> float:
         return max(0.0, min(1.0, final_similarity))
         
     except Exception as e:
-        logger.error(f"❌ Error calculating similarity: {e}")
+        logger.error(f" Error calculating similarity: {e}")
         return 0.5  # Default safe score
 
 def get_stored_pattern_safe(user_id: str) -> Dict:
-    """✅ FIXED: Get stored pattern with error handling"""
     try:
         if supabase_manager.client:
             result = supabase_manager.client.table("behavioral_patterns") \
@@ -3255,7 +3235,7 @@ def get_stored_pattern_safe(user_id: str) -> Dict:
             if result.data:
                 return result.data[0]['pattern_data']
     except Exception as e:
-        logger.error(f"❌ Error getting stored pattern: {e}")
+        logger.error(f"Error getting stored pattern: {e}")
     
     # Return default pattern
     return {
@@ -3269,7 +3249,6 @@ def get_stored_pattern_safe(user_id: str) -> Dict:
     }
 
 def extract_basic_behavioral_features(behavioral_data: Dict) -> Dict:
-    """✅ FIXED: Extract basic features without scipy dependencies"""
     features = {
         'keystroke_features': {},
         'mouse_features': {}
@@ -3315,7 +3294,6 @@ def extract_basic_behavioral_features(behavioral_data: Dict) -> Dict:
     return features
 
 def calculate_enhanced_similarity_safe(current_features: Dict, stored_features: Dict) -> Dict:
-    """✅ FIXED: Calculate similarity safely without errors"""
     try:
         similarities = {
             'keystroke_similarity': 0.5,
@@ -3362,7 +3340,7 @@ def calculate_enhanced_similarity_safe(current_features: Dict, stored_features: 
         return similarities
         
     except Exception as e:
-        logger.error(f"❌ Error calculating enhanced similarity: {e}")
+        logger.error(f" Error calculating enhanced similarity: {e}")
         return {
             'keystroke_similarity': 0.5,
             'mouse_similarity': 0.5,
@@ -3370,7 +3348,6 @@ def calculate_enhanced_similarity_safe(current_features: Dict, stored_features: 
         }
 
 def validate_enhanced_behavioral_data(behavioral_data: Dict) -> Dict:
-    """✅ FIXED: Validate behavioral data with proper error handling"""
     validated_data = {
         'keystrokes': [],
         'mouseMovements': []
@@ -3401,12 +3378,11 @@ def validate_enhanced_behavioral_data(behavioral_data: Dict) -> Dict:
                     validated_data['mouseMovements'].append(validated_mouse)
     
     except Exception as e:
-        logger.error(f"❌ Data validation error: {e}")
+        logger.error(f"Data validation error: {e}")
     
     return validated_data
 
 def save_behavioral_session_safe(user_id: str, session_id: str, data: Dict) -> bool:
-    """✅ FIXED: Save behavioral session safely"""
     try:
         if not supabase_manager.client:
             return False
@@ -3432,11 +3408,10 @@ def save_behavioral_session_safe(user_id: str, session_id: str, data: Dict) -> b
         return bool(result.data)
         
     except Exception as e:
-        logger.error(f"❌ Error saving behavioral session: {e}")
+        logger.error(f"Error saving behavioral session: {e}")
         return False
 
 def save_anomaly_safe(user_id: str, session_id: str, data: Dict) -> bool:
-    """✅ FIXED: Save anomaly safely"""
     try:
         if not supabase_manager.client:
             return False
@@ -3476,20 +3451,18 @@ def save_anomaly_safe(user_id: str, session_id: str, data: Dict) -> bool:
         return bool(result.data)
         
     except Exception as e:
-        logger.error(f"❌ Error saving anomaly: {e}")
+        logger.error(f" Error saving anomaly: {e}")
         return False
 
 def save_monitoring_session(session_data: Dict):
-    """✅ FIXED: Save monitoring session asynchronously"""
     try:
         if supabase_manager.client:
             supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
-            logger.info(f"✅ Monitoring session saved: {session_data['session_id']}")
+            logger.info(f"  Monitoring session saved: {session_data['session_id']}")
     except Exception as e:
-        logger.error(f"❌ Error saving monitoring session: {e}")
+        logger.error(f" Error saving monitoring session: {e}")
 
 def save_monitoring_anomaly(anomaly_data: Dict):
-    """✅ FIXED: Save monitoring anomaly asynchronously"""
     try:
         if supabase_manager.client:
             # Convert user_id to UUID if needed
@@ -3507,9 +3480,9 @@ def save_monitoring_anomaly(anomaly_data: Dict):
             
             anomaly_data['event_ts'] = anomaly_data['created_at']
             supabase_manager.client.table("anomaly_audit").insert(anomaly_data).execute()
-            logger.info(f"✅ Monitoring anomaly saved: {anomaly_data['session_id']}")
+            logger.info(f"Monitoring anomaly saved: {anomaly_data['session_id']}")
     except Exception as e:
-        logger.error(f"❌ Error saving monitoring anomaly: {e}")
+        logger.error(f"Error saving monitoring anomaly: {e}")
 
 def calculate_typing_speed(keystrokes: List) -> float:
     """Calculate typing speed safely"""
@@ -3549,7 +3522,7 @@ def calculate_mouse_velocity(mouse_movements: List) -> float:
 
 def ensure_uuid_format(user_id: str) -> str:
     """
-    CRITICAL FIX: Ensure user_id is in proper UUID format for database operations
+    Ensure user_id is in proper UUID format for database operations
     """
     try:
         # If it's already a valid UUID, return as string
@@ -3607,7 +3580,7 @@ def validate_behavioral_data(behavioral_data: Dict) -> Dict:
                 }
                 validated_data['mouseMovements'].append(validated_mouse)
     
-    logger.info(f"✅ FIXED: Validated behavioral data - {len(validated_data['keystrokes'])} keystrokes, {len(validated_data['mouseMovements'])} mouse events")
+    logger.info(f" Validated behavioral data - {len(validated_data['keystrokes'])} keystrokes, {len(validated_data['mouseMovements'])} mouse events")
     return validated_data
 
 def extract_advanced_behavioral_features(behavioral_data: Dict, enhanced_features: Dict = None) -> Dict:
@@ -4329,7 +4302,7 @@ def calculate_features(behavioral_data: Dict) -> Dict:
         'keystroke_to_mouse_ratio': len(keystrokes) / len(mouse_events) if mouse_events else float('inf')
     }
     
-    logger.info(f"✅ FIXED: Calculated enhanced behavioral features")
+    logger.info(f"Calculated enhanced behavioral features")
     return features
 
 def calculate_similarity(current_features: Dict, stored_features: Dict) -> Dict:
@@ -4403,7 +4376,7 @@ def calculate_similarity(current_features: Dict, stored_features: Dict) -> Dict:
     similarities['overall_similarity'] = (similarities['keystroke_similarity'] * 0.6 + 
                                         similarities['mouse_similarity'] * 0.4)
     
-    logger.info(f"✅ FIXED: Calculated similarity scores - Overall: {similarities['overall_similarity']:.3f}, Keystroke: {similarities['keystroke_similarity']:.3f}, Mouse: {similarities['mouse_similarity']:.3f}")
+    logger.info(f" Calculated similarity scores - Overall: {similarities['overall_similarity']:.3f}, Keystroke: {similarities['keystroke_similarity']:.3f}, Mouse: {similarities['mouse_similarity']:.3f}")
     return similarities
 
 def calculate_simple_features(keystrokes, mouse_movements):
@@ -4503,7 +4476,7 @@ def save_behavioral_session_simple(user_id, session_id, data):
     """Save behavioral session - GUARANTEED"""
     try:
         if not supabase_manager.client:
-            print("❌ No Supabase client")
+            print(" No Supabase client")
             return False
         
         session_data = {
@@ -4522,21 +4495,21 @@ def save_behavioral_session_simple(user_id, session_id, data):
         result = supabase_manager.client.table("behavioral_sessions").insert(session_data).execute()
         
         if result.data:
-            print(f"✅ Session saved: {result.data[0]['id']}")
+            print(f" Session saved: {result.data[0]['id']}")
             return True
         else:
-            print("❌ Session save failed - no data returned")
+            print(" Session save failed - no data returned")
             return False
             
     except Exception as e:
-        print(f"❌ Session save error: {e}")
+        print(f"Session save error: {e}")
         return False
 
 def save_anomaly_simple(user_id, session_id, data):
     """Save anomaly - GUARANTEED with FIXED UUID handling"""
     try:
         if not supabase_manager.client:
-            print("❌ No Supabase client")
+            print("No Supabase client")
             return False
         
         # CRITICAL: Convert user_id to UUID if needed
@@ -4550,10 +4523,10 @@ def save_anomaly_simple(user_id, session_id, data):
                 if user_result.data:
                     user_id_uuid = user_result.data[0]['id']
                 else:
-                    print(f"❌ Could not convert user_id to UUID: {user_id}")
+                    print(f"  Could not convert user_id to UUID: {user_id}")
                     return False
             except:
-                print(f"❌ UUID conversion failed: {user_id}")
+                print(f"  UUID conversion failed: {user_id}")
                 return False
         
         # Build anomaly record
@@ -4575,7 +4548,7 @@ def save_anomaly_simple(user_id, session_id, data):
             'event_ts': datetime.now().isoformat()
         }
         
-        print(f"💾 Saving anomaly to anomaly_audit table...")
+        print(f"  Saving anomaly to anomaly_audit table...")
         print(f"   User ID (UUID): {user_id_uuid}")
         print(f"   Session ID: {session_id}")
         print(f"   Severity: {data['severity']}")
@@ -4584,103 +4557,18 @@ def save_anomaly_simple(user_id, session_id, data):
         
         if result.data:
             anomaly_id = result.data[0]['id']
-            print(f"✅ ANOMALY SAVED SUCCESSFULLY: {anomaly_id}")
+            print(f"  ANOMALY SAVED SUCCESSFULLY: {anomaly_id}")
             return True
         else:
-            print("❌ Anomaly save failed - no data returned")
+            print("  Anomaly save failed - no data returned")
             return False
             
     except Exception as e:
-        print(f"❌ CRITICAL: Anomaly save error: {e}")
+        print(f"  CRITICAL: Anomaly save error: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-# def calculate_simple_features(keystrokes, mouse_movements):
-#     """Calculate simple behavioral features for demo"""
-#     features = {
-#         'keystroke_count': len(keystrokes),
-#         'mouse_count': len(mouse_movements),
-#         'typing_speed': 0,
-#         'avg_dwell_time': 0,
-#         'avg_velocity': 0,
-#         'keystroke_similarity': 0.5,
-#         'mouse_similarity': 0.5
-#     }
-    
-#     # Simple typing speed calculation
-#     if len(keystrokes) > 1:
-#         total_time = (keystrokes[-1]['timestamp'] - keystrokes[0]['timestamp']) / 1000.0
-#         if total_time > 0:
-#             features['typing_speed'] = len(keystrokes) / total_time * 60  # Keys per minute
-    
-#     # Simple dwell time calculation
-#     key_press_times = {}
-#     dwell_times = []
-    
-#     for keystroke in keystrokes:
-#         key = keystroke['key']
-#         timestamp = keystroke['timestamp']
-#         event_type = keystroke.get('type', 'keydown')
-        
-#         if event_type == 'keydown':
-#             key_press_times[key] = timestamp
-#         elif event_type == 'keyup' and key in key_press_times:
-#             dwell_time = timestamp - key_press_times[key]
-#             if 0 < dwell_time < 1000:  # Reasonable limits
-#                 dwell_times.append(dwell_time)
-#             del key_press_times[key]
-    
-#     if dwell_times:
-#         features['avg_dwell_time'] = sum(dwell_times) / len(dwell_times)
-    
-#     # Simple mouse velocity calculation
-#     if len(mouse_movements) > 1:
-#         velocities = []
-#         for i in range(1, len(mouse_movements)):
-#             prev = mouse_movements[i-1]
-#             curr = mouse_movements[i]
-            
-#             if prev.get('type') == 'mousemove' and curr.get('type') == 'mousemove':
-#                 dx = curr['x'] - prev['x']
-#                 dy = curr['y'] - prev['y']
-#                 dt = curr['timestamp'] - prev['timestamp']
-                
-#                 if dt > 0:
-#                     distance = (dx**2 + dy**2)**0.5
-#                     velocity = distance / dt
-#                     velocities.append(velocity)
-        
-#         if velocities:
-#             features['avg_velocity'] = sum(velocities) / len(velocities)
-    
-#     return features
-
-# def calculate_simple_similarity(current_features, stored_pattern):
-#     """Calculate simple similarity score for demo (0-1)"""
-#     try:
-#         similarities = []
-        
-#         # Typing speed comparison
-#         current_speed = current_features.get('typing_speed', 0)
-#         stored_speed = stored_pattern.get('keystroke_features', {}).get('typing_speed', 45)
-#         if stored_speed > 0:
-#             speed_similarity = max(0, 1 - abs(current_speed - stored_speed) / stored_speed)
-#             similarities.append(speed_similarity)
-        
-#         # Mouse velocity comparison
-#         current_velocity = current_features.get('avg_velocity', 0)
-#         stored_velocity = stored_pattern.get('mouse_features', {}).get('avg_velocity', 150)
-#         if stored_velocity > 0:
-#             velocity_similarity = max(0, 1 - abs(current_velocity - stored_velocity) / stored_velocity)
-#             similarities.append(velocity_similarity)
-        
-#         # Return average similarity (0-1)
-#         return sum(similarities) / len(similarities) if similarities else 0.5
-        
-#     except Exception as e:
-#         logger.error(f"Similarity calculation error: {e}")
-#         return 0.5  # Default safe score
     
 def store_behavioral_result(user_id, session_id, similarity_score, is_anomaly, action_taken, severity):
     """Store results in Supabase"""
@@ -4733,7 +4621,7 @@ def store_behavioral_result(user_id, session_id, similarity_score, is_anomaly, a
 def fallback_face_verification(user_id: str, face_image_b64: str, email: str, ip_address: str):
     """Fallback face verification using basic face_recognition library"""
     try:
-        logger.info("🔄 Using fallback face verification")
+        logger.info("  Using fallback face verification")
         
         if not supabase_manager.client:
             return jsonify({
@@ -4840,14 +4728,14 @@ def internal_error(error):
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 MULTIMODAL BIOMETRIC AUTHENTICATION SYSTEM")
+    print("  MULTIMODAL BIOMETRIC AUTHENTICATION SYSTEM")
     print("=" * 60)
-    print("✅ Face Verification After Login")
-    print("✅ OTP Fallback for Failed Face Verification")
-    print("✅ Account Lockout Protection")
-    print("✅ Login Attempt Tracking")
-    print("✅ Enhanced OCR Processing")
-    print("✅ Real Email Sending")
+    print("  Face Verification After Login")
+    print("  OTP Fallback for Failed Face Verification")
+    print("  Account Lockout Protection")
+    print("  Login Attempt Tracking")
+    print("  Enhanced OCR Processing")
+    print("  Real Email Sending")
     print("-" * 60)
     
     # Initialize detector
@@ -4855,22 +4743,22 @@ if __name__ == '__main__':
     try:
         initialize_detector()
         DETECTOR = LivenessDetector(supabase_manager)
-        logger.info("✅ Liveness detector initialized")
+        logger.info("  Liveness detector initialized")
     except Exception as e:
-        logger.error(f"⚠️ Could not initialize liveness detector: {e}")
+        logger.error(f"  Could not initialize liveness detector: {e}")
         DETECTOR = None
     
     # Check Supabase
     if supabase_manager.client:
-        print("✅ Supabase connected")
+        print("  Supabase connected")
     else:
-        print("⚠️ Running in mock mode (no Supabase)")
+        print("  Running in mock mode (no Supabase)")
     
     print("-" * 60)
-    print("📡 Server running on http://localhost:5000")
-    print("🔐 Rate limiting: 3 failed attempts = 15min lockout")
-    print("📧 OTP fallback: Available after 3 failed face attempts")
-    print("📧 Real email sending: Gmail SMTP + Supabase Auth")
+    print("  Server running on http://localhost:5000")
+    print("  Rate limiting: 3 failed attempts = 15min lockout")
+    print("  OTP fallback: Available after 3 failed face attempts")
+    print("  Real email sending: Gmail SMTP + Supabase Auth")
     print("=" * 60)
     
     app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)

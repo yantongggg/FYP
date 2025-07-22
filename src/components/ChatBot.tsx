@@ -75,7 +75,7 @@ const ChatBot: React.FC = () => {
 // Add error boundary
 useEffect(() => {
   const handleError = (error: any) => {
-    console.error('💬 ChatBot error:', error);
+    console.error('  ChatBot error:', error);
     setHasError(true);
     setTimeout(() => setHasError(false), 5000); // Reset after 5s
   };
@@ -129,7 +129,7 @@ if (hasError) {
       keystrokes: [...prev.keystrokes, keystrokeEvent].slice(-100) // Keep last 100
     }))
 
-    console.log(`💬 Chat keystroke: ${keystrokeEvent.key} (${keystrokeEvent.type})`)
+    console.log(`  Chat keystroke: ${keystrokeEvent.key} (${keystrokeEvent.type})`)
   }
 
   const handleChatMouseEvent = (event: globalThis.MouseEvent) => {
@@ -176,7 +176,7 @@ if (hasError) {
     if (!userData?.uid || !behavioralMonitoring || keystrokesRef.current.length < 5) return
 
     try {
-      console.log(`💬 Running chat behavioral check: ${keystrokesRef.current.length} keystrokes, ${mouseEventsRef.current.length} mouse events`)
+      console.log(`  Running chat behavioral check: ${keystrokesRef.current.length} keystrokes, ${mouseEventsRef.current.length} mouse events`)
 
       const sessionId = `chat_${userData.uid}_${Date.now()}`
       const behavioralData = {
@@ -203,7 +203,7 @@ if (hasError) {
       }
 
       const result = await response.json()
-      console.log('💬 Chat behavioral check result:', result)
+      console.log('  Chat behavioral check result:', result)
 
       // Update behavioral status based on result
       if (result.action_taken === 'auto_lock') {
@@ -212,13 +212,13 @@ if (hasError) {
         const alertMessage: Message = {
           id: Date.now().toString(),
           role: 'assistant',
-          content: '🚨 **CRITICAL SECURITY ALERT** 🚨\n\nAn unusual behavioral pattern has been detected during our conversation. For your security, this session will be logged and may require additional verification.\n\nIf you are the legitimate user, please continue normally. If you suspect unauthorized access, please contact security immediately.',
+          content: '  **CRITICAL SECURITY ALERT**  \n\nAn unusual behavioral pattern has been detected during our conversation. For your security, this session will be logged and may require additional verification.\n\nIf you are the legitimate user, please continue normally. If you suspect unauthorized access, please contact security immediately.',
           timestamp: new Date()
         }
         setMessages(prev => [...prev, alertMessage])
       } else if (result.is_anomaly) {
         setBehavioralStatus('warning')
-        console.log('⚠️ Chat behavioral warning detected')
+        console.log('  Chat behavioral warning detected')
       } else {
         setBehavioralStatus('normal')
       }
@@ -278,7 +278,7 @@ if (hasError) {
       mouseEventsRef.current = mouseEventsRef.current.slice(-15)
 
     } catch (error) {
-      console.error('❌ Chat behavioral check error:', error)
+      console.error('  Chat behavioral check error:', error)
     }
   }
 
@@ -288,7 +288,7 @@ useEffect(() => {
     return;
   }
 
-  console.log('💬 Starting chat behavioral monitoring')
+  console.log('  Starting chat behavioral monitoring')
   
   // Reset behavioral data
   keystrokesRef.current = []
@@ -325,7 +325,7 @@ useEffect(() => {
     }
 
     keystrokesRef.current.push(keystrokeEvent)
-    console.log(`💬 Chat keystroke: ${keystrokeEvent.key}`)
+    console.log(`  Chat keystroke: ${keystrokeEvent.key}`)
   };
 
   const mouseHandler = (event: globalThis.MouseEvent) => {
@@ -368,7 +368,7 @@ useEffect(() => {
     if (keystrokesRef.current.length < 5) return;
     
     try {
-      console.log(`💬 Running simplified behavioral check`);
+      console.log(`  Running simplified behavioral check`);
       // Simplified check without complex callback dependencies
       const sessionId = `chat_${userData.uid}_${Date.now()}`;
       const behavioralData = {
@@ -398,12 +398,12 @@ useEffect(() => {
         setLastBehavioralCheck(new Date());
       }
     } catch (error) {
-      console.error('❌ Chat behavioral check error:', error);
+      console.error('  Chat behavioral check error:', error);
     }
   }, 30000);
 
   return () => {
-    console.log('💬 Stopping chat behavioral monitoring')
+    console.log('  Stopping chat behavioral monitoring')
     document.removeEventListener('keydown', keyHandler, true)
     document.removeEventListener('keyup', keyHandler, true)
     document.removeEventListener('mousemove', mouseHandler, true)
@@ -484,7 +484,7 @@ useEffect(() => {
     
     // Facial Recognition & Liveness Detection
     if (lowerMessage.includes('face') || lowerMessage.includes('facial') || lowerMessage.includes('liveness') || lowerMessage.includes('recognition')) {
-      return "Our facial recognition system features:\n\n• **Advanced Face Detection**: AI-powered face detection and embedding generation\n• **Liveness Detection**: Color-based anti-spoofing technology with face flashing\n• **High Accuracy**: 99.8% authentication accuracy\n• **Secure Storage**: Only encrypted face embeddings stored, no raw images\n\nThe system uses OpenCV and DeepFace for processing, with real-time verification in under 2 seconds."
+      return "Our facial recognition system features:\n\n• **Advanced Face Detection**: AI-powered face detection and embedding generation\n• **Liveness Detection**: anti-spoofing technology with EAR MAR calculation\n• **High Accuracy**: 99.8% authentication accuracy\n• **Secure Storage**: Only encrypted face embeddings stored, no raw images\n\nThe system uses OpenCV and DeepFace for processing, with real-time verification in under 2 seconds."
     }
     
     // Security & Anomaly Detection

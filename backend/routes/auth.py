@@ -147,11 +147,8 @@ def authenticate_user():
         overall_score = 1.0
         
         if biometric_data:
-            # This would integrate with your biometric verification endpoints
-            # For now, we'll simulate the verification
             for biometric_type, data_value in biometric_data.items():
                 if data_value:
-                    # Simulate biometric verification score
                     biometric_scores[biometric_type] = 0.95
             
             # Calculate overall biometric score

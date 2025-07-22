@@ -129,7 +129,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       currentSessionKeystrokes: keystrokesRef.current.length
     }));
 
-    console.log(`🔑 FIXED Monitor: Keystroke captured: ${keystrokeEvent.key} (${keystrokeEvent.type}) on ${getCurrentPageContext()}`);
+    console.log(`  FIXED Monitor: Keystroke captured: ${keystrokeEvent.key} (${keystrokeEvent.type}) on ${getCurrentPageContext()}`);
   }, [isActive, isCollecting, shouldMonitorPage, getCurrentPageContext]);
 
   const handleMouseEvent = useCallback((event: globalThis.MouseEvent) => {
@@ -247,7 +247,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
 
       const result: VerificationResult = await response.json();
       
-      console.log('✅ FIXED Monitor: Behavioral verification result:', {
+      console.log('  FIXED Monitor: Behavioral verification result:', {
         similarity: result.similarity_score,
         action: result.action_taken,
         page: currentPageContext,
@@ -293,17 +293,17 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
         });
 
         if (sessionSaveResponse.ok) {
-          console.log('✅ FIXED Monitor: Behavioral session saved successfully');
+          console.log('  FIXED Monitor: Behavioral session saved successfully');
         } else {
-          console.error('❌ FIXED Monitor: Failed to save behavioral session');
+          console.error('  FIXED Monitor: Failed to save behavioral session');
         }
       } catch (sessionError) {
-        console.error('❌ FIXED Monitor: Error saving behavioral session:', sessionError);
+        console.error('  FIXED Monitor: Error saving behavioral session:', sessionError);
       }
 
       // CRITICAL: Save anomaly if detected
       if (result.is_anomaly && result.action_taken !== 'none') {
-        console.log(`🚨 FIXED Monitor: Anomaly detected: ${result.severity} - ${result.action_taken}`);
+        console.log(`  FIXED Monitor: Anomaly detected: ${result.severity} - ${result.action_taken}`);
         
         try {
           const anomalySaveResponse = await fetch('http://localhost:5000/api/save-anomaly', {
@@ -335,12 +335,12 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
           });
 
           if (anomalySaveResponse.ok) {
-            console.log('✅ FIXED Monitor: Anomaly saved successfully');
+            console.log('  FIXED Monitor: Anomaly saved successfully');
           } else {
-            console.error('❌ FIXED Monitor: Failed to save anomaly');
+            console.error('  FIXED Monitor: Failed to save anomaly');
           }
         } catch (anomalyError) {
-          console.error('❌ FIXED Monitor: Error saving anomaly:', anomalyError);
+          console.error('  FIXED Monitor: Error saving anomaly:', anomalyError);
         }
 
         // Trigger real-time update event
@@ -359,9 +359,9 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
 
       // Handle critical anomalies
       if (result.action_taken === 'auto_lock') {
-        console.error('🚨 FIXED Monitor: CRITICAL auto-lock triggered by continuous monitoring');
+        console.error('  FIXED Monitor: CRITICAL auto-lock triggered by continuous monitoring');
         
-        const criticalAlert = `🚨 CRITICAL SECURITY ALERT 🚨\n\n` +
+        const criticalAlert = `  CRITICAL SECURITY ALERT  \n\n` +
           `Unusual behavioral patterns detected during continuous monitoring.\n\n` +
           `Page: ${currentPageContext}\n` +
           `Similarity Score: ${(result.similarity_score * 100).toFixed(1)}%\n` +
@@ -390,7 +390,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       }));
 
     } catch (error) {
-      console.error('❌ FIXED Monitor: Behavioral verification error:', error);
+      console.error('  FIXED Monitor: Behavioral verification error:', error);
       setConnectionStatus('error');
     }
   }, [isActive, userId, minDataThreshold, getCurrentPageContext, shouldMonitorPage, onVerificationComplete, triggerInterval]);
@@ -398,11 +398,11 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
   // CRITICAL FIX: Enhanced Monitoring Lifecycle Management
   const startMonitoring = useCallback(() => {
     if (!isActive || isCollecting || !shouldMonitorPage()) {
-      console.log('⏭️ FIXED Monitor: Cannot start - not active, already collecting, or not on monitored page');
+      console.log('⏭ FIXED Monitor: Cannot start - not active, already collecting, or not on monitored page');
       return;
     }
 
-    console.log(`🚀 FIXED Monitor: Starting behavioral monitoring for user ${userId} on ${getCurrentPageContext()} (interval: ${triggerInterval}min)`);
+    console.log(`  FIXED Monitor: Starting behavioral monitoring for user ${userId} on ${getCurrentPageContext()} (interval: ${triggerInterval}min)`);
     
     setIsCollecting(true);
     dataCollectionStartRef.current = Date.now();
@@ -419,8 +419,8 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       currentSessionMouse: 0
     }));
 
-    // CRITICAL FIX: Proper event listener attachment
-    console.log('🔗 FIXED Monitor: Attaching event listeners with proper capture');
+    //  Proper event listener attachment
+    console.log('  Attaching event listeners with proper capture');
     
     // Use capture phase for broader event coverage
     document.addEventListener('keydown', handleKeyEvent, { capture: true, passive: true });
@@ -447,13 +447,13 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       }));
     }, 5000);
 
-    console.log('✅ FIXED Monitor: Behavioral monitoring started with enhanced event handling');
+    console.log('  FIXED Monitor: Behavioral monitoring started with enhanced event handling');
   }, [isActive, userId, triggerInterval, handleKeyEvent, handleMouseEvent, runBehavioralVerification, shouldMonitorPage, getCurrentPageContext]);
 
   const stopMonitoring = useCallback(() => {
     if (!isCollecting) return;
 
-    console.log('🛑 FIXED Monitor: Stopping behavioral monitoring');
+    console.log('  FIXED Monitor: Stopping behavioral monitoring');
     
     setIsCollecting(false);
 
@@ -469,7 +469,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
     }
 
     // CRITICAL FIX: Proper event listener removal
-    console.log('🔗 FIXED Monitor: Removing event listeners');
+    console.log('  FIXED Monitor: Removing event listeners');
     
     document.removeEventListener('keydown', handleKeyEvent, true);
     document.removeEventListener('keyup', handleKeyEvent, true);
@@ -482,11 +482,11 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
 
     // Run final verification if we have data
     if (keystrokesRef.current.length > 0 || mouseEventsRef.current.length > 0) {
-      console.log('🔍 FIXED Monitor: Running final verification before stop');
+      console.log('  FIXED Monitor: Running final verification before stop');
       runBehavioralVerification();
     }
 
-    console.log('✅ FIXED Monitor: Behavioral monitoring stopped');
+    console.log('  FIXED Monitor: Behavioral monitoring stopped');
   }, [isCollecting, handleKeyEvent, handleMouseEvent, runBehavioralVerification]);
 
   // Effect for managing monitoring lifecycle
@@ -506,10 +506,10 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
   useEffect(() => {
     const handleLocationChange = () => {
       if (isCollecting && !shouldMonitorPage()) {
-        console.log('🔄 FIXED Monitor: Page changed to non-monitored page, stopping monitoring');
+        console.log('  FIXED Monitor: Page changed to non-monitored page, stopping monitoring');
         stopMonitoring();
       } else if (!isCollecting && shouldMonitorPage() && isActive && userId) {
-        console.log('🔄 FIXED Monitor: Page changed to monitored page, starting monitoring');
+        console.log('  FIXED Monitor: Page changed to monitored page, starting monitoring');
         startMonitoring();
       }
     };
@@ -574,7 +574,7 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center">
           <span className="mr-2">{getConnectionStatusIcon()}</span>
-          <span>👁️ FIXED Monitor</span>
+          <span>  FIXED Monitor</span>
         </div>
         <span className={`font-bold ${isCollecting ? 'text-green-400' : 'text-gray-400'}`}>
           {isCollecting ? 'ACTIVE' : 'INACTIVE'}
@@ -583,51 +583,51 @@ const BehavioralMonitor: React.FC<BehavioralMonitorProps> = ({
       
       <div className="space-y-1">
         <div className="flex justify-between">
-          <span>📊 Session Keys:</span>
+          <span>  Session Keys:</span>
           <span className="text-cyan-400">{monitoringStats.currentSessionKeystrokes}</span>
         </div>
         <div className="flex justify-between">
-          <span>🖱️ Session Mouse:</span>
+          <span>  Session Mouse:</span>
           <span className="text-cyan-400">{monitoringStats.currentSessionMouse}</span>
         </div>
         <div className="flex justify-between">
-          <span>✅ Verifications:</span>
+          <span>  Verifications:</span>
           <span className="text-cyan-400">{monitoringStats.verificationsRun}</span>
         </div>
         <div className="flex justify-between">
-          <span>🚨 Anomalies:</span>
+          <span>  Anomalies:</span>
           <span className={monitoringStats.anomaliesDetected > 0 ? 'text-red-400' : 'text-green-400'}>
             {monitoringStats.anomaliesDetected}
           </span>
         </div>
         <div className="flex justify-between">
-          <span>📈 Avg Similarity:</span>
+          <span> Avg Similarity:</span>
           <span className="text-purple-400">
             {(monitoringStats.averageSimilarity * 100).toFixed(0)}%
           </span>
         </div>
         <div className="flex justify-between">
-          <span>🔄 Total K/M:</span>
+          <span>  Total K/M:</span>
           <span className="text-blue-400">
             {monitoringStats.totalKeystrokes}/{monitoringStats.totalMouseEvents}
           </span>
         </div>
         {lastVerification && (
           <div className="text-gray-400 text-xs pt-1 border-t border-green-500/20">
-            🕐 Last: {lastVerification.toLocaleTimeString()}
+             Last: {lastVerification.toLocaleTimeString()}
           </div>
         )}
         <div className="text-gray-400 text-xs">
-          📍 Page: {getCurrentPageContext()}
+           Page: {getCurrentPageContext()}
         </div>
         <div className="text-gray-400 text-xs">
-          ⏱️ Interval: {triggerInterval}m
+          ⏱ Interval: {triggerInterval}m
         </div>
       </div>
       
       {connectionStatus === 'error' && (
         <div className="mt-2 text-red-400 text-xs">
-          ⚠️ Connection Error
+            Connection Error
         </div>
       )}
       

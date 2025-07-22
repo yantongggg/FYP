@@ -260,23 +260,6 @@ const AdminEditAccount = () => {
                   </div>
                 </div>
 
-                {/* <div>
-                <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                  PHONE_NUMBER
-                </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="terminal-input w-full pl-10 pr-4 py-3 rounded"
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-                </div> */}
-
                 <div className="border-t border-green-500/30 pt-6">
                   <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE_PASSWORD</h3>
                   

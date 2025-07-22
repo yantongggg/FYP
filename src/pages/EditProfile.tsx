@@ -68,17 +68,17 @@ const EditProfile = () => {
   const loadBiometricStatus = async () => {
     try {
       if (!userData?.uid) {
-        console.log('❌ No userData.uid found');
+        console.log('  No userData.uid found');
         return;
       }
 
-      console.log('🔍 Checking biometric status for user:', userData.uid);
+      console.log('  Checking biometric status for user:', userData.uid);
 
       // Check if this is a demo user (non-UUID format)
       const isDemoUser = userData.uid === 'admin-demo' || userData.uid === 'user-demo' || !userData.uid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     
       if (isDemoUser) {
-        console.log('✅ Demo user detected, setting all biometrics to true');
+        console.log('  Demo user detected, setting all biometrics to true');
         setBiometricStatus({
           face: true,
           keystroke: true,
@@ -92,27 +92,27 @@ const EditProfile = () => {
         .select('biometric_type, user_id, created_at')
         .eq('user_id', userData.uid);
 
-      console.log('📊 Biometric query result:', { biometricData, error });
+      console.log('  Biometric query result:', { biometricData, error });
 
       if (biometricData) {
         const types = biometricData.map((item: { biometric_type: string }) => item.biometric_type);
-        console.log('🎯 Found biometric types:', types);
+        console.log('  Found biometric types:', types);
         
         setBiometricStatus({
           face: types.includes('face'),
           keystroke: types.includes('keystroke'),
           behavioral: types.includes('mouse') || types.includes('scroll') || types.includes('behavioral')
         });
-        console.log("🌟 Final biometricStatus:", biometricStatus);
+        console.log(" Final biometricStatus:", biometricStatus);
         
-        console.log('✅ Biometric status set:', {
+        console.log('  Biometric status set:', {
           face: types.includes('face'),
           keystroke: types.includes('keystroke'),
           behavioral: types.includes('mouse') || types.includes('scroll') || types.includes('behavioral')
         });
       }
     } catch (error) {
-      console.error('❌ Error loading biometric status:', error);
+      console.error('  Error loading biometric status:', error);
     }
   };
 
@@ -166,7 +166,7 @@ const EditProfile = () => {
       // Show progress message
       setMessage({ type: 'success', text: 'Updating profile...' });
 
-      // 🔧 UNIFIED API CALL - handles both profile and password updates
+      //   UNIFIED API CALL - handles both profile and password updates
       const updatePayload: any = {
         user_id: userData.uid,
         username: formData.username,
@@ -200,11 +200,11 @@ const EditProfile = () => {
       let successMessage = '';
       
       if (updatedFields.includes('password_hash') && updatedFields.length > 1) {
-        successMessage = '✅ Profile information and password updated successfully!';
+        successMessage = '  Profile information and password updated successfully!';
       } else if (updatedFields.includes('password_hash')) {
-        successMessage = '✅ Password updated successfully!';
+        successMessage = '  Password updated successfully!';
       } else if (updatedFields.length > 0) {
-        successMessage = '✅ Profile information updated successfully!';
+        successMessage = '  Profile information updated successfully!';
       } else {
         successMessage = 'ℹ️ No changes were made to your profile.';
       }
@@ -236,22 +236,7 @@ const EditProfile = () => {
       setLoading(false);
     }
   };
-  // const handleBiometricReenroll = (type: 'face' | 'keystroke' | 'scroll') => {
-  //   setBiometricType(type);
-  //   setShowBiometricCapture(true);
-  // };
-
-  // const handleBiometricCapture = (data: any) => {
-  //   // In a real implementation, this would send the data to the server
-  //   setMessage({ type: 'success', text: `${biometricType} data captured successfully` });
-  //   setShowBiometricCapture(false);
-    
-  //   // Update local state
-  //   setBiometricStatus(prev => ({
-  //     ...prev,
-  //     [biometricType]: true
-  //   }));
-  // };
+  
 
   const handleEKYCCapture = (data: any) => {
     setMessage({ type: 'success', text: 'eKYC documents uploaded successfully' });
@@ -375,22 +360,6 @@ const EditProfile = () => {
                   />
                 </div>
               </div>
-              {/* <div>
-                <label className="block text-sm font-bold text-green-400 mb-2" style={{ fontFamily: 'IBM Plex Mono' }}>
-                  PHONE_NUMBER
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-green-400" />
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="terminal-input w-full pl-10 pr-4 py-3 rounded"
-                    placeholder="Enter phone number"
-                  />
-                </div>
-              </div> */}
 
               <div className="border-t border-green-500/30 pt-6">
                 <h3 className="text-lg font-bold text-cyan-400 mb-4">CHANGE PASSWORD</h3>

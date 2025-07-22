@@ -212,12 +212,12 @@
     // behavioral data loading with better error handling
     const loadBehavioralData = async () => {
       if (!userData?.uid) {
-        console.log('❌ FIXED UserHome: No user ID available');
+        console.log('  FIXED UserHome: No user ID available');
         setLoadingStates(prev => ({ ...prev, behavioral: 'error' }));
         return;
       }
 
-      console.log(`🔍 FIXED UserHome: Loading behavioral data for user: ${userData.uid}`);
+      console.log(`  FIXED UserHome: Loading behavioral data for user: ${userData.uid}`);
       setLoadingStates(prev => ({ ...prev, behavioral: 'loading' }));
 
       // demo user handling
@@ -264,7 +264,7 @@
         // behavioral sessions loading with multiple fallbacks
         let sessionsData: BehavioralSession[] = [];
         try {
-          console.log(`📡 FIXED UserHome: Fetching behavioral sessions from  API`);
+          console.log(`  FIXED UserHome: Fetching behavioral sessions from  API`);
           
           const sessionsResponse = await fetch(`http://localhost:5000/api/user/behavioral-sessions/${userData.uid}?limit=30`, {
             method: 'GET',
@@ -279,13 +279,13 @@
           }
           
           const sessionsResult = await sessionsResponse.json();
-          console.log('📊 FIXED UserHome: Sessions API response:', sessionsResult);
+          console.log('  FIXED UserHome: Sessions API response:', sessionsResult);
           
           if (sessionsResult.success && Array.isArray(sessionsResult.sessions)) {
             sessionsData = sessionsResult.sessions;
-            console.log(`✅ FIXED UserHome: Loaded ${sessionsData.length} behavioral sessions via API`);
+            console.log(`  FIXED UserHome: Loaded ${sessionsData.length} behavioral sessions via API`);
           } else {
-            console.warn('⚠️ FIXED UserHome: Sessions API returned non-success, trying direct Supabase');
+            console.warn('  FIXED UserHome: Sessions API returned non-success, trying direct Supabase');
             
             // Fallback to direct Supabase query
             const { data: directSessions, error } = await supabase
@@ -296,16 +296,16 @@
               .limit(30);
             
             if (error) {
-              console.error('❌ FIXED UserHome: Supabase direct query failed:', error);
+              console.error('  FIXED UserHome: Supabase direct query failed:', error);
               sessionsData = [];
             } else {
               sessionsData = directSessions || [];
-              console.log(`✅ FIXED UserHome: Loaded ${sessionsData.length} sessions via direct Supabase`);
+              console.log(`  FIXED UserHome: Loaded ${sessionsData.length} sessions via direct Supabase`);
             }
           }
           
         } catch (sessionError) {
-          console.error('❌ FIXED UserHome: Error loading behavioral sessions:', sessionError);
+          console.error('  FIXED UserHome: Error loading behavioral sessions:', sessionError);
           setConnectionStatus('error');
           sessionsData = [];
         }
@@ -315,7 +315,7 @@
         // anomalies loading with better UUID handling
         let anomaliesData: AnomalyAudit[] = [];
         try {
-          console.log(`📡 FIXED UserHome: Fetching anomalies from  API`);
+          console.log(`  FIXED UserHome: Fetching anomalies from  API`);
           
           const anomaliesResponse = await fetch(`http://localhost:5000/api/user/anomalies/${userData.uid}?limit=20`, {
             method: 'GET',
@@ -445,7 +445,7 @@
         return;
       }
 
-      console.log(`🔍 FIXED UserHome: Loading login activity for user: ${userData.uid}`);
+      console.log(`  FIXED UserHome: Loading login activity for user: ${userData.uid}`);
       setLoadingStates(prev => ({ ...prev, loginActivity: 'loading' }));
 
       //  demo user handling
@@ -471,7 +471,7 @@
       }
       
       try {
-        console.log(`📡 FIXED UserHome: Fetching login activity from Supabase for user: ${userData.uid}`);
+        console.log(`  FIXED UserHome: Fetching login activity from Supabase for user: ${userData.uid}`);
         
         // Use Supabase directly for login audit (UUID required)
         const { data, error } = await supabase
@@ -482,14 +482,14 @@
           .limit(20);
         
         if (error) {
-          console.error('❌ FIXED UserHome: Supabase error loading login activity:', error);
+          console.error('  FIXED UserHome: Supabase error loading login activity:', error);
           setLoadingStates(prev => ({ ...prev, loginActivity: 'error' }));
           setConnectionStatus('error');
           return;
         }
         
         if (data && data.length > 0) {
-          console.log(`✅ FIXED UserHome: Login activity loaded: ${data.length} records`);
+          console.log(`  FIXED UserHome: Login activity loaded: ${data.length} records`);
           setRecentLoginActivity(data);
           setLoadingStates(prev => ({ ...prev, loginActivity: 'loaded' }));
         } else {
@@ -856,7 +856,7 @@
       setUpdatingProfile(true);
       
       try {
-        console.log('🔄 FIXED UserHome: Updating profile for user:', userData.uid);
+        console.log('  FIXED UserHome: Updating profile for user:', userData.uid);
         
         const payload: {
           user_id: string;
@@ -1013,7 +1013,7 @@
                       <h3 className={`font-bold ${
                         realTimeStats.lastVerificationResult.anomaly ? 'text-yellow-400' : 'text-green-400'
                       }`}>
-                        🔄 LATEST BEHAVIORAL VERIFICATION
+                          LATEST BEHAVIORAL VERIFICATION
                       </h3>
                       <p className="text-gray-400 text-sm">
                         Last check: {realTimeStats.lastVerificationResult.timestamp.toLocaleTimeString()}

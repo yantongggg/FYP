@@ -2,7 +2,7 @@
 
 A comprehensive Supabase-based eKYC biometric authentication system with multimodal biometric capture, real-time behavioral monitoring, and AI-powered anomaly detection.
 
-## 🚀 Features
+##   Features
 
 ### Core Authentication
 - **Facial Recognition**: Advanced face detection and embedding generation
@@ -69,7 +69,7 @@ npm install
 npm run dev
 ```
 
-## 📊 Database Schema
+##   Database Schema
 
 ### Core Tables
 
@@ -90,7 +90,7 @@ npm run dev
 - Comprehensive audit trails
 - Security event logging and monitoring
 
-## 🔐 Security Features
+##   Security Features
 
 ### Data Encryption
 ```typescript
@@ -140,7 +140,7 @@ AI-powered support assistant that helps with:
 - Security feature explanations
 - Account management guidance
 
-## 📈 Monitoring & Analytics
+##  Monitoring & Analytics
 
 ### Real-time Dashboard
 - Live user activity monitoring
@@ -154,7 +154,7 @@ AI-powered support assistant that helps with:
 - Anomaly investigation tools
 - Compliance reporting
 
-## 🔧 API Reference
+##   API Reference
 
 ### Authentication Endpoints
 
@@ -197,7 +197,7 @@ GET /api/users/{userId}/metrics
 GET /api/anomalies?user_id={userId}&limit=100
 ```
 
-## 🚀 Deployment
+##   Deployment
 
 ### Production Deployment
 
@@ -226,7 +226,7 @@ GET /api/anomalies?user_id={userId}&limit=100
    WITH CHECK (bucket_id = 'biometric-data' AND auth.uid()::text = (storage.foldername(name))[1]);
    ```
 
-## 🔒 Security Best Practices
+##   Security Best Practices
 
 1. **Never store raw biometric images** - Only processed templates
 2. **Implement proper key rotation** - Regular encryption key updates
@@ -249,10 +249,10 @@ GET /api/anomalies?user_id={userId}&limit=100
 4. Add tests and documentation
 5. Submit a pull request
 
-## 📄 License
+##   License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## ⚠️ Disclaimer
+##   Disclaimer
 
 This system is designed for educational and demonstration purposes. For production use, ensure compliance with local biometric privacy laws and regulations."# FYP" 

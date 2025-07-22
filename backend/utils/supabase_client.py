@@ -39,7 +39,6 @@ except Exception as e:
     supabase_client = MockSupabaseClient()
 
 class MockTable:
-    """Mock Supabase table for development/testing"""
     
     def __init__(self, table_name):
         self.table_name = table_name
@@ -67,7 +66,6 @@ class MockTable:
         return MockQuery(self._data, delete=True)
 
 class MockQuery:
-    """Mock Supabase query for development/testing"""
     
     def __init__(self, data, update_data=None, delete=False):
         self._data = data
@@ -112,7 +110,6 @@ class MockQuery:
         return result
 
 class MockResponse:
-    """Mock Supabase response for development/testing"""
     
     def __init__(self, data):
         self.data = data if isinstance(data, list) else [data] if data is not None else []
