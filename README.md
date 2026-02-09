@@ -1,4 +1,4 @@
-//trigger。/
+//trigger。
 
 # eKYC Biometric Authentication System
 
