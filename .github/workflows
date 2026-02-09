@@ -1,0 +1,22 @@
+  name: Security Scanning
+
+  permissions:
+    contents: read
+    pull-requests: write
+    actions: write
+    checks: write
+
+  on:
+    push:
+      branches: [ "main", "master", "develop" ]
+    pull_request:
+      branches: [ "main", "master", "develop" ]
+    workflow_dispatch:
+
+  jobs:
+    sast-scan:
+      uses: yantongggg/TM_M/.github/workflows/sast-reusable.yml@v1.0.2
+      with:
+        semgrep_config: auto        # Semgrep rules: auto, security, p/ci
+        security_mode: audit        # audit = non-blocking, block = fail on findings
+        fail_on_high_severity: false # Set true to fail workflow on Critical/High
