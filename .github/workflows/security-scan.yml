@@ -1,4 +1,4 @@
-  name: Security Scanning
+  name: AI-Driven Pentest
 
   permissions:
     contents: read
@@ -14,9 +14,16 @@
     workflow_dispatch:
 
   jobs:
-    sast-scan:
-      uses: yantongggg/TM_M/.github/workflows/sast-reusable.yml@v1.0.2
+    ai-pentest:
+      uses:
+  yantongggg/TM_M/.github/workflows/ai-pentest-reusable.yml@v2.2.0
       with:
-        semgrep_config: auto        # Semgrep rules: auto, security, p/ci
-        security_mode: audit        # audit = non-blocking, block = fail on findings
-        fail_on_high_severity: false # Set true to fail workflow on Critical/High
+        semgrep_config: auto          # Semgrep rules to use
+        skip_logic_audit: false       # Set true to skip business logic
+  audit (saves tokens)
+        max_logic_files: 5            # Max files to analyze for logic
+  flaws
+        fail_on_critical: false       # Set true to fail workflow on
+  Critical/High findings
+      secrets:
+        openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
