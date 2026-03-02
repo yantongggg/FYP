@@ -5,7 +5,7 @@ on:
     branches: [ "**" ]
   push:
     branches: [ "main" ]
-  workflow_dispatch: # 加了这个，允许你在 Actions 页面手动点击运行按钮！
+  workflow_dispatch: 
 
 permissions:
   contents: read
@@ -43,9 +43,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTIONS: "true"
         run: |
-          chmod +x tm-scan-tool/tm-scan
-          # 将原来的 ./tm-scan 替换为 python tm-scan
-          cd tm-scan-tool && python tm-scan --local-dir "$GITHUB_WORKSPACE/target-repo" --mode quick --fail-on-critical
+          cd tm-scan-tool
+          
+          python tm-scan --local-dir "$GITHUB_WORKSPACE/target-repo" --mode quick --fail-on-critical
+          
       - name: Locate SARIF artifact
         id: find-sarif
         if: success() || failure()
