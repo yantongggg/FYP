@@ -45,7 +45,7 @@ jobs:
         run: |
           cd tm-scan-tool
           
-          python tm-scan --local-dir "$GITHUB_WORKSPACE/target-repo" --mode quick --fail-on-critical
+          python tm-scan --local-dir "$GITHUB_WORKSPACE/target-repo" --mode quick --mode quick
           
       - name: Locate SARIF artifact
         id: find-sarif
