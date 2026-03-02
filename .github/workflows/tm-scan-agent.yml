@@ -60,11 +60,19 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload SARIF results
+      # - name: Upload SARIF results
+      #   if: (success() || failure()) && steps.find-sarif.outputs.found == 'true'
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: ${{ env.SARIF_FILE }}
+
+      - name: Upload Threat Model Reports as Artifact
         if: (success() || failure()) && steps.find-sarif.outputs.found == 'true'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: ${{ env.SARIF_FILE }}
+          name: threat-model-reports
+          
+          path: ~/tm-output/reports/target-repo/
 
       - name: Run deterministic PR reviewer
         if: failure() && github.event_name == 'pull_request' 
