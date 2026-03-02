@@ -82,3 +82,28 @@ jobs:
           GITHUB_EVENT_PATH: ${{ github.event_path }}
         run: |
           python tm-scan-tool/scripts/local_pr_reviewer.py
+
+      - name: Find Markdown Report
+        id: find-md
+        if: (success() || failure()) && github.event_name == 'pull_request'
+        run: |
+          MD_PATH=$(find "$HOME/tm-output" -name "threatmodel-report.md" -print -quit 2>/dev/null || true)
+          if [ -n "$MD_PATH" ]; then
+            echo "MD_FILE=$MD_PATH" >> "$GITHUB_ENV"
+          fi
+
+      - name: Comment PR with Threat Model Report
+        if: (success() || failure()) && github.event_name == 'pull_request' && env.MD_FILE != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: threat-model-report
+          path: ${{ env.MD_FILE }}
+
+      - name: Publish Job Summary
+        if: success() || failure()
+        run: |
+          MD_PATH=$(find "$HOME/tm-output" -name "threatmodel-report.md" -print -quit 2>/dev/null || true)
+          if [ -n "$MD_PATH" ]; then
+            echo "## 🛡️ Threat Modeling Scan Results" >> $GITHUB_STEP_SUMMARY
+            cat "$MD_PATH" >> $GITHUB_STEP_SUMMARY
+          fi
