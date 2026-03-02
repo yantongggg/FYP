@@ -67,7 +67,7 @@ jobs:
           sarif_file: ${{ env.SARIF_FILE }}
 
       - name: Run deterministic PR reviewer
-        if: failure()
+        if: failure() && github.event_name == 'pull_request' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
