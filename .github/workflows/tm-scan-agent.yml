@@ -3,6 +3,8 @@ name: tm-scan agentic workflow
 on:
   pull_request:
     branches: ["**"]
+push:
+    branches: ["main"]
 
 permissions:
   contents: read
