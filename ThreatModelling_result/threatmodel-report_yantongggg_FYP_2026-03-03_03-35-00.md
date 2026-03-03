@@ -9,7 +9,7 @@
 **Organization:** mbbgrp
 **Report Date:** 2026-03-03
 **Report Version:** tm-scan v1.0.0
-**Report ID:** 20260303_033024
+**Report ID:** 20260303_033458
 **Report Classification:** Confidential
 
 ## SYSTEM CONTEXT
@@ -21,7 +21,7 @@
 - Internet User
 
 ### Assets
-- Sensitive User/Secret Data (High) - 135 evidence indicator(s)
+- Sensitive User/Secret Data (High) - 72 evidence indicator(s)
 - Datastores (postgres, postgresql, users) (High)
 
 ### Trust boundaries & Assumptions
@@ -95,19 +95,13 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| README.md | not-captured | password | HIGH |
-| backend/__pycache__/app.cpython-311.pyc | not-captured | password | HIGH |
 | backend/app.py | not-captured | password | HIGH |
-| backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | password | HIGH |
 | backend/routes/auth.py | not-captured | password | HIGH |
-| backend/utils/__pycache__/supabase_manager.cpython-311.pyc | not-captured | password | HIGH |
 | backend/utils/encryption_utils.py | not-captured | password | HIGH |
 | backend/utils/exportUtils.ts | not-captured | console.log | LOW |
 | backend/utils/supabase_manager.py | not-captured | password | HIGH |
-| evidence-summary.md | not-captured | password | HIGH |
 | evidence.json | not-captured | password | HIGH |
 | evidence.json | not-captured | console.log | LOW |
-| setUp.bat | not-captured | password | HIGH |
 | src/App.tsx | not-captured | console.log | LOW |
 | src/components/BehavioralMonitor.tsx | not-captured | password | HIGH |
 | src/components/BehavioralMonitor.tsx | not-captured | console.log | LOW |
@@ -137,9 +131,6 @@ flowchart TD
 | supabase/functions/local-chatbot/index.ts | not-captured | password | HIGH |
 | supabase/migrations/20250620102624_foggy_truth.sql | not-captured | password | HIGH |
 | supabase/migrations/20250626133933_late_crystal.sql | not-captured | password | HIGH |
-| threatmodel-report.md | not-captured | password | HIGH |
-| threatmodel-report.md | not-captured | console.log | LOW |
-| threatmodel-report.sarif | not-captured | password | HIGH |
 
 **Recommended Technical Mitigations:**
 - Structured logging + field allowlists
@@ -149,44 +140,6 @@ flowchart TD
 - TypeScript/React: never trust client-side computed security/business fields; send minimal inputs and recalculate on server.
 - TypeScript backend: apply strict schema validation (zod/joi) and centralized authorization middleware per route.
 - Python/TS APIs: verify JWT signature, issuer, audience, expiry on every protected request.
-- React/Python logs: redact Authorization headers, tokens, passwords, and PII at logger middleware.
-
-### [TM-CRYPTO-001] Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data
-**STRIDE & LINDDUN Categories & CWE Reference:** Information Disclosure | Linkability | CWE-327
-**DREAD:** Damage=9, Reproducibility=8, Exploitability=7, AffectedUsers=9, Discoverability=7, Avg=8.00
-
-**PASTA Attack Scenario:**
-- Precondition: External attacker or insider has access to Password storage, token derivation, encryption at rest, backups
-- Exploitation: Offline cracking; ciphertext pattern analysis
-- Business Impact: Account compromise, regulatory breach, reputational damage
-
-**Evidence Table:**
-| File Path | Line Number | Trigger | Severity |
-|-----------|-------------|---------|----------|
-| backend/__pycache__/app.cpython-311.pyc | not-captured | bcrypt | MEDIUM |
-| backend/app.py | not-captured | bcrypt | MEDIUM |
-| backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | bcrypt | MEDIUM |
-| backend/routes/auth.py | not-captured | bcrypt | MEDIUM |
-| backend/utils/__pycache__/supabase_manager.cpython-311.pyc | not-captured | bcrypt | MEDIUM |
-| backend/utils/supabase_manager.py | not-captured | bcrypt | MEDIUM |
-| evidence.json | not-captured | bcrypt | MEDIUM |
-| package-lock.json | not-captured | bcrypt | MEDIUM |
-| package.json | not-captured | bcrypt | MEDIUM |
-| requirements.txt | not-captured | bcrypt | MEDIUM |
-| setUp.bat | not-captured | bcrypt | MEDIUM |
-| src/contexts/AuthContext.tsx | not-captured | bcrypt | MEDIUM |
-| threatmodel-report.md | not-captured | argon2 | MEDIUM |
-| threatmodel-report.md | not-captured | bcrypt | MEDIUM |
-| threatmodel-report.sarif | not-captured | argon2 | MEDIUM |
-| threatmodel-report.sarif | not-captured | bcrypt | MEDIUM |
-
-**Recommended Technical Mitigations:**
-- Ban weak algorithms by policy/lint
-- Use AEAD modes (AES-GCM)
-- Centralize crypto utilities and key management (KMS/HSM)
-- Python: enforce server-side validation using Pydantic/FastAPI validators and reject unsafe payload shapes.
-- TypeScript/React: never trust client-side computed security/business fields; send minimal inputs and recalculate on server.
-- TypeScript backend: apply strict schema validation (zod/joi) and centralized authorization middleware per route.
 - React/Python logs: redact Authorization headers, tokens, passwords, and PII at logger middleware.
 
 ### [TM-AUTH-002] Credential Stuffing / Missing Rate Limiting on Auth Endpoints
@@ -201,11 +154,7 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| backend/__pycache__/enhanced_face_routes.cpython-311.pyc | not-captured | authenticate | MEDIUM |
-| backend/__pycache__/enhanced_face_routes.cpython-312.pyc | not-captured | authenticate | MEDIUM |
-| backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | authenticate | MEDIUM |
 | backend/routes/auth.py | not-captured | authenticate | MEDIUM |
-| evidence-summary.md | not-captured | authenticate | MEDIUM |
 | evidence.json | not-captured | authenticate | MEDIUM |
 | src/App.tsx | not-captured | authenticate | MEDIUM |
 | src/components/ChatBot.tsx | not-captured | authenticate | MEDIUM |
@@ -215,7 +164,6 @@ flowchart TD
 | supabase/migrations/20250624130544_copper_cell.sql | not-captured | authenticate | MEDIUM |
 | supabase/migrations/20250624130931_dawn_smoke.sql | not-captured | authenticate | MEDIUM |
 | supabase/migrations/20250626133933_late_crystal.sql | not-captured | authenticate | MEDIUM |
-| threatmodel-report.md | not-captured | authenticate | MEDIUM |
 
 **Recommended Technical Mitigations:**
 - IP + account throttling
@@ -226,6 +174,35 @@ flowchart TD
 - TypeScript backend: apply strict schema validation (zod/joi) and centralized authorization middleware per route.
 - Python/TS APIs: verify JWT signature, issuer, audience, expiry on every protected request.
 - Python/TS gateway: enforce IP + account rate-limits, lockout/backoff, and anomaly detection.
+
+### [TM-CRYPTO-001] Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data
+**STRIDE & LINDDUN Categories & CWE Reference:** Information Disclosure | Linkability | CWE-327
+**DREAD:** Damage=9, Reproducibility=8, Exploitability=7, AffectedUsers=9, Discoverability=7, Avg=8.00
+
+**PASTA Attack Scenario:**
+- Precondition: External attacker or insider has access to Password storage, token derivation, encryption at rest, backups
+- Exploitation: Offline cracking; ciphertext pattern analysis
+- Business Impact: Account compromise, regulatory breach, reputational damage
+
+**Evidence Table:**
+| File Path | Line Number | Trigger | Severity |
+|-----------|-------------|---------|----------|
+| backend/app.py | not-captured | bcrypt | MEDIUM |
+| backend/routes/auth.py | not-captured | bcrypt | MEDIUM |
+| backend/utils/supabase_manager.py | not-captured | bcrypt | MEDIUM |
+| evidence.json | not-captured | bcrypt | MEDIUM |
+| package-lock.json | not-captured | bcrypt | MEDIUM |
+| package.json | not-captured | bcrypt | MEDIUM |
+| src/contexts/AuthContext.tsx | not-captured | bcrypt | MEDIUM |
+
+**Recommended Technical Mitigations:**
+- Ban weak algorithms by policy/lint
+- Use AEAD modes (AES-GCM)
+- Centralize crypto utilities and key management (KMS/HSM)
+- Python: enforce server-side validation using Pydantic/FastAPI validators and reject unsafe payload shapes.
+- TypeScript/React: never trust client-side computed security/business fields; send minimal inputs and recalculate on server.
+- TypeScript backend: apply strict schema validation (zod/joi) and centralized authorization middleware per route.
+- React/Python logs: redact Authorization headers, tokens, passwords, and PII at logger middleware.
 
 ### [TM-BIZ-001] Client-Side Trust of Financial Fields (Price/Quantity/Risk Score Manipulation)
 **STRIDE & LINDDUN Categories & CWE Reference:** Tampering | Unawareness | CWE-602
@@ -239,9 +216,7 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc | not-captured | risk_score | HIGH |
 | evidence.json | not-captured | risk_score | HIGH |
-| threatmodel-report.md | not-captured | risk_score | HIGH |
 
 **Recommended Technical Mitigations:**
 - Server-side recalculation of totals and risk
@@ -257,8 +232,8 @@ flowchart TD
 flowchart TD
     a0[Preconditions: Internet reachability and attacker capability]
     a1[Initial Exploitation: TM-PRIV-001 Improper Logging of PII/Secrets (Tokens, Passwords, Full User Objects)]
-    a2[Privilege/Logic Abuse: TM-CRYPTO-001 Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data]
-    a3[Lateral Movement: TM-AUTH-002 Credential Stuffing / Missing Rate Limiting on Auth Endpoints]
+    a2[Privilege/Logic Abuse: TM-AUTH-002 Credential Stuffing / Missing Rate Limiting on Auth Endpoints]
+    a3[Lateral Movement: TM-CRYPTO-001 Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data]
     a4[Business Impact: Data breach, fraud, or service disruption]
 
     a0 -.-> a1
@@ -281,13 +256,13 @@ flowchart TD
 | Threat ID | Risk Level | DREAD Avg | Mitigation Priority |
 |-----------|------------|-----------|---------------------|
 | TM-PRIV-001 | Critical | 8.20 | P0 - Immediate |
-| TM-CRYPTO-001 | Critical | 8.00 | P0 - Immediate |
-| TM-AUTH-002 | Critical | 8.20 | P0 - Immediate |
+| TM-AUTH-002 | High | 8.20 | P1 - Current Sprint |
+| TM-CRYPTO-001 | High | 8.00 | P1 - Current Sprint |
 | TM-BIZ-001 | Critical | 7.60 | P0 - Immediate |
 
 ---
 
 *Secret Findings (gitleaks): 0*
 *Total Packages (SBOM): 0*
-*Report generated by tm-scan v1.0.0 on 2026-03-03 03:30:25*
+*Report generated by tm-scan v1.0.0 on 2026-03-03 03:34:59*
 *Automated output from static analysis; manual security review is required.*
