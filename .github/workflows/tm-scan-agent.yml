@@ -3,6 +3,7 @@ name: tm-scan agentic workflow
 on:
   pull_request:
     branches: [ "**" ]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [ "main" ]
     paths-ignore:
@@ -16,6 +17,7 @@ permissions:
 
 jobs:
   tm-scan:
+    if: ${{ !contains(github.event.head_commit.message, '[skip tm-scan]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR code
