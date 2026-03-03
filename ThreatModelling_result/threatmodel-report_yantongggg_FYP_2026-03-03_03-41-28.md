@@ -9,7 +9,7 @@
 **Organization:** mbbgrp
 **Report Date:** 2026-03-03
 **Report Version:** tm-scan v1.0.0
-**Report ID:** 20260303_033458
+**Report ID:** 20260303_034126
 **Report Classification:** Confidential
 
 ## SYSTEM CONTEXT
@@ -95,42 +95,42 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| backend/app.py | not-captured | password | HIGH |
-| backend/routes/auth.py | not-captured | password | HIGH |
-| backend/utils/encryption_utils.py | not-captured | password | HIGH |
-| backend/utils/exportUtils.ts | not-captured | console.log | LOW |
-| backend/utils/supabase_manager.py | not-captured | password | HIGH |
-| evidence.json | not-captured | password | HIGH |
-| evidence.json | not-captured | console.log | LOW |
-| src/App.tsx | not-captured | console.log | LOW |
-| src/components/BehavioralMonitor.tsx | not-captured | password | HIGH |
-| src/components/BehavioralMonitor.tsx | not-captured | console.log | LOW |
-| src/components/BiometricCapture.tsx | not-captured | console.log | LOW |
-| src/components/ChatBot.tsx | not-captured | password | HIGH |
-| src/components/ChatBot.tsx | not-captured | console.log | LOW |
-| src/components/EKYCDocumentViewer.tsx | not-captured | console.log | LOW |
-| src/components/GlobalBehavioralWrapper.tsx | not-captured | password | HIGH |
-| src/components/GlobalBehavioralWrapper.tsx | not-captured | console.log | LOW |
-| src/components/ProtectedRoute.tsx | not-captured | console.log | LOW |
-| src/contexts/AuthContext.tsx | not-captured | password | HIGH |
-| src/contexts/AuthContext.tsx | not-captured | console.log | LOW |
-| src/lib/supabase.ts | not-captured | password | HIGH |
-| src/pages/AdminDashboard.tsx | not-captured | console.log | LOW |
-| src/pages/AdminEditAccount.tsx | not-captured | password | HIGH |
-| src/pages/BehavioralTestPage.tsx | not-captured | console.log | LOW |
-| src/pages/Documentation.tsx | not-captured | password | HIGH |
-| src/pages/Documentation.tsx | not-captured | console.log | LOW |
-| src/pages/EditProfile.tsx | not-captured | password | HIGH |
-| src/pages/EditProfile.tsx | not-captured | console.log | LOW |
-| src/pages/Login.tsx | not-captured | password | HIGH |
-| src/pages/Login.tsx | not-captured | console.log | LOW |
-| src/pages/Register.tsx | not-captured | password | HIGH |
-| src/pages/Register.tsx | not-captured | console.log | LOW |
-| src/pages/UserHome.tsx | not-captured | password | HIGH |
-| src/pages/UserHome.tsx | not-captured | console.log | LOW |
-| supabase/functions/local-chatbot/index.ts | not-captured | password | HIGH |
-| supabase/migrations/20250620102624_foggy_truth.sql | not-captured | password | HIGH |
-| supabase/migrations/20250626133933_late_crystal.sql | not-captured | password | HIGH |
+| backend/app.py | - | password | HIGH |
+| backend/routes/auth.py | - | password | HIGH |
+| backend/utils/encryption_utils.py | - | password | HIGH |
+| backend/utils/exportUtils.ts | - | console.log | LOW |
+| backend/utils/supabase_manager.py | - | password | HIGH |
+| evidence.json | - | console.log | LOW |
+| evidence.json | - | password | HIGH |
+| src/App.tsx | - | console.log | LOW |
+| src/components/BehavioralMonitor.tsx | - | console.log | LOW |
+| src/components/BehavioralMonitor.tsx | - | password | HIGH |
+| src/components/BiometricCapture.tsx | - | console.log | LOW |
+| src/components/ChatBot.tsx | - | console.log | LOW |
+| src/components/ChatBot.tsx | - | password | HIGH |
+| src/components/EKYCDocumentViewer.tsx | - | console.log | LOW |
+| src/components/GlobalBehavioralWrapper.tsx | - | console.log | LOW |
+| src/components/GlobalBehavioralWrapper.tsx | - | password | HIGH |
+| src/components/ProtectedRoute.tsx | - | console.log | LOW |
+| src/contexts/AuthContext.tsx | - | console.log | LOW |
+| src/contexts/AuthContext.tsx | - | password | HIGH |
+| src/lib/supabase.ts | - | password | HIGH |
+| src/pages/AdminDashboard.tsx | - | console.log | LOW |
+| src/pages/AdminEditAccount.tsx | - | password | HIGH |
+| src/pages/BehavioralTestPage.tsx | - | console.log | LOW |
+| src/pages/Documentation.tsx | - | console.log | LOW |
+| src/pages/Documentation.tsx | - | password | HIGH |
+| src/pages/EditProfile.tsx | - | console.log | LOW |
+| src/pages/EditProfile.tsx | - | password | HIGH |
+| src/pages/Login.tsx | - | console.log | LOW |
+| src/pages/Login.tsx | - | password | HIGH |
+| src/pages/Register.tsx | - | console.log | LOW |
+| src/pages/Register.tsx | - | password | HIGH |
+| src/pages/UserHome.tsx | - | console.log | LOW |
+| src/pages/UserHome.tsx | - | password | HIGH |
+| supabase/functions/local-chatbot/index.ts | - | password | HIGH |
+| supabase/migrations/20250620102624_foggy_truth.sql | - | password | HIGH |
+| supabase/migrations/20250626133933_late_crystal.sql | - | password | HIGH |
 
 **Recommended Technical Mitigations:**
 - Structured logging + field allowlists
@@ -154,16 +154,16 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| backend/routes/auth.py | not-captured | authenticate | MEDIUM |
-| evidence.json | not-captured | authenticate | MEDIUM |
-| src/App.tsx | not-captured | authenticate | MEDIUM |
-| src/components/ChatBot.tsx | not-captured | authenticate | MEDIUM |
-| src/pages/Documentation.tsx | not-captured | authenticate | MEDIUM |
-| supabase/functions/local-chatbot/index.ts | not-captured | authenticate | MEDIUM |
-| supabase/migrations/20250620102624_foggy_truth.sql | not-captured | authenticate | MEDIUM |
-| supabase/migrations/20250624130544_copper_cell.sql | not-captured | authenticate | MEDIUM |
-| supabase/migrations/20250624130931_dawn_smoke.sql | not-captured | authenticate | MEDIUM |
-| supabase/migrations/20250626133933_late_crystal.sql | not-captured | authenticate | MEDIUM |
+| backend/routes/auth.py | - | authenticate | MEDIUM |
+| evidence.json | - | authenticate | MEDIUM |
+| src/App.tsx | - | authenticate | MEDIUM |
+| src/components/ChatBot.tsx | - | authenticate | MEDIUM |
+| src/pages/Documentation.tsx | - | authenticate | MEDIUM |
+| supabase/functions/local-chatbot/index.ts | - | authenticate | MEDIUM |
+| supabase/migrations/20250620102624_foggy_truth.sql | - | authenticate | MEDIUM |
+| supabase/migrations/20250624130544_copper_cell.sql | - | authenticate | MEDIUM |
+| supabase/migrations/20250624130931_dawn_smoke.sql | - | authenticate | MEDIUM |
+| supabase/migrations/20250626133933_late_crystal.sql | - | authenticate | MEDIUM |
 
 **Recommended Technical Mitigations:**
 - IP + account throttling
@@ -187,13 +187,13 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| backend/app.py | not-captured | bcrypt | MEDIUM |
-| backend/routes/auth.py | not-captured | bcrypt | MEDIUM |
-| backend/utils/supabase_manager.py | not-captured | bcrypt | MEDIUM |
-| evidence.json | not-captured | bcrypt | MEDIUM |
-| package-lock.json | not-captured | bcrypt | MEDIUM |
-| package.json | not-captured | bcrypt | MEDIUM |
-| src/contexts/AuthContext.tsx | not-captured | bcrypt | MEDIUM |
+| backend/app.py | - | bcrypt | MEDIUM |
+| backend/routes/auth.py | - | bcrypt | MEDIUM |
+| backend/utils/supabase_manager.py | - | bcrypt | MEDIUM |
+| evidence.json | - | bcrypt | MEDIUM |
+| package-lock.json | - | bcrypt | MEDIUM |
+| package.json | - | bcrypt | MEDIUM |
+| src/contexts/AuthContext.tsx | - | bcrypt | MEDIUM |
 
 **Recommended Technical Mitigations:**
 - Ban weak algorithms by policy/lint
@@ -216,7 +216,7 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| evidence.json | not-captured | risk_score | HIGH |
+| evidence.json | - | risk_score | HIGH |
 
 **Recommended Technical Mitigations:**
 - Server-side recalculation of totals and risk
@@ -231,9 +231,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     a0[Preconditions: Internet reachability and attacker capability]
-    a1[Initial Exploitation: TM-PRIV-001 Improper Logging of PII/Secrets (Tokens, Passwords, Full User Objects)]
-    a2[Privilege/Logic Abuse: TM-AUTH-002 Credential Stuffing / Missing Rate Limiting on Auth Endpoints]
-    a3[Lateral Movement: TM-CRYPTO-001 Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data]
+    a1["Initial Exploitation: TM-PRIV-001 Improper Logging of PII/Secrets (Tokens, Passwords, Full User Objects)"]
+    a2["Privilege/Logic Abuse: TM-AUTH-002 Credential Stuffing / Missing Rate Limiting on Auth Endpoints"]
+    a3["Lateral Movement: TM-CRYPTO-001 Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data"]
     a4[Business Impact: Data breach, fraud, or service disruption]
 
     a0 -.-> a1
@@ -264,5 +264,5 @@ flowchart TD
 
 *Secret Findings (gitleaks): 0*
 *Total Packages (SBOM): 0*
-*Report generated by tm-scan v1.0.0 on 2026-03-03 03:34:59*
+*Report generated by tm-scan v1.0.0 on 2026-03-03 03:41:27*
 *Automated output from static analysis; manual security review is required.*
