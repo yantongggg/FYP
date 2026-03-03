@@ -9,7 +9,7 @@
 **Organization:** mbbgrp
 **Report Date:** 2026-03-03
 **Report Version:** tm-scan v1.0.0
-**Report ID:** 20260303_032327
+**Report ID:** 20260303_033024
 **Report Classification:** Confidential
 
 ## SYSTEM CONTEXT
@@ -21,7 +21,7 @@
 - Internet User
 
 ### Assets
-- Sensitive User/Secret Data (High) - 168 evidence indicator(s)
+- Sensitive User/Secret Data (High) - 135 evidence indicator(s)
 - Datastores (postgres, postgresql, users) (High)
 
 ### Trust boundaries & Assumptions
@@ -96,16 +96,6 @@ flowchart TD
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
 | README.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | console.log | LOW |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | console.log | LOW |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | console.log | LOW |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | console.log | LOW |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | password | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | console.log | LOW |
 | backend/__pycache__/app.cpython-311.pyc | not-captured | password | HIGH |
 | backend/app.py | not-captured | password | HIGH |
 | backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | password | HIGH |
@@ -173,16 +163,6 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | argon2 | MEDIUM |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | bcrypt | MEDIUM |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | argon2 | MEDIUM |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | bcrypt | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | argon2 | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | bcrypt | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | argon2 | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | bcrypt | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | argon2 | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | bcrypt | MEDIUM |
 | backend/__pycache__/app.cpython-311.pyc | not-captured | bcrypt | MEDIUM |
 | backend/app.py | not-captured | bcrypt | MEDIUM |
 | backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | bcrypt | MEDIUM |
@@ -221,11 +201,6 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | authenticate | MEDIUM |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | authenticate | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | authenticate | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | authenticate | MEDIUM |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | authenticate | MEDIUM |
 | backend/__pycache__/enhanced_face_routes.cpython-311.pyc | not-captured | authenticate | MEDIUM |
 | backend/__pycache__/enhanced_face_routes.cpython-312.pyc | not-captured | authenticate | MEDIUM |
 | backend/routes/__pycache__/auth.cpython-311.pyc | not-captured | authenticate | MEDIUM |
@@ -264,11 +239,6 @@ flowchart TD
 **Evidence Table:**
 | File Path | Line Number | Trigger | Severity |
 |-----------|-------------|---------|----------|
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-42-46.md | not-captured | risk_score | HIGH |
-| ThreatModelling_result/threatmodel-report_2026-03-03_02-58-49.md | not-captured | risk_score | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-04-43.md | not-captured | risk_score | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-08-02.md | not-captured | risk_score | HIGH |
-| ThreatModelling_result/threatmodel-report_yantongggg_FYP_2026-03-03_03-22-42.md | not-captured | risk_score | HIGH |
 | backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc | not-captured | risk_score | HIGH |
 | evidence.json | not-captured | risk_score | HIGH |
 | threatmodel-report.md | not-captured | risk_score | HIGH |
@@ -319,5 +289,5 @@ flowchart TD
 
 *Secret Findings (gitleaks): 0*
 *Total Packages (SBOM): 0*
-*Report generated by tm-scan v1.0.0 on 2026-03-03 03:23:28*
+*Report generated by tm-scan v1.0.0 on 2026-03-03 03:30:25*
 *Automated output from static analysis; manual security review is required.*
