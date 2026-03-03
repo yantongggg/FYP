@@ -1,0 +1,3586 @@
+{
+  "repo_name": "target-repo",
+  "scan_timestamp": "2026-03-03",
+  "openapi_files": [],
+  "db_migration_files": [
+    "supabase/migrations/20250626133933_late_crystal.sql",
+    "supabase/migrations/20250624130931_dawn_smoke.sql",
+    "supabase/migrations/20250624085451_quick_cottage.sql",
+    "supabase/migrations/20250620102624_foggy_truth.sql",
+    "supabase/migrations/20250624130544_copper_cell.sql",
+    "supabase/migrations/20250624084919_sparkling_oasis.sql",
+    "supabase/migrations/20250623105842_stark_glade.sql",
+    "supabase/migrations/20250623102226_winter_bonus.sql"
+  ],
+  "config_files": [
+    ".env.example"
+  ],
+  "keyword_hits": [
+    {
+      "keyword": "users",
+      "file_path": "README.md",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "password",
+      "file_path": "README.md",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "update",
+      "file_path": "README.md",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "README.md",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "README.md",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "README.md",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "README.md",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "requirements.txt",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "requirements.txt",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "requirements.txt",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "package.json",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "1h",
+      "file_path": "package-lock.json",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "package-lock.json",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "package-lock.json",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "jwt",
+      "file_path": "package-lock.json",
+      "category": "authn",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "package-lock.json",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "package-lock.json",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "package-lock.json",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "package-lock.json",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "rsa",
+      "file_path": "package-lock.json",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "package-lock.json",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "package-lock.json",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "api_key",
+      "file_path": ".env.example",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": ".env.example",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "jwt",
+      "file_path": "setUp.bat",
+      "category": "authn",
+      "priority": "high"
+    },
+    {
+      "keyword": "password",
+      "file_path": "setUp.bat",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "secret",
+      "file_path": "setUp.bat",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "password=",
+      "file_path": "setUp.bat",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "setUp.bat",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "setUp.bat",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "jwt",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "apikey",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "apikey",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "decrypt",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "decrypt",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "src/App.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/App.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/App.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/components/EKYCDocumentViewer.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/EKYCDocumentViewer.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/components/Navbar.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "rsa",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/components/ProtectedRoute.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/ProtectedRoute.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/lib/supabase.ts",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/lib/supabase.ts",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/lib/supabase.ts",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/lib/supabase.ts",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/lib/supabase.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "src/lib/supabase.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/lib/supabase.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "src/lib/supabase.ts",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "src/lib/supabase.ts",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/Home.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/Home.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "src/pages/Home.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "src/pages/Home.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/Login.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/Login.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/Login.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/Login.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/Login.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/BehavioralTestPage.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/BehavioralTestPage.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "src/pages/BehavioralTestPage.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/BehavioralTestPage.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/MyAnomalies.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/MyAnomalies.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/MyAnomalies.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "jwt",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "authn",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "24h",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "useragent",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/Register.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/Register.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/Register.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/Register.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/Register.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "jwt",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "postgres",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "postgresql",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "database",
+      "priority": "medium"
+    },
+    {
+      "keyword": "secret",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "secret",
+      "priority": "high"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "aes",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/app.py",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/app.py",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/app.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/app.py",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/app.py",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/app.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/app.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/app.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/app.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/app.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/app.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/app.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/app.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-312.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-312.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-312.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "1h",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "encrypt",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "decrypt",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/logger.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/ocr_utils.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "console.log",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/utils/supabase_client.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/utils/supabase_client.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/utils/supabase_client.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/utils/supabase_client.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/supabase_client.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/utils/storage_utils.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/storage_utils.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/ocr_utils.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/image_utils.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/utils/__pycache__/image_utils.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/__init__.cpython-312.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/storage_utils.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/utils/__pycache__/storage_utils.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/logger.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/utils/__pycache__/logger.cpython-311.pyc",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/__init__.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/utils/__pycache__/ocr_utils.cpython-312.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/utils/__pycache__/ocr_utils.cpython-312.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/ml_models/face_verification.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/ml_models/face_verification.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/hyperfas_inferencer.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "1h",
+      "file_path": "backend/ml_models/__pycache__/hyperfas_inferencer.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/ml_models/__pycache__/hyperfas_inferencer.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-312.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "1h",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-312.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-312.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-312.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-312.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-312.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "risk_score",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc",
+      "category": "business_logic",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/flash_liveness.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/ml_models/__pycache__/flash_liveness.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/demo.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/mtcnn.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/ml_models/__pycache__/mtcnn.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "delete",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/__init__.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/face_verification.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/ml_models/__pycache__/face_verification.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "1h",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/sub_functions.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/behavior.py",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/routes/behavior.py",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/routes/behavior.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/behavior.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/routes/behavior.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/routes/behavior.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/routes/behavior.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/routes/behavior.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/auth.py",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/routes/auth.py",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "backend/routes/auth.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/routes/auth.py",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/routes/auth.py",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/routes/auth.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/auth.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/routes/auth.py",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "logger.",
+      "file_path": "backend/routes/auth.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "print(",
+      "file_path": "backend/routes/auth.py",
+      "category": "logging",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/routes/auth.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/routes/auth.py",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/liveness.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/__pycache__/liveness.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "4h",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "7d",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "time_interval",
+      "priority": "medium"
+    },
+    {
+      "keyword": "session",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "session",
+      "priority": "medium"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/__init__.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "user-agent",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "client_fingerprinting",
+      "priority": "medium"
+    },
+    {
+      "keyword": "authenticate",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "login",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "authn",
+      "priority": "medium"
+    },
+    {
+      "keyword": "password",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "credential",
+      "priority": "high"
+    },
+    {
+      "keyword": "select",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "insert",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "update",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "sql_query",
+      "priority": "low"
+    },
+    {
+      "keyword": "hash",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "bcrypt",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "cryptography",
+      "priority": "medium"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/face.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    },
+    {
+      "keyword": "users",
+      "file_path": "backend/routes/__pycache__/face_capture.cpython-311.pyc",
+      "category": "database",
+      "priority": "high"
+    }
+  ],
+  "rule_hits": [
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "src/lib/supabase.ts",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/app.py",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-sqli-concatenation",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "injection",
+      "sub_category": "sql_injection",
+      "severity": "CRITICAL",
+      "cwe": "CWE-89"
+    },
+    {
+      "rule_id": "vuln-weak-hashing",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "crypto",
+      "sub_category": "weak_hash",
+      "severity": "HIGH",
+      "cwe": "CWE-328"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-insecure-random",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "crypto",
+      "sub_category": "prng",
+      "severity": "MEDIUM",
+      "cwe": "CWE-330"
+    },
+    {
+      "rule_id": "vuln-sqli-concatenation",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "injection",
+      "sub_category": "sql_injection",
+      "severity": "CRITICAL",
+      "cwe": "CWE-89"
+    },
+    {
+      "rule_id": "vuln-sqli-concatenation",
+      "file_path": "backend/routes/auth.py",
+      "category": "injection",
+      "sub_category": "sql_injection",
+      "severity": "CRITICAL",
+      "cwe": "CWE-89"
+    },
+    {
+      "rule_id": "vuln-hardcoded-credentials",
+      "file_path": "backend/routes/auth.py",
+      "category": "authn",
+      "sub_category": "hardcoded_secret",
+      "severity": "CRITICAL",
+      "cwe": "CWE-798"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/routes/auth.py",
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    }
+  ],
+  "sast_hits": [
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/app.py",
+      "line": 538,
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-weak-hashing",
+      "file_path": "backend/utils/supabase_manager.py",
+      "line": 1226,
+      "category": "crypto",
+      "sub_category": "weak_hash",
+      "severity": "HIGH",
+      "cwe": "CWE-328"
+    },
+    {
+      "rule_id": "vuln-weak-hashing",
+      "file_path": "backend/utils/supabase_manager.py",
+      "line": 1234,
+      "category": "crypto",
+      "sub_category": "weak_hash",
+      "severity": "HIGH",
+      "cwe": "CWE-328"
+    },
+    {
+      "rule_id": "vuln-sensitive-data-logging",
+      "file_path": "backend/utils/supabase_manager.py",
+      "line": 272,
+      "category": "repudiation",
+      "sub_category": "pii_leak",
+      "severity": "HIGH",
+      "cwe": "CWE-532"
+    },
+    {
+      "rule_id": "vuln-insecure-random",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "line": 216,
+      "category": "crypto",
+      "sub_category": "prng",
+      "severity": "MEDIUM",
+      "cwe": "CWE-330"
+    },
+    {
+      "rule_id": "vuln-insecure-random",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "line": 217,
+      "category": "crypto",
+      "sub_category": "prng",
+      "severity": "MEDIUM",
+      "cwe": "CWE-330"
+    },
+    {
+      "rule_id": "vuln-insecure-random",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "line": 219,
+      "category": "crypto",
+      "sub_category": "prng",
+      "severity": "MEDIUM",
+      "cwe": "CWE-330"
+    },
+    {
+      "rule_id": "vuln-insecure-random",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "line": 220,
+      "category": "crypto",
+      "sub_category": "prng",
+      "severity": "MEDIUM",
+      "cwe": "CWE-330"
+    },
+    {
+      "rule_id": "vuln-hardcoded-credentials",
+      "file_path": "backend/routes/auth.py",
+      "line": 132,
+      "category": "authn",
+      "sub_category": "hardcoded_secret",
+      "severity": "CRITICAL",
+      "cwe": "CWE-798"
+    }
+  ],
+  "auth_hints": [
+    {
+      "type": "password",
+      "file_path": "README.md",
+      "category": "credential"
+    },
+    {
+      "type": "jwt",
+      "file_path": "package-lock.json",
+      "category": "authn"
+    },
+    {
+      "type": "jwt",
+      "file_path": "setUp.bat",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "setUp.bat",
+      "category": "credential"
+    },
+    {
+      "type": "jwt",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "supabase/functions/local-chatbot/index.ts",
+      "category": "session"
+    },
+    {
+      "type": "session",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts",
+      "category": "session"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql",
+      "category": "session"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql",
+      "category": "session"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "src/App.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/App.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/components/GlobalBehavioralWrapper.tsx",
+      "category": "session"
+    },
+    {
+      "type": "password",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/components/BehavioralMonitor.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/components/Navbar.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/components/ChatBot.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/components/ProtectedRoute.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "src/components/BiometricCapture.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/lib/supabase.ts",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/lib/supabase.ts",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/lib/supabase.ts",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/contexts/AuthContext.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/Home.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/AdminEditAccount.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/Login.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/Login.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/EditProfile.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/UserHome.tsx",
+      "category": "session"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/BehavioralTestPage.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/MyAnomalies.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/DatabaseSchema.tsx",
+      "category": "session"
+    },
+    {
+      "type": "jwt",
+      "file_path": "src/pages/Architecture.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/AdminDashboard.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/Register.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/Register.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "jwt",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "src/pages/Documentation.tsx",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/app.py",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/app.py",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/app.py",
+      "category": "session"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-312.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/utils/encryption_utils.py",
+      "category": "credential"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/utils/supabase_manager.py",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/utils/exportUtils.ts",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "credential"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/ml_models/liveness_detector.py",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/ml_models/face_verification.py",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/ml_models/__pycache__/mtcnn.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/ml_models/__pycache__/face_verification.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/routes/behavior.py",
+      "category": "session"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/routes/ekyc.py",
+      "category": "authn"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "backend/routes/auth.py",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/routes/auth.py",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/routes/auth.py",
+      "category": "credential"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "session",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc",
+      "category": "session"
+    },
+    {
+      "type": "authenticate",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "login",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "authn"
+    },
+    {
+      "type": "password",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc",
+      "category": "credential"
+    }
+  ],
+  "db_hints": [
+    {
+      "type": "users",
+      "file_path": "README.md"
+    },
+    {
+      "type": "postgres",
+      "file_path": "README.md"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "README.md"
+    },
+    {
+      "type": "postgres",
+      "file_path": "package-lock.json"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/functions/local-chatbot/index.ts"
+    },
+    {
+      "type": "postgres",
+      "file_path": "supabase/functions/local-chatbot/index.ts"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "supabase/functions/local-chatbot/index.ts"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250626133933_late_crystal.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250624130931_dawn_smoke.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250624085451_quick_cottage.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250620102624_foggy_truth.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250624130544_copper_cell.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250624084919_sparkling_oasis.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250623105842_stark_glade.sql"
+    },
+    {
+      "type": "users",
+      "file_path": "supabase/migrations/20250623102226_winter_bonus.sql"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/components/ChatBot.tsx"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "src/components/ChatBot.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/lib/supabase.ts"
+    },
+    {
+      "type": "users",
+      "file_path": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/Home.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/AdminEditAccount.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/Login.tsx"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/pages/UserHome.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/MyAnomalies.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/DatabaseSchema.tsx"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/pages/DatabaseSchema.tsx"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "src/pages/DatabaseSchema.tsx"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/pages/Architecture.tsx"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "src/pages/Architecture.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/AdminDashboard.tsx"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/pages/AdminDashboard.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "src/pages/Documentation.tsx"
+    },
+    {
+      "type": "postgres",
+      "file_path": "src/pages/Documentation.tsx"
+    },
+    {
+      "type": "postgresql",
+      "file_path": "src/pages/Documentation.tsx"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/app.py"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-312.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/__pycache__/enhanced_face_routes.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/__pycache__/app.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/supabase_manager.py"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/exportUtils.ts"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/supabase_manager.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/ocr_utils.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/image_utils.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/__init__.cpython-312.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/storage_utils.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/supabase_client.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/logger.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/__init__.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/utils/__pycache__/ocr_utils.cpython-312.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/liveness_detector.py"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/hyperfas_inferencer.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-312.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-312.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/behavior_auth.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/flash_liveness.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/demo.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/mtcnn.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/active_liveness_integration.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/__init__.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/face_verification.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/production_liveness_detector.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/sub_functions.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/ml_models/__pycache__/liveness_detector.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/behavior.py"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/auth.py"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/liveness.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/ekyc.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/behavior.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/__init__.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/auth.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/face.cpython-311.pyc"
+    },
+    {
+      "type": "users",
+      "file_path": "backend/routes/__pycache__/face_capture.cpython-311.pyc"
+    }
+  ],
+  "risky_config_hints": [
+    {
+      "type": "secret_reference",
+      "value": "api_key",
+      "file_path": ".env.example"
+    },
+    {
+      "type": "secret_reference",
+      "value": "secret",
+      "file_path": "setUp.bat"
+    },
+    {
+      "type": "secret_reference",
+      "value": "password=",
+      "file_path": "setUp.bat"
+    },
+    {
+      "type": "secret_reference",
+      "value": "apikey",
+      "file_path": "supabase/functions/local-chatbot/index.ts"
+    },
+    {
+      "type": "secret_reference",
+      "value": "apikey",
+      "file_path": "supabase/functions/behavioral-analysis/index.ts"
+    },
+    {
+      "type": "secret_reference",
+      "value": "secret",
+      "file_path": "src/pages/Documentation.tsx"
+    }
+  ],
+  "file_counts": {
+    "openapi_files": 0,
+    "db_migration_files": 8,
+    "config_files": 1,
+    "sast_hits": 9,
+    "rule_hits": 12
+  }
+}

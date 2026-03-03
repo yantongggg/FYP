@@ -1,0 +1,133 @@
+{
+  "$schema": "https://schemastore.azurewebsites.net/schemas/json/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "tm-scan",
+          "rules": [
+            {
+              "id": "CWE-532",
+              "name": "Improper Logging of PII/Secrets (Tokens, Passwords, Full User Objects)",
+              "shortDescription": {
+                "text": "Logs include raw PII (email, SSN, phone), credentials, or tokens, violating privacy and compliance controls."
+              }
+            },
+            {
+              "id": "CWE-307",
+              "name": "Credential Stuffing / Missing Rate Limiting on Auth Endpoints",
+              "shortDescription": {
+                "text": "Authentication endpoints lack throttling and abuse protections, enabling credential stuffing and resource exhaustion."
+              }
+            },
+            {
+              "id": "CWE-327",
+              "name": "Broken / Weak Cryptography (MD5/SHA1/DES/ECB) for Secrets or Sensitive Data",
+              "shortDescription": {
+                "text": "Use of outdated hashing/encryption algorithms or insecure modes enables offline cracking and data compromise."
+              }
+            },
+            {
+              "id": "CWE-602",
+              "name": "Client-Side Trust of Financial Fields (Price/Quantity/Risk Score Manipulation)",
+              "shortDescription": {
+                "text": "Server trusts client-supplied price/quantity/risk fields, enabling fraud by parameter tampering."
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "CWE-532",
+          "level": "error",
+          "message": {
+            "text": "Adopt structured logging with allowlisted fields only. Redact tokens/PII by default."
+          },
+          "properties": {
+            "threatId": "TM-PRIV-001",
+            "strideCategory": "Information Disclosure",
+            "linddunCategory": "Detectability",
+            "dreadScore": 8.2
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "target-repo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CWE-307",
+          "level": "error",
+          "message": {
+            "text": "Add IP + account-based rate limits, progressive delays, anomaly detection, and step-up challenges."
+          },
+          "properties": {
+            "threatId": "TM-AUTH-002",
+            "strideCategory": "Denial of Service",
+            "linddunCategory": "Detectability",
+            "dreadScore": 8.2
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "target-repo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CWE-327",
+          "level": "error",
+          "message": {
+            "text": "Replace weak crypto with modern primitives: Argon2id/bcrypt for passwords; AES-GCM/ChaCha20-Poly1305 for encryption; avoid ECB."
+          },
+          "properties": {
+            "threatId": "TM-CRYPTO-001",
+            "strideCategory": "Information Disclosure",
+            "linddunCategory": "Linkability",
+            "dreadScore": 8
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "target-repo"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "CWE-602",
+          "level": "warning",
+          "message": {
+            "text": "Recompute all financial/risk-critical fields server-side from authoritative sources. Treat client values as hints only."
+          },
+          "properties": {
+            "threatId": "TM-BIZ-001",
+            "strideCategory": "Tampering",
+            "linddunCategory": "Unawareness",
+            "dreadScore": 7.6
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "target-repo"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
