@@ -9,7 +9,7 @@
 **Organization:** mbbgrp
 **Report Date:** 2026-03-03
 **Report Version:** tm-scan v1.0.0
-**Report ID:** 20260303_034126
+**Report ID:** 20260303_035139
 **Report Classification:** Confidential
 
 ## SYSTEM CONTEXT
@@ -34,40 +34,40 @@
 
 ```mermaid
 flowchart TD
-    subgraph z1[Untrusted Zone]
-        attacker((Threat Actor))
-        user[End User / Browser]
+    subgraph TB1 [TB1: Untrusted Internet Zone]
+        threatActor((Threat Actor))
+        internetUser((Internet User))
+        reactClient((React Frontend / Mobile Client))
     end
 
-    subgraph z2[Application Zone]
-        gateway[API Gateway / Web Layer]
-        appsvc[Application Services]
+    subgraph TB2 [TB2: Application Internal Services]
+        apiGateway[API Gateway]
+        pyMlBackend[Python ML Backend]
+        backendService[Backend Orchestration Service]
     end
 
-    subgraph z3[Data Zone]
-        datastore[(Primary Database)]
-        audit[(Audit/Telemetry Store)]
+    subgraph TB3 [TB3: Secure Data Zone]
+        primaryStore[(Supabase PostgreSQL)]
+        auditStore[(Security Audit Store)]
     end
 
-    subgraph z4[External Services Zone]
-        idp[(Identity Provider)]
-        external[(3rd Party APIs)]
-    end
-
-    attacker -->|HTTPS / untrusted input| gateway
-    user -->|HTTPS / auth token| gateway
-    gateway -->|internal authn/authz context| appsvc
-    appsvc -->|SQL/TCP + db credentials| datastore
-    appsvc -->|security events| audit
-    gateway -->|OIDC/JWT validation| idp
-    appsvc -->|TLS API call| external
+    internetUser -->|TLS Session / UI Interaction| reactClient
+    reactClient -->|HTTPS / eKYC Payload| apiGateway
+    threatActor -->|HTTPS / Recon and Attack Traffic| apiGateway
+    apiGateway -->|HTTPS / eKYC Biometric Request| pyMlBackend
+    pyMlBackend -->|Inference Result / Risk Score| backendService
+    backendService -->|SQL over TLS / KYC Data Persistence| primaryStore
+    backendService -->|Signed Security Event Stream| auditStore
 
     classDef highRisk fill:#ffcccc,stroke:#cc0000;
-    classDef mediumRisk fill:#ffe6cc,stroke:#cc7a00;
-    class gateway highRisk;
-    class appsvc highRisk;
-    class datastore highRisk;
-    class attacker highRisk;
+    class apiGateway highRisk;
+    class backendService highRisk;
+    class primaryStore highRisk;
+    linkStyle 0 stroke:#cc0000,stroke-width:2px;
+    linkStyle 1 stroke:#cc0000,stroke-width:2px;
+    linkStyle 2 stroke:#cc0000,stroke-width:2px;
+    linkStyle 3 stroke:#cc0000,stroke-width:2px;
+    linkStyle 4 stroke:#cc0000,stroke-width:2px;
 ```
 
 ## DATA FLOW MATRIX
@@ -93,44 +93,38 @@ flowchart TD
 - Business Impact: Privacy breach, regulatory fines, incident response cost
 
 **Evidence Table:**
-| File Path | Line Number | Trigger | Severity |
-|-----------|-------------|---------|----------|
-| backend/app.py | - | password | HIGH |
-| backend/routes/auth.py | - | password | HIGH |
-| backend/utils/encryption_utils.py | - | password | HIGH |
-| backend/utils/exportUtils.ts | - | console.log | LOW |
-| backend/utils/supabase_manager.py | - | password | HIGH |
-| evidence.json | - | console.log | LOW |
-| evidence.json | - | password | HIGH |
-| src/App.tsx | - | console.log | LOW |
-| src/components/BehavioralMonitor.tsx | - | console.log | LOW |
-| src/components/BehavioralMonitor.tsx | - | password | HIGH |
-| src/components/BiometricCapture.tsx | - | console.log | LOW |
-| src/components/ChatBot.tsx | - | console.log | LOW |
-| src/components/ChatBot.tsx | - | password | HIGH |
-| src/components/EKYCDocumentViewer.tsx | - | console.log | LOW |
-| src/components/GlobalBehavioralWrapper.tsx | - | console.log | LOW |
-| src/components/GlobalBehavioralWrapper.tsx | - | password | HIGH |
-| src/components/ProtectedRoute.tsx | - | console.log | LOW |
-| src/contexts/AuthContext.tsx | - | console.log | LOW |
-| src/contexts/AuthContext.tsx | - | password | HIGH |
-| src/lib/supabase.ts | - | password | HIGH |
-| src/pages/AdminDashboard.tsx | - | console.log | LOW |
-| src/pages/AdminEditAccount.tsx | - | password | HIGH |
-| src/pages/BehavioralTestPage.tsx | - | console.log | LOW |
-| src/pages/Documentation.tsx | - | console.log | LOW |
-| src/pages/Documentation.tsx | - | password | HIGH |
-| src/pages/EditProfile.tsx | - | console.log | LOW |
-| src/pages/EditProfile.tsx | - | password | HIGH |
-| src/pages/Login.tsx | - | console.log | LOW |
-| src/pages/Login.tsx | - | password | HIGH |
-| src/pages/Register.tsx | - | console.log | LOW |
-| src/pages/Register.tsx | - | password | HIGH |
-| src/pages/UserHome.tsx | - | console.log | LOW |
-| src/pages/UserHome.tsx | - | password | HIGH |
-| supabase/functions/local-chatbot/index.ts | - | password | HIGH |
-| supabase/migrations/20250620102624_foggy_truth.sql | - | password | HIGH |
-| supabase/migrations/20250626133933_late_crystal.sql | - | password | HIGH |
+| File Path | Exact Line | Trigger (Rule/Keyword) | Severity |
+|-----------|------------|------------------------|----------|
+| `evidence.json` | - | Keyword: `password` | HIGH |
+| `evidence.json` | - | Keyword: `console.log` | LOW |
+| `supabase/functions/local-chatbot/index.ts` | - | Keyword: `password` | HIGH |
+| `supabase/migrations/20250626133933_late_crystal.sql` | - | Keyword: `password` | HIGH |
+| `supabase/migrations/20250620102624_foggy_truth.sql` | - | Keyword: `password` | HIGH |
+| `src/App.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/GlobalBehavioralWrapper.tsx` | - | Keyword: `password` | HIGH |
+| `src/components/GlobalBehavioralWrapper.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/EKYCDocumentViewer.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/BehavioralMonitor.tsx` | - | Keyword: `password` | HIGH |
+| `src/components/BehavioralMonitor.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/ChatBot.tsx` | - | Keyword: `password` | HIGH |
+| `src/components/ChatBot.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/ProtectedRoute.tsx` | - | Keyword: `console.log` | LOW |
+| `src/components/BiometricCapture.tsx` | - | Keyword: `console.log` | LOW |
+| `src/lib/supabase.ts` | - | Keyword: `password` | HIGH |
+| `src/contexts/AuthContext.tsx` | - | Keyword: `password` | HIGH |
+| `src/contexts/AuthContext.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/AdminEditAccount.tsx` | - | Keyword: `password` | HIGH |
+| `src/pages/Login.tsx` | - | Keyword: `password` | HIGH |
+| `src/pages/Login.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/EditProfile.tsx` | - | Keyword: `password` | HIGH |
+| `src/pages/EditProfile.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/UserHome.tsx` | - | Keyword: `password` | HIGH |
+| `src/pages/UserHome.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/BehavioralTestPage.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/AdminDashboard.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/Register.tsx` | - | Keyword: `password` | HIGH |
+| `src/pages/Register.tsx` | - | Keyword: `console.log` | LOW |
+| `src/pages/Documentation.tsx` | - | Keyword: `password` | HIGH |
 
 **Recommended Technical Mitigations:**
 - Structured logging + field allowlists
@@ -152,18 +146,18 @@ flowchart TD
 - Business Impact: Account takeover, auth outage, infra cost spike
 
 **Evidence Table:**
-| File Path | Line Number | Trigger | Severity |
-|-----------|-------------|---------|----------|
-| backend/routes/auth.py | - | authenticate | MEDIUM |
-| evidence.json | - | authenticate | MEDIUM |
-| src/App.tsx | - | authenticate | MEDIUM |
-| src/components/ChatBot.tsx | - | authenticate | MEDIUM |
-| src/pages/Documentation.tsx | - | authenticate | MEDIUM |
-| supabase/functions/local-chatbot/index.ts | - | authenticate | MEDIUM |
-| supabase/migrations/20250620102624_foggy_truth.sql | - | authenticate | MEDIUM |
-| supabase/migrations/20250624130544_copper_cell.sql | - | authenticate | MEDIUM |
-| supabase/migrations/20250624130931_dawn_smoke.sql | - | authenticate | MEDIUM |
-| supabase/migrations/20250626133933_late_crystal.sql | - | authenticate | MEDIUM |
+| File Path | Exact Line | Trigger (Rule/Keyword) | Severity |
+|-----------|------------|------------------------|----------|
+| `evidence.json` | - | Keyword: `authenticate` | MEDIUM |
+| `supabase/functions/local-chatbot/index.ts` | - | Keyword: `authenticate` | MEDIUM |
+| `supabase/migrations/20250626133933_late_crystal.sql` | - | Keyword: `authenticate` | MEDIUM |
+| `supabase/migrations/20250624130931_dawn_smoke.sql` | - | Keyword: `authenticate` | MEDIUM |
+| `supabase/migrations/20250620102624_foggy_truth.sql` | - | Keyword: `authenticate` | MEDIUM |
+| `supabase/migrations/20250624130544_copper_cell.sql` | - | Keyword: `authenticate` | MEDIUM |
+| `src/App.tsx` | - | Keyword: `authenticate` | MEDIUM |
+| `src/components/ChatBot.tsx` | - | Keyword: `authenticate` | MEDIUM |
+| `src/pages/Documentation.tsx` | - | Keyword: `authenticate` | MEDIUM |
+| `backend/routes/auth.py` | - | Keyword: `authenticate` | MEDIUM |
 
 **Recommended Technical Mitigations:**
 - IP + account throttling
@@ -185,15 +179,15 @@ flowchart TD
 - Business Impact: Account compromise, regulatory breach, reputational damage
 
 **Evidence Table:**
-| File Path | Line Number | Trigger | Severity |
-|-----------|-------------|---------|----------|
-| backend/app.py | - | bcrypt | MEDIUM |
-| backend/routes/auth.py | - | bcrypt | MEDIUM |
-| backend/utils/supabase_manager.py | - | bcrypt | MEDIUM |
-| evidence.json | - | bcrypt | MEDIUM |
-| package-lock.json | - | bcrypt | MEDIUM |
-| package.json | - | bcrypt | MEDIUM |
-| src/contexts/AuthContext.tsx | - | bcrypt | MEDIUM |
+| File Path | Exact Line | Trigger (Rule/Keyword) | Severity |
+|-----------|------------|------------------------|----------|
+| `evidence.json` | - | Keyword: `bcrypt` | MEDIUM |
+| `package.json` | - | Keyword: `bcrypt` | MEDIUM |
+| `package-lock.json` | - | Keyword: `bcrypt` | MEDIUM |
+| `src/contexts/AuthContext.tsx` | - | Keyword: `bcrypt` | MEDIUM |
+| `backend/app.py` | - | Keyword: `bcrypt` | MEDIUM |
+| `backend/utils/supabase_manager.py` | - | Keyword: `bcrypt` | MEDIUM |
+| `backend/routes/auth.py` | - | Keyword: `bcrypt` | MEDIUM |
 
 **Recommended Technical Mitigations:**
 - Ban weak algorithms by policy/lint
@@ -214,9 +208,9 @@ flowchart TD
 - Business Impact: Financial loss, AML/KYC violations, chargebacks
 
 **Evidence Table:**
-| File Path | Line Number | Trigger | Severity |
-|-----------|-------------|---------|----------|
-| evidence.json | - | risk_score | HIGH |
+| File Path | Exact Line | Trigger (Rule/Keyword) | Severity |
+|-----------|------------|------------------------|----------|
+| `evidence.json` | - | Keyword: `risk_score` | HIGH |
 
 **Recommended Technical Mitigations:**
 - Server-side recalculation of totals and risk
@@ -264,5 +258,5 @@ flowchart TD
 
 *Secret Findings (gitleaks): 0*
 *Total Packages (SBOM): 0*
-*Report generated by tm-scan v1.0.0 on 2026-03-03 03:41:27*
+*Report generated by tm-scan v1.0.0 on 2026-03-03 03:51:40*
 *Automated output from static analysis; manual security review is required.*
