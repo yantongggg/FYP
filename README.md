@@ -1,5 +1,3 @@
-//trigger--203.21
-
 
 # eKYC Biometric Authentication System
 
