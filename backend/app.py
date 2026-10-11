@@ -32,6 +32,7 @@ from ml_models.liveness_detector import LivenessDetector, initialize_models
 from utils.supabase_manager import SupabaseManager
 from ml_models.face_verification import FaceVerificationModel
 from flask_cors import CORS, cross_origin
+from utils.liveness_challenge import LoginChallengeStore
 import scipy.stats  
 import math  
 from ml_models.face_verification import FaceVerificationModel
@@ -161,6 +162,7 @@ class EnhancedLivenessSession:
 
 USER_SESSIONS = {}
 session_lock = threading.Lock()
+LOGIN_LIVENESS_CHALLENGES = LoginChallengeStore(ttl_seconds=300)
 
 # ============= CORS HEADERS =============
 @app.after_request
@@ -561,7 +563,9 @@ def login_user():
                 email, 'password', True, 'requires_biometric_verification', ip_address
             ))
             
+            challenge_id = LOGIN_LIVENESS_CHALLENGES.issue(user['id'])
             return jsonify({
+                'login_challenge_id': challenge_id,
                 'success': False,
                 'error': 'BIOMETRIC_REQUIRED',
                 'user_id': user['id'],
@@ -2018,6 +2022,10 @@ def sequential_liveness_detect_optimized():
         reset_counters = data.get("reset_counters", False)
         current_step = data.get("current_step", "ready")
         face_image_b64 = data.get("face_image")
+        challenge_id = data.get("login_challenge_id")
+
+        if mode == 'login' and not LOGIN_LIVENESS_CHALLENGES.is_pending(challenge_id, user_id):
+            return jsonify({'success': False, 'error': 'Valid login challenge required'}), 403
 
         logger.info(f"[API] Request: user={user_id}, mode={mode}, step={current_step}, reset={reset_counters}")
 
@@ -2098,7 +2106,7 @@ def sequential_liveness_detect_optimized():
             })
 
         logger.info(f"  [PROCESSING] Processing frame for user {user_id}")
-        result = process_frame_api(face_image_b64, user_id, reset_counters)
+        result = process_frame_api(face_image_b64, user_id, reset_counters, mode=mode)
 
         if result['success']:
             session.last_face_score = result.get('liveness_score', 0.0)
@@ -2123,6 +2131,10 @@ def sequential_liveness_detect_optimized():
             
             all_met = all(step_requirements.values())
             
+            # The detector's own validation takes precedence over API counters.
+            all_met = bool(result.get('liveness_passed', False))
+            if all_met and mode == 'login':
+                all_met = LOGIN_LIVENESS_CHALLENGES.mark_liveness_completed(challenge_id, user_id)
             if all_met and not getattr(session, 'all_requirements_met', False):
                 session.all_requirements_met = True
                 session.completion_time = time.time() - session.start_time
@@ -2464,7 +2476,7 @@ def process_base64_image(base64_str):
     nparr = np.frombuffer(img_data, np.uint8)
     return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
+def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False, mode: str = 'registration'):
     """Process frame for liveness detection with user-specific tracking"""
     try:
         if user_id is None:
@@ -2474,7 +2486,7 @@ def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: 
             DETECTOR.reset_user_counters(user_id)
 
         frame = process_base64_image(face_image_b64)
-        result = DETECTOR.process_frame_for_user(frame, user_id)
+        result = DETECTOR.process_frame_for_user(frame, user_id, mode)
 
         # Build liveness_validation field to match frontend expectations
         step_requirements = {
@@ -2531,11 +2543,14 @@ def biometric_login_verify():
 
         user_id = data.get('user_id')
         face_image_b64 = data.get('face_image')
+        login_challenge_id = data.get('login_challenge_id')
         ip_address = request.remote_addr
         user_agent = request.headers.get('User-Agent', '')
 
         if not user_id or not face_image_b64:
             return jsonify({'success': False, 'error': 'User ID and face image are required'}), 400
+        if not LOGIN_LIVENESS_CHALLENGES.is_liveness_completed(login_challenge_id, user_id):
+            return jsonify({'success': False, 'error': 'Server-verified liveness challenge required'}), 403
 
         logger.info(f" Starting biometric login verification for user: {user_id}")
 
@@ -2625,6 +2640,8 @@ def biometric_login_verify():
         )
         
         if is_match:
+            if not LOGIN_LIVENESS_CHALLENGES.consume(login_challenge_id, user_id):
+                return jsonify({'success': False, 'error': 'Liveness challenge expired or already used'}), 403
             logger.info(f"Biometric login successful for user {user_id}")
             return jsonify({
                 'success': True,
