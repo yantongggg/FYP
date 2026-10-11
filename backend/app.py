@@ -28,7 +28,7 @@ from supabase import create_client, Client
 from utils.ocr_utils import MyKadOCR
 from utils.image_utils import decode_base64_image
 from io import BytesIO
-from ml_models.liveness_detector import LivenessDetector, initialize_models
+from ml_models.liveness_detector import DETECTOR, initialize_models
 from utils.supabase_manager import SupabaseManager
 from ml_models.face_verification import FaceVerificationModel
 from flask_cors import CORS, cross_origin
@@ -2062,7 +2062,7 @@ def sequential_liveness_detect_optimized():
                 if 'DETECTOR' in globals():
                     DETECTOR.reset_user_counters(user_id)
                     
-                logger.info(f"[SESSION] Created: {session}")
+                logger.info("[SESSION] Created for user=%s mode=%s (challenge ID redacted)", user_id, mode)
             else:
                 session = USER_SESSIONS[user_id]
                 if mode == 'login' and session.login_challenge_id != challenge_id:
@@ -4767,7 +4767,6 @@ if __name__ == '__main__':
     print("Initializing liveness detector...")
     try:
         initialize_detector()
-        DETECTOR = LivenessDetector(supabase_manager)
         logger.info("  Liveness detector initialized")
     except Exception as e:
         logger.error(f"  Could not initialize liveness detector: {e}")
