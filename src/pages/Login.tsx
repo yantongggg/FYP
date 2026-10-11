@@ -27,6 +27,7 @@ interface FaceVerificationStep {
   user_id: string;
   email: string;
   full_name: string;
+  login_challenge_id: string;
 }
 
 interface OTPStep {
@@ -141,7 +142,8 @@ const Login: React.FC = () => {
         setFaceStep({
           user_id: result.user_id,
           email: result.email,
-          full_name: result.full_name || result.email
+          full_name: result.full_name || result.email,
+          login_challenge_id: result.login_challenge_id
         });
         setCurrentStep('face');
         setError('');
@@ -272,7 +274,8 @@ const Login: React.FC = () => {
         body: JSON.stringify({
           user_id: faceStep.user_id,
           face_image: faceData.includes(',') ? faceData.split(',')[1] : faceData, // Remove data:image prefix if exists
-          liveness_data: livenessData // Include liveness validation data
+          liveness_data: livenessData, // Backend does not trust this client-controlled value.
+          login_challenge_id: faceStep.login_challenge_id
         })
       });
 
@@ -587,6 +590,7 @@ const Login: React.FC = () => {
               onLivenessCapture={handleLivenessCapture}
               mode="login"
               userId={faceStep.user_id}
+              loginChallengeId={faceStep.login_challenge_id}
               onProgressUpdate={(progress) => {
                 setBiometricProgress(prev => ({
                   ...prev,
