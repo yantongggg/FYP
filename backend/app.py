@@ -146,6 +146,7 @@ class EnhancedLivenessSession:
     last_face_score: float = 0.0
     last_enhanced_score: float = 0.0
     registration_data: dict = field(default_factory=dict)
+    login_challenge_id: str = ''
     
     def __post_init__(self):
         """Ensure all attributes are properly initialized"""
@@ -2052,7 +2053,8 @@ def sequential_liveness_detect_optimized():
                     completion_time=0.0,
                     last_face_score=0.0,
                     last_enhanced_score=0.0,
-                    registration_data={}
+                    registration_data={},
+                    login_challenge_id=challenge_id if mode == 'login' else ''
                 )
                 
                 USER_SESSIONS[user_id] = session
@@ -2063,6 +2065,11 @@ def sequential_liveness_detect_optimized():
                 logger.info(f"[SESSION] Created: {session}")
             else:
                 session = USER_SESSIONS[user_id]
+                if mode == 'login' and session.login_challenge_id != challenge_id:
+                    # Never carry completed state across independently issued challenges.
+                    session.all_requirements_met = False
+                    session.login_challenge_id = challenge_id
+                    DETECTOR.reset_user_counters(user_id)
                 session.current_step = current_step
                 
                 if not hasattr(session, 'all_requirements_met'):
@@ -2489,14 +2496,15 @@ def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: 
         result = DETECTOR.process_frame_for_user(frame, user_id, mode)
 
         # Build liveness_validation field to match frontend expectations
+        # Report the detector's actual challenge counts, not unrelated API defaults.
+        state = DETECTOR.get_user_state(user_id, mode)
         step_requirements = {
-            'blinks_met': result['blink_count'] >= 3,
-            'mouth_met': result['mouth_open_count'] >= 2,
-            'head_met': result['head_movement_count'] >= 2,
+            'blinks_met': result['blink_count'] >= state.required_blinks,
+            'mouth_met': result['mouth_open_count'] >= state.required_mouth_opens,
+            'head_met': result['head_movement_count'] >= state.required_head_movements,
             'score_met': result['liveness_score'] >= 0.2
-            # 'score_met': result['face_real_score'] >= 0.2
         }
-        all_met = all(step_requirements.values())
+        all_met = bool(result.get('liveness_passed', False))
 
         result['liveness_validation'] = {
             'overall_liveness_passed': all_met,
