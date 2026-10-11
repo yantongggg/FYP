@@ -188,7 +188,7 @@ class UserState:
 
 
         # Add after existing fields in __init__
-        self.mode = 'registration'  # default mode
+        self.mode = None  # initialized once per session by set_mode
         self.required_blinks = THRESHOLDS['MIN_BLINKS']
         self.required_mouth_opens = THRESHOLDS['MIN_MOUTH_OPENS']
         self.required_head_movements = THRESHOLDS['MIN_HEAD_MOVEMENTS']
@@ -197,6 +197,8 @@ class UserState:
         self.no_face_frames = 0
 
     def set_mode(self, mode):
+        if self.mode == mode:
+            return  # Preserve per-session challenge counts and order across frames.
         self.mode = mode
         if mode == 'login':
             # Login requirements (less strict)
@@ -223,7 +225,9 @@ class UserState:
         if THRESHOLDS['ENABLE_RANDOM_ORDER']:
             import random
             self.challenge_order = ["blinking", "mouth", "head"]
-            random.shuffle(self.challenge_order[:2])  # Only shuffle first two, keep head last
+            opening_phases = self.challenge_order[:2]
+            random.shuffle(opening_phases)
+            self.challenge_order = opening_phases + ["head"]
 
     def reset(self):
         self.__init__()
