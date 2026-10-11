@@ -53,6 +53,7 @@ interface BiometricCaptureProps {
   onLivenessCapture: (livenessData: any) => void;
   mode: "registration" | "login" | "authentication";
   userId?: string;
+  loginChallengeId?: string;
   onProgressUpdate?: (progress: {
     phase: string;
     blinks: number;
@@ -76,6 +77,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   onLivenessCapture,
   mode = "registration",
   userId = "user_001",
+  loginChallengeId,
   onProgressUpdate
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -246,7 +248,8 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         face_image: frameData,
         mode: mode,
         reset_counters: resetCounters,
-        current_step: currentStep
+        current_step: currentStep,
+        ...(mode === 'login' ? { login_challenge_id: loginChallengeId } : {})
       };
 
       console.log(" [API] Sending request to backend", {
