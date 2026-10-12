@@ -68,3 +68,43 @@ failure/retry policies, and frame- vs video-level aggregation.
 Without jointly sampled multimodal observations, do not report an empirical
 full-fusion ablation or infer a joint spoof success rate from independent
 LFW, NUAA, and CMU evaluations.
+
+## Oct 12 local pilot failure diagnosis (not a validated PAD benchmark)
+
+Two user-recorded 12-second 15-FPS videos (one bona fide; one screen
+replay) were evaluated in registration mode. Both were rejected. This
+yielded pilot-only APCER 0%, BPCER 100%, ACER 50% (N=1 per class), which
+must **not** be reported as evidence of spoof resistance or generalization.
+
+Inspection of Flask responses found that MTCNN does find faces on sampled
+frames but the sessions remained in blinking with B/M/H counts at zero.
+Server logs included `STATIC IMAGE DETECTED` due only to mouth never
+opening, while the user had been instructed not to open their mouth until
+after an initial blink phase; separate logs included `eyes never opened`
+and transient `No face detected`. The logs are not correlated to
+individual clips, so do not assign specific errors to a clip without a
+per-frame trace.
+
+This change **defers passive static-image classification until all
+requested action counts have been observed**. An incomplete challenge
+continues to fail liveness; it is not mislabeled as confirmed static-media
+evidence. The static check remains enabled after all motions are complete.
+For local diagnosis, the detector emits a `LIVENESS_DIAG` line every 15
+successfully processed frames, including EAR/MAR and stage counts. No
+EAR threshold was changed because its sensitivity has not been calibrated.
+
+The evaluation script `eval_replay_api.py` already paces frames to the
+recording timestamps; slow/fast replay must be assessed using measured
+`p95_sampling_lag_ms`, not inferred from a zero count. Its original trace
+omitted status/face/error information, so the updated external evaluator
+must be used to distinguish actual model rejection from missing frames.
+The user-recorded clip followed fixed prompts (2 blinks / 1 mouth /
+head), which **do not necessarily match** random registration challenge
+order or minimum counts. Fixing the software cannot make these pilot
+videos into a valid challenge-aligned test set.
+
+Before recording any new video, rerun the same private clips as a
+separately versioned diagnostic only, with a new trace directory and the
+exact backend commit SHA recorded. Do not merge this draft or report
+performance improvement until a separate challenge-matched evaluation
+and genuine/spoof tests have been completed.
