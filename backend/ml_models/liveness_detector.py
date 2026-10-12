@@ -13,6 +13,7 @@ import torch
 from utils.supabase_manager import SupabaseManager
 from ml_models.liveness_gate_policy import may_evaluate_static_image
 from ml_models.blink_pulse import BlinkPulseTracker
+from ml_models.screen_replay_challenge import ScreenReplayChallenge
 
 supabase_manager = SupabaseManager()
 
@@ -231,8 +232,14 @@ class UserState:
             opening_phases = self.challenge_order[:2]
             random.shuffle(opening_phases)
             self.challenge_order = opening_phases + ["head"]
-        # The active phase must agree with the session's assigned challenge order.
-        self.current_detection_phase = self.challenge_order[0]
+        # Authentication evidence must follow instructions issued incrementally
+        # by the server, not a fixed list of historical movement counters.
+        self.screen_challenge = ScreenReplayChallenge(
+            blinks=self.required_blinks,
+            mouth=self.required_mouth_opens,
+            head=self.required_head_movements,
+        )
+        self.current_detection_phase = self.screen_challenge.public_phase
 
     def reset(self):
         self.__init__()
@@ -405,6 +412,8 @@ class LivenessDetector:
         # No face detected
         if boxes is None or len(boxes) == 0:
             user_state.blink_tracker.invalidate()
+            if user_state.screen_challenge:
+                user_state.screen_challenge.observe_missing()
             user_state.no_face_frames += 1
             logger.warning(f"No face detected - consecutive frames: {user_state.no_face_frames}")
             
@@ -417,6 +426,8 @@ class LivenessDetector:
         # Multiple faces detected - security risk
         if len(boxes) > 1:
             user_state.blink_tracker.invalidate()
+            if user_state.screen_challenge:
+                user_state.screen_challenge.status = "rejected_multiple_faces"
             logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
             
             # Reset all progress when multiple faces detected
@@ -477,12 +488,8 @@ class LivenessDetector:
                 EAR_CLOSED_THRESHOLD = 0.25
                 current_eye_closed = ear <= EAR_CLOSED_THRESHOLD
                 
-                # Process blinks only if in blinking phase AND eyes have opened before
-                phase = user_state.get_current_phase()
-                if phase == "blinking" and user_state.eyes_ever_opened:
-                    self._process_blink_detection(user_state, lmarks)
-                elif phase == "blinking" and not user_state.eyes_ever_opened:
-                    logger.warning("Cannot process blinks - eyes never opened")
+                # Counters are now credited ONLY by the server-timed active
+                # challenge below, not by an unprompted raw eye blink.
             
             # ============= MOUTH ASPECT RATIO PROCESSING =============
             mar = get_mouth_aspect_ratio(lmarks)
@@ -503,12 +510,7 @@ class LivenessDetector:
                     user_state.mouth_ever_opened = True
                     logger.debug(f"Mouth confirmed open (MAR: {mar:.3f})")
                 
-                # Process mouth opening only if in mouth phase AND mouth has moved before
-                phase = user_state.get_current_phase()
-                if phase == "mouth" and user_state.mouth_ever_opened:
-                    self._process_mouth_detection(user_state, current_mouth_open)
-                elif phase == "mouth" and not user_state.mouth_ever_opened:
-                    logger.warning("Cannot process mouth - mouth never opened")
+                # Do not count mouth openings until prompted by the server.
             
             # ============= HEAD MOVEMENT PROCESSING =============
             phase = user_state.get_current_phase()
@@ -520,12 +522,56 @@ class LivenessDetector:
                 
                 # Process head movement with noise filtering
                 head_moved, head_score = self._detect_head_movement(lmarks, user_state)
-                if head_moved and user_state.total_head_movements < user_state.required_head_movements:
-                    user_state.total_head_movements += 1
-                    logger.info(f"Head movement #{user_state.total_head_movements}/{user_state.required_head_movements} detected")
+                # Pixel displacement is an unreliable spoof signal; only the
+                # direction-calibrated nose-vs-eye pose challenge may earn credit.
         
-        if not landmarks:
+        # Feed the original measured landmarks into the fresh per-session
+        # challenge. The source image never supplies server time or progress.
+        if landmarks and len(landmarks) > 0:
+            marks = landmarks[0]
+            l_eye = marks.get('left_eye')
+            r_eye = marks.get('right_eye')
+            nose = marks.get('nose_tip')
+            if l_eye and r_eye and nose and len(nose) > 2:
+                left_ear = get_ear(l_eye)
+                right_ear = get_ear(r_eye)
+                l_x = float(np.mean([point[0] for point in l_eye]))
+                r_x = float(np.mean([point[0] for point in r_eye]))
+                eye_span = abs(r_x - l_x)
+                if eye_span > 1:
+                    nose_x = float(nose[2][0])
+                    yaw = (nose_x - (l_x + r_x) / 2.0) / eye_span
+                    user_state.screen_challenge.observe(
+                        left_ear, right_ear, mar_value, yaw, time.monotonic()
+                    )
+                else:
+                    user_state.screen_challenge.observe_missing()
+            else:
+                user_state.screen_challenge.observe_missing()
+        else:
             user_state.blink_tracker.invalidate()
+            user_state.screen_challenge.observe_missing()
+
+        # Only this server-owned sequence can update credited movements.
+        gate = user_state.screen_challenge
+        user_state.total_blinks = gate.counts['blinks']
+        user_state.total_mouth_open = gate.counts['mouth']
+        user_state.total_head_movements = gate.counts['head']
+        user_state.current_detection_phase = gate.public_phase
+
+        if gate.status not in ('active', 'passed'):
+            return {
+                'success': False,
+                'face_detected': True,
+                'error': 'Active challenge expired or invalid. Start a new session.',
+                'alert_type': 'active_challenge_failed',
+                'blink_count': user_state.total_blinks,
+                'mouth_open_count': user_state.total_mouth_open,
+                'head_movement_count': user_state.total_head_movements,
+                'liveness_passed': False,
+                'liveness_score': 0.0,
+                'sequential_state': self._get_sequential_state(user_state, False),
+            }
 
         # ============= STATIC IMAGE DETECTION =============
         # Missing an action is an incomplete challenge, NOT evidence of a
@@ -572,8 +618,10 @@ class LivenessDetector:
 
         # ============= PHASE PROGRESSION =============
         # Update detection phase based on completed actions
-        self._update_detection_phase(user_state)
-        
+        # Do not overwrite the timed randomized action sequence with the
+        # legacy fixed three-phase order.
+        user_state.current_detection_phase = gate.public_phase
+
         # ============= FINAL VALIDATION =============
         # Comprehensive requirements check
         all_requirements_met = (
@@ -583,7 +631,8 @@ class LivenessDetector:
             not is_static_image and
             user_state.eyes_ever_opened and  # Must have opened eyes at least once
             user_state.mouth_ever_opened and  # Must have opened mouth at least once
-            user_state.frames_processed >= 30  # Minimum frames for validation
+            user_state.frames_processed >= 30 and  # Minimum frames for validation
+            gate.complete  # Required for all registration/login approvals.
         )
         
         # Update completion status
@@ -761,7 +810,8 @@ class LivenessDetector:
                 "blinks": user_state.required_blinks,
                 "mouth": user_state.required_mouth_opens,
                 "head": user_state.required_head_movements
-            }
+            },
+            "screen_replay_challenge": user_state.screen_challenge.metadata(time.monotonic())
         }
 
     def _create_no_face_response(self, user_state):
