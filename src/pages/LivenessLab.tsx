@@ -185,7 +185,7 @@ export default function LivenessLab() {
             setServerDeadline(active.seconds_remaining ?? null);
             setServerAction(active.current_action);
             if (active.status !== 'active' && active.status !== 'passed') {
-              setError('Active challenge failed or expired. Start a new session.');
+              setError(`Server rejection (${active.status}): ${active.prompt}`);
               break;
             }
           }
