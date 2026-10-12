@@ -174,5 +174,51 @@ class FlaskLivenessFlowTests(unittest.TestCase):
         self.assertEqual(self.face(challenge=second).status_code, 403)
 
 
+    def test_api_preserves_detector_randomized_requirements(self):
+        challenge = self.store.issue("alice")
+        with patch.object(backend_app, "process_frame_api", return_value={
+            "success": True,
+            "face_detected": True,
+            "blink_count": 2,
+            "mouth_open_count": 0,
+            "head_movement_count": 0,
+            "liveness_score": 0.0,
+            "liveness_passed": False,
+            "sequential_state": {
+                "current_phase": "mouth",
+                "challenge_order": ["mouth", "blinking", "head"],
+                "requirements": {"blinks": 4, "mouth": 2, "head": 2},
+            },
+        }):
+            response = self.liveness(challenge=challenge)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertFalse(data["all_completed"])
+        self.assertEqual(data["sequential_state"]["current_phase"], "mouth")
+        self.assertEqual(data["sequential_state"]["requirements"]["blinks"], 4)
+        self.assertFalse(data["liveness_validation"]["step_requirements"]["blinks_met"])
+
+    def test_detector_error_preserves_reason_and_type(self):
+        challenge = self.store.issue("alice")
+        with patch.object(backend_app, "process_frame_api", return_value={
+            "success": False,
+            "face_detected": True,
+            "error": "Static image or photo detected. Please use live camera feed.",
+            "alert_type": "static_image",
+            "blink_count": 0,
+            "mouth_open_count": 0,
+            "head_movement_count": 0,
+            "liveness_score": 0.0,
+            "sequential_state": {"current_phase": "blinking"},
+        }):
+            response = self.liveness(challenge=challenge)
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["alert_type"], "static_image")
+        self.assertIn("Static image", data["error"])
+        self.assertEqual(data["sequential_state"]["current_phase"], "blinking")
+
+
+
 if __name__ == "__main__":
     unittest.main()
