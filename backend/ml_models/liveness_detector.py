@@ -12,6 +12,7 @@ from facenet_pytorch import MTCNN
 import torch
 from utils.supabase_manager import SupabaseManager
 from ml_models.liveness_gate_policy import may_evaluate_static_image
+from ml_models.blink_pulse import BlinkPulseTracker
 
 supabase_manager = SupabaseManager()
 
@@ -143,6 +144,7 @@ class UserState:
         self.last_mouth_state = False
         self.previous_head_pose = None
         self.eye_close_start_time = None  
+        self.blink_tracker = BlinkPulseTracker()
         self.last_blink_time = None      
         self.blink_phase = 'open'
 
@@ -402,6 +404,7 @@ class LivenessDetector:
 
         # No face detected
         if boxes is None or len(boxes) == 0:
+            user_state.blink_tracker.invalidate()
             user_state.no_face_frames += 1
             logger.warning(f"No face detected - consecutive frames: {user_state.no_face_frames}")
             
@@ -413,6 +416,7 @@ class LivenessDetector:
 
         # Multiple faces detected - security risk
         if len(boxes) > 1:
+            user_state.blink_tracker.invalidate()
             logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
             
             # Reset all progress when multiple faces detected
@@ -476,7 +480,7 @@ class LivenessDetector:
                 # Process blinks only if in blinking phase AND eyes have opened before
                 phase = user_state.get_current_phase()
                 if phase == "blinking" and user_state.eyes_ever_opened:
-                    self._process_blink_detection(user_state, ear)
+                    self._process_blink_detection(user_state, lmarks)
                 elif phase == "blinking" and not user_state.eyes_ever_opened:
                     logger.warning("Cannot process blinks - eyes never opened")
             
@@ -520,6 +524,9 @@ class LivenessDetector:
                     user_state.total_head_movements += 1
                     logger.info(f"Head movement #{user_state.total_head_movements}/{user_state.required_head_movements} detected")
         
+        if not landmarks:
+            user_state.blink_tracker.invalidate()
+
         # ============= STATIC IMAGE DETECTION =============
         # Missing an action is an incomplete challenge, NOT evidence of a
         # static presentation. Do not short-circuit during initial prompts.
@@ -880,56 +887,33 @@ class LivenessDetector:
                 logger.error(f" MTCNN detection error on attempt {attempt + 1}: {e}")
         return None, None
 
-    def _process_blink_detection(self, user_state, ear):
-        if ear is None:
+    def _process_blink_detection(self, user_state, landmarks):
+        """Track a bilateral eye closure followed by stable reopening.
+
+        Action evidence only: a prerecorded video may contain the same event.
+        The single-sample 15-FPS case is permitted after independent
+        pre/post open frames, not described as a verified 100ms closure.
+        """
+        left_eye = landmarks.get('left_eye')
+        right_eye = landmarks.get('right_eye')
+        if not left_eye or not right_eye:
+            user_state.blink_tracker.invalidate()
             return
-        current_time = time.time()
-        ear_thresh = THRESHOLDS['EAR_THRESHOLD']
-        is_eye_closed = ear < ear_thresh
-        print(f"    EAR: {ear:.4f}, Threshold: {ear_thresh}, Eyes Closed: {is_eye_closed}")
-        # Eyes just closed
-        if is_eye_closed and not user_state.last_eye_state:
-            user_state.eye_close_start_time = current_time
-            user_state.eye_closed_frames = 1
-            print(f"    Eyes CLOSED (EAR: {ear:.3f})")
-        # Eyes still closed
-        elif is_eye_closed and user_state.last_eye_state:
-            user_state.eye_closed_frames += 1
-        # Eyes just opened
-        elif not is_eye_closed and user_state.last_eye_state:
-            # Validate only if the start time was set
-            if user_state.eye_close_start_time is not None:
-                close_duration = current_time - user_state.eye_close_start_time
-
-                min_dur = THRESHOLDS['BLINK_MIN_DURATION']
-                max_dur = THRESHOLDS['BLINK_MAX_DURATION']
-                min_frames = THRESHOLDS['BLINK_MIN_FRAMES']
-                cooldown = THRESHOLDS['BLINK_COOLDOWN']
-
-                if (min_dur <= close_duration <= max_dur and
-                    user_state.eye_closed_frames >= min_frames):
-
-                    if (user_state.last_blink_time is None or
-                        current_time - user_state.last_blink_time > cooldown):
-
-                        user_state.total_blinks += 1
-                        user_state.last_blink_time = current_time
-                        print(f"    VALID BLINK #{user_state.total_blinks} - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
-                    else:
-                        print("    REJECTED: Blink too soon after previous")
-                else:
-                    print(f"    REJECTED: Invalid blink - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
-
-            else:
-                print(" Skipped blink validation - start time was not set")
-
-            # Always reset after eyes open
-            user_state.eye_closed_frames = 0
-            user_state.eye_close_start_time = None
-
-        user_state.last_eye_state = is_eye_closed
-        user_state.current_ear = float(ear)
-
+        left_ear = get_ear(left_eye)
+        right_ear = get_ear(right_eye)
+        accepted = user_state.blink_tracker.update(
+            left_ear, right_ear, time.monotonic()
+        )
+        user_state.last_eye_state = (
+            user_state.blink_tracker.phase in ('closed', 'reopening')
+        )
+        if accepted:
+            user_state.total_blinks += 1
+            user_state.last_blink_time = time.monotonic()
+            logger.info(
+                'VALID BLINK PULSE %d/%d, bilateral open/close/reopen',
+                user_state.total_blinks, user_state.required_blinks
+            )
 
     def _process_mouth_detection(self, user_state, current_mouth_open):
         """Process mouth detection with state transitions"""
@@ -938,10 +922,11 @@ class LivenessDetector:
         elif current_mouth_open:
             user_state.mouth_open_frames += 1
         elif not current_mouth_open and user_state.last_mouth_state:
-            if not user_state.mouth_completed:
+            if user_state.total_mouth_open < user_state.required_mouth_opens:
                 user_state.total_mouth_open += 1
-                logger.info(f" Mouth open detected! Total: {user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']}")
-                if user_state.total_mouth_open >= THRESHOLDS['MIN_MOUTH_OPENS']:
+                logger.info("Mouth opening %d/%d recorded",
+                            user_state.total_mouth_open, user_state.required_mouth_opens)
+                if user_state.total_mouth_open >= user_state.required_mouth_opens:
                     user_state.mouth_completed = True
             user_state.mouth_open_frames = 0
         user_state.last_mouth_state = current_mouth_open
