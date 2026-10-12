@@ -52,6 +52,80 @@ class ChallengeTests(unittest.TestCase):
         self.assertEqual(c.counts, {"blinks": 2, "mouth": 1, "head": 2})
         self.assertEqual(c.metadata()["status"], "passed")
 
+    def test_late_verified_turn_gets_separate_return_window(self):
+        c = self.make()
+        c.actions = ("turn_left", "blink", "mouth", "turn_right")
+        self.feed(c, [self.OPEN] * 3, 0)
+        self.assertEqual(c.phase, "perform")
+        perform_deadline = c.deadline
+        # The valid turn begins just before the 10-second perform deadline.
+        self.assertLess(9.9, perform_deadline)
+        c.observe(*self.LEFT, perform_deadline - 0.7)
+        c.observe(*self.LEFT, perform_deadline - 0.3)
+        self.assertEqual(c.phase, "return")
+        self.assertGreater(c.deadline, perform_deadline + 6.0)
+        # The user can now return AFTER the former deadline, but before
+        # the fresh bounded return deadline.
+        for seconds in (perform_deadline + 0.5,
+                        perform_deadline + 0.9,
+                        perform_deadline + 1.3):
+            c.observe(*self.OPEN, seconds)
+        self.assertEqual(c.index, 1)
+        self.assertEqual(c.counts["head"], 1)
+
+    def test_small_head_centering_offset_is_tolerated_after_real_turn(self):
+        c = self.make()
+        c.actions = ("turn_left", "blink", "mouth", "turn_right")
+        t = self.feed(c, [self.OPEN] * 3 + [self.LEFT] * 2, 0)
+        self.assertEqual(c.phase, "return")
+        offset_center = (0.35, 0.34, 0.14, -0.068)
+        t = self.feed(c, [offset_center] * 2, t)
+        self.assertEqual(c.index, 0, "Return still needs 3 steady frames")
+        info = c.metadata(t)
+        self.assertEqual(info["return_hold_frames"], 2)
+        self.assertEqual(info["return_required_frames"], 3)
+        t = self.feed(c, [offset_center], t)
+        self.assertEqual(c.index, 1)
+        self.assertEqual(c.counts["head"], 1)
+
+    def test_return_needs_verified_counter_motion_and_cannot_credit_jitter(self):
+        c = self.make()
+        c.actions = ("turn_left", "blink", "mouth", "turn_right")
+        t = self.feed(c, [self.OPEN] * 3, 0)
+        t = self.feed(c, [
+            (0.35, 0.34, 0.14, -0.09),
+            (0.35, 0.34, 0.14, -0.09),
+            self.OPEN, self.OPEN, self.OPEN,
+        ], t)
+        self.assertEqual(c.index, 0)
+        self.assertEqual(c.phase, "perform")
+        t = self.feed(c, [self.RIGHT] * 2 + [self.OPEN] * 3, t)
+        self.assertEqual(c.index, 0)
+        self.assertEqual(c.counts["head"], 0)
+
+    def test_missing_frame_interrupts_return_hold(self):
+        c = self.make()
+        c.actions = ("turn_left", "blink", "mouth", "turn_right")
+        t = self.feed(c, [self.OPEN] * 3 + [self.LEFT] * 2, 0)
+        t = self.feed(c, [self.OPEN] * 2, t)
+        self.assertEqual(c.return_streak, 2)
+        c.observe_missing()
+        self.assertEqual(c.return_streak, 0)
+        t = self.feed(c, [self.OPEN] * 2, t)
+        self.assertEqual(c.index, 0)
+        t = self.feed(c, [self.OPEN], t)
+        self.assertEqual(c.index, 1)
+
+    def test_expired_return_still_fails_closed(self):
+        c = self.make()
+        c.actions = ("turn_left", "blink", "mouth", "turn_right")
+        t = self.feed(c, [self.OPEN] * 3 + [self.LEFT] * 2, 0)
+        self.assertEqual(c.phase, "return")
+        self.assertFalse(c.observe(*self.OPEN, c.deadline + .01))
+        self.assertEqual(c.status, "expired")
+        self.assertFalse(c.complete)
+        self.assertEqual(c.counts["head"], 0)
+
     def test_wrong_direction_cannot_finish_head_step(self):
         c = ScreenReplayChallenge(blinks=1, mouth=1, head=2, rng=random.Random(9))
         c.actions = ("turn_left", "turn_right", "blink", "mouth")
