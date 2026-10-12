@@ -27,6 +27,16 @@ interface LivenessResponse {
     all_phases_complete: boolean;
     challenge_order?: Array<"blinking" | "mouth" | "head">;
     requirements?: { blinks: number; mouth: number; head: number };
+    screen_replay_challenge?: {
+      status: string;
+      stage: string;
+      current_action: string;
+      step: number;
+      total_steps: number;
+      prompt: string;
+      seconds_remaining: number | null;
+      completed: boolean;
+    };
   };
   liveness_validation?: {
     overall_liveness_passed: boolean;
@@ -185,6 +195,12 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
   }, [phaseCompleted, challengeRequirements]);
 
   const getStepPrompt = (step: WorkflowStep): string => {
+    // Never guess a random security challenge from the client's stale metrics.
+    // The current instruction is issued incrementally by the backend.
+    const serverChallenge = lastLivenessResult?.sequential_state?.screen_replay_challenge;
+    if (serverChallenge && serverChallenge.status === 'active') {
+      return `Step ${serverChallenge.step}/${serverChallenge.total_steps}: ${serverChallenge.prompt}`;
+    }
     const metrics = livenessMetrics;
     
     console.log("  [PROMPT] Getting step prompt", {
@@ -194,7 +210,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       phaseCompleted
     });
 
-    // Use our own phase logic instead of relying on backend sequential_state
+    // Legacy UI fallback for older API responses.
     if (currentPhase === "blinking") {
       return `Please blink ${challengeRequirements.blinks} times (${metrics.blinkCount}/${challengeRequirements.blinks})`;
     } else if (currentPhase === "mouth") {
