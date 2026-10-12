@@ -108,3 +108,39 @@ separately versioned diagnostic only, with a new trace directory and the
 exact backend commit SHA recorded. Do not merge this draft or report
 performance improvement until a separate challenge-matched evaluation
 and genuine/spoof tests have been completed.
+
+## Oct 12 follow-up: blink/mouth/UI action reliability patch
+
+The earlier 15-FPS sample contained three isolated mean-EAR drops below
+0.2 in the bona fide clip and four in the replay clip. A single low-EAR
+frame does not prove a 100-ms physical eye closure, and an action pulse
+does not prove the subject is live. The original detector used a fixed
+100-ms server-clock requirement, while the UI showed fixed 2/1/1 prompts
+despite randomized backend requirements up to 4 blinks, 3 mouth opens,
+and 2 head movements. The mouth counter also stopped at the first
+completion of its fixed default rather than the session's random goal.
+
+The draft changes add `BlinkPulseTracker`: paired eye EAR readings,
+a stable open-eye baseline, bilateral drop relative to the baseline,
+and two confirmed open frames following a possible closure. Even one
+low-EAR sample may produce a pulse if surrounding frames strongly
+support a full transition. These are candidate actions for a
+challenge, not PAD/spoof scores. The detector refuses unilateral
+landmark drops, ambiguous recovery, prolonged eye closure, missing
+landmarks, and rapid repeated pulses. It uses a monotonic clock for
+cooldown. No assertion is made that this heuristic generalizes from
+the two pilot recordings.
+
+The mouth counter now uses `required_mouth_opens`. API responses
+return uncapped action counts and server-owned challenge requirements
+and order; the React capture prompts and progress reflect that state.
+
+Regression tests: `backend/tests/test_blink_pulse.py` (pure unit),
+`backend/tests/test_flask_liveness_flow.py` (mocked Flask integration).
+CI checks the pure tests and frontend build; a local repeat evaluation
+on untouched source videos is still required. Keep results separated
+by commit and filename; do not overwrite the original baseline.
+A valid presentation attack evaluation further requires matched,
+freshly prompted randomized challenges and explicit security outcome
+labels. Server-enforced authentication and frontend Supabase bypass
+remain separately unresolved production concerns.
