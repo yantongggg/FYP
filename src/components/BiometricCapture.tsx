@@ -25,6 +25,8 @@ interface LivenessResponse {
     mouth_completed: boolean;
     head_completed: boolean;
     all_phases_complete: boolean;
+    challenge_order?: Array<"blinking" | "mouth" | "head">;
+    requirements?: { blinks: number; mouth: number; head: number };
   };
   liveness_validation?: {
     overall_liveness_passed: boolean;
@@ -106,6 +108,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
     enhancedScore: 0
   });
   const [lastLivenessResult, setLastLivenessResult] = useState<LivenessResponse | null>(null);
+  const [challengeRequirements, setChallengeRequirements] = useState({ blinks: 2, mouth: 1, head: 1 });
 
   // Initialize camera
   useEffect(() => {
@@ -157,19 +160,19 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
     }
 
     // Determine phase based on what's not yet completed
-    if (metrics.blinkCount < 2) {
+    if (metrics.blinkCount < challengeRequirements.blinks) {
       console.log("  [PHASE LOGIC] Still need blinks", {
         current: metrics.blinkCount,
-        required: 2
+        required: challengeRequirements.blinks
       });
       return "blinking";
-    } else if (metrics.mouthOpenCount < 1) {
+    } else if (metrics.mouthOpenCount < challengeRequirements.mouth) {
       console.log("  [PHASE LOGIC] Still need mouth opens", {
         current: metrics.mouthOpenCount,
         required: 1
       });
       return "mouth";
-    } else if (metrics.headMovementCount < 1) {
+    } else if (metrics.headMovementCount < challengeRequirements.head) {
       console.log(" [PHASE LOGIC] Still need head movements", {
         current: metrics.headMovementCount,
         required: 1
@@ -179,7 +182,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       console.log("[PHASE LOGIC] All metrics met (2 blinks, 1 mouth, 1 head), waiting for backend confirmation");
       return "head"; // Keep in head phase until backend confirms completion
     }
-  }, [phaseCompleted]);
+  }, [phaseCompleted, challengeRequirements]);
 
   const getStepPrompt = (step: WorkflowStep): string => {
     const metrics = livenessMetrics;
@@ -193,11 +196,11 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
 
     // Use our own phase logic instead of relying on backend sequential_state
     if (currentPhase === "blinking") {
-      return `Please blink 2 times slowly (${metrics.blinkCount}/2)`;
+      return `Please blink ${challengeRequirements.blinks} times (${metrics.blinkCount}/${challengeRequirements.blinks})`;
     } else if (currentPhase === "mouth") {
-      return `Please open your mouth 1 time (${metrics.mouthOpenCount}/1)`;
+      return `Please open and close your mouth ${challengeRequirements.mouth} times (${metrics.mouthOpenCount}/${challengeRequirements.mouth})`;
     } else if (currentPhase === "head") {
-      return `Please move your head slowly left and right (${metrics.headMovementCount}/1)`;
+      return `Please move your head ${challengeRequirements.head} times (${metrics.headMovementCount}/${challengeRequirements.head})`;
     } else if (currentPhase === "complete") {
       return "All verification steps completed successfully!";
     } else {
@@ -293,19 +296,13 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       setLastLivenessResult(result);
 
       if (result.success) {
-        const safeBlinks = Math.min(result.blink_count || 0, 2);
-        const safeMouth = Math.min(result.mouth_open_count || 0, 1);
-        const safeHead = Math.min(result.head_movement_count || 0, 1);
-        
-        if ((result.blink_count || 0) > 2) {
-          console.warn(" [BACKEND BUG] Backend sent blink count > 2:", result.blink_count);
-        }
-        if ((result.mouth_open_count || 0) > 1) {
-          console.warn(" [BACKEND BUG] Backend sent mouth count > 1:", result.mouth_open_count);
-        }
-        if ((result.head_movement_count || 0) > 1) {
-          console.warn(" [BACKEND BUG] Backend sent head count > 1:", result.head_movement_count);
-        }
+        const requirements = result.sequential_state?.requirements ?? challengeRequirements;
+        setChallengeRequirements(requirements);
+        // Display server-verified raw counts: registration may require 4/3/2,
+        // not the legacy hardcoded frontend 2/1/1 limits.
+        const safeBlinks = result.blink_count || 0;
+        const safeMouth = result.mouth_open_count || 0;
+        const safeHead = result.head_movement_count || 0;
 
         const newMetrics = {
           blinkCount: safeBlinks,
@@ -330,9 +327,9 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         setLivenessMetrics(newMetrics);
 
         const newPhaseCompleted = {
-          blinks: newMetrics.blinkCount >= 2,   
-          mouth: newMetrics.mouthOpenCount >= 1, 
-          head: newMetrics.headMovementCount >= 1 
+          blinks: newMetrics.blinkCount >= requirements.blinks,   
+          mouth: newMetrics.mouthOpenCount >= requirements.mouth, 
+          head: newMetrics.headMovementCount >= requirements.head 
         };
 
         console.log(" [PHASE COMPLETION] Updating phase completion", {
@@ -367,7 +364,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         }
 
         //   FIXED: Only update phase, don't prematurely complete
-        const determinedPhase = determineCurrentPhase(newMetrics, isAllCompleted);
+        const determinedPhase = result.sequential_state?.current_phase ?? determineCurrentPhase(newMetrics, isAllCompleted);
         console.log("  [PHASE UPDATE] Phase determination result", {
           previousPhase: currentPhase,
           determinedPhase,
@@ -435,7 +432,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       setCameraError(errorMessage);
       return null;
     }
-  }, [captureFrame, userId, mode, currentStep, currentPhase, livenessMetrics, phaseCompleted, onProgressUpdate, determineCurrentPhase]);
+  }, [captureFrame, userId, mode, currentStep, currentPhase, livenessMetrics, phaseCompleted, onProgressUpdate, determineCurrentPhase, loginChallengeId, challengeRequirements]);
 
   const saveToSupabase = useCallback(async (faceData: string) => {
     try {
@@ -506,7 +503,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
         head: false
       });
       
-      await runSequentialDetection(true);
+      const initialResult = await runSequentialDetection(true);
 
       // Capture reference face
       setCurrentStep("capturing_face");
@@ -516,8 +513,9 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
       if (!referenceFace) throw new Error("Failed to capture reference face");
 
       // Start sequential detection phases
-      setCurrentStep("blink_prompt");
-      setCurrentPhase("blinking");
+      const initialPhase = initialResult?.sequential_state?.current_phase ?? "blinking";
+      setCurrentStep(initialPhase === "mouth" ? "mouth_prompt" : initialPhase === "head" ? "head_prompt" : "blink_prompt");
+      setCurrentPhase(initialPhase);
       
       let allComplete = false;
       let attempts = 0;
@@ -562,11 +560,12 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
           }
 
           // Update workflow step based on current phase
-          if (currentPhase === "blinking") {
+          const serverPhase = result.sequential_state?.current_phase ?? currentPhase;
+          if (serverPhase === "blinking") {
             setCurrentStep("blink_prompt");
-          } else if (currentPhase === "mouth") {
+          } else if (serverPhase === "mouth") {
             setCurrentStep("mouth_prompt");
-          } else if (currentPhase === "head") {
+          } else if (serverPhase === "head") {
             setCurrentStep("head_prompt");
           }
         }
@@ -718,7 +717,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
               }`}>
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.blinkCount}</div>
                 <div className="text-xs text-gray-400">Blinks</div>
-                <div className="text-xs text-green-400">/2</div>
+                <div className="text-xs text-green-400">/{challengeRequirements.blinks}</div>
                 {/*   Show completion indicator */}
                 {phaseCompleted.blinks && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
@@ -731,7 +730,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
               }`}>
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.mouthOpenCount}</div>
                 <div className="text-xs text-gray-400">Mouth</div>
-                <div className="text-xs text-green-400">/1</div>
+                <div className="text-xs text-green-400">/{challengeRequirements.mouth}</div>
                 {/*   Show completion indicator */}
                 {phaseCompleted.mouth && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
@@ -744,7 +743,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
               }`}>
                 <div className="text-2xl font-bold text-cyan-400">{livenessMetrics.headMovementCount}</div>
                 <div className="text-xs text-gray-400">Head</div>
-                <div className="text-xs text-green-400">/1</div>
+                <div className="text-xs text-green-400">/{challengeRequirements.head}</div>
                 {/*   Show completion indicator */}
                 {phaseCompleted.head && (
                   <div className="text-xs text-green-400 mt-1">✓ Complete</div>
@@ -836,7 +835,7 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({
           <li>• Ensure good lighting and face the camera directly</li>
           <li>• Remove glasses if they cause glare</li>
           <li>• Keep your face within the guide box</li>
-          <li>• You will need to: <strong>blink exactly 2 times</strong>, <strong>open mouth exactly 1 time</strong>, and <strong>move head left/right exactly 1 time</strong></li>
+          <li>• The server will select the order and required number of blinks, mouth movements, and head movements for this session</li>
           <li>• Counts stop automatically when requirements are met</li>
           <li>• Follow the on-screen prompts for each action</li>
           <li>• The process takes about 30-45 seconds</li>
