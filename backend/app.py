@@ -2200,8 +2200,8 @@ def sequential_liveness_detect_optimized():
             return jsonify({
                 'success': False,
                 'face_detected': result.get('face_detected', False),
-                'blink_count': 0,
-                'mouth_open_count': 0,
+                'blink_count': result.get('blink_count', 0),
+                'mouth_open_count': result.get('mouth_open_count', 0),
                 'head_movement_count': result.get('head_movement_count', 0),
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': 0,
