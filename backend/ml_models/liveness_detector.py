@@ -541,9 +541,16 @@ class LivenessDetector:
                 if eye_span > 1:
                     nose_x = float(nose[2][0])
                     yaw = (nose_x - (l_x + r_x) / 2.0) / eye_span
-                    user_state.screen_challenge.observe(
+                    step_finished = user_state.screen_challenge.observe(
                         left_ear, right_ear, mar_value, yaw, time.monotonic()
                     )
+                    if step_finished:
+                        active = user_state.screen_challenge
+                        logger.info(
+                            'ACTIVE_CHALLENGE_STEP step=%d/%d action=%s next=%s status=%s',
+                            len(active.completed_events), len(active.actions),
+                            active.completed_events[-1], active.action, active.status
+                        )
                 else:
                     user_state.screen_challenge.observe_missing()
             else:
