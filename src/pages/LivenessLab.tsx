@@ -25,6 +25,9 @@ type ServerResult = {
       total_steps: number;
       prompt: string;
       seconds_remaining?: number | null;
+      return_hold_frames?: number | null;
+      return_required_frames?: number | null;
+      return_hint?: string | null;
       completed: boolean;
     } | null;
   };
@@ -70,6 +73,8 @@ export default function LivenessLab() {
   const [serverStepTotal, setServerStepTotal] = useState<number>(0);
   const [serverDeadline, setServerDeadline] = useState<number | null>(null);
   const [serverAction, setServerAction] = useState<string | null>(null);
+  const [returnHint, setReturnHint] = useState<string | null>(null);
+  const [returnProgress, setReturnProgress] = useState<{ current: number; required: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +138,8 @@ export default function LivenessLab() {
     setServerStepTotal(0);
     setServerDeadline(null);
     setServerAction(null);
+    setReturnHint(null);
+    setReturnProgress(null);
     const started = performance.now();
     let frameIndex = 0;
     try {
@@ -184,6 +191,12 @@ export default function LivenessLab() {
             setServerStepTotal(active.total_steps);
             setServerDeadline(active.seconds_remaining ?? null);
             setServerAction(active.current_action);
+            setReturnHint(active.return_hint ?? null);
+            setReturnProgress(
+              active.stage === 'return' && active.return_required_frames != null
+                ? { current: active.return_hold_frames ?? 0, required: active.return_required_frames }
+                : null
+            );
             if (active.status !== 'active' && active.status !== 'passed') {
               setError(`Server rejection (${active.status}): ${active.prompt}`);
               break;
@@ -264,6 +277,9 @@ export default function LivenessLab() {
             <p className="mt-2 text-xl font-bold text-white">{serverPrompt ?? phaseLabel(phase, requirements, activeCount)}</p>
             {serverAction === 'turn_left' && <p className="mt-3 text-5xl text-cyan-400" aria-label="Turn left">←</p>}
             {serverAction === 'turn_right' && <p className="mt-3 text-5xl text-cyan-400" aria-label="Turn right">→</p>}
+            {returnHint && <p className="mt-3 rounded-md border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm text-cyan-200" role="status">
+              {returnHint}{returnProgress ? ` · Return hold ${returnProgress.current}/${returnProgress.required}` : ''}
+            </p>}
             {serverDeadline !== null && running && <p className="mt-2 text-sm text-amber-300">Time remaining for this step: {serverDeadline.toFixed(1)}s</p>}
           </div>
           <p className="mt-5 text-xs uppercase tracking-wider text-slate-400">Fresh server-issued action</p>
