@@ -81,3 +81,29 @@ only the single known successful replay clip.
   end-to-end review before production deployment.
 - A proper enrollment/authentication API test with a real configured DB;
   Flask unit tests running in mock mode do not validate that integration.
+
+## 12 Oct: Head-return genuine false-reject remediation
+
+A real-person trial reached step 5/9 and expired during `phase=return`.
+The prior implementation started its 10-second perform deadline before
+the instructed head turn and did **not** reset it after the turn was
+confirmed. This could leave little time to center and stabilize the head.
+
+The patch now starts an independent, non-renewable **8-second return
+window only after two valid frames of directional movement**. Re-centering
+uses a bounded yaw hysteresis band of 0.075 versus the unchanged turn
+threshold of 0.11, requires actual reverse travel of at least 0.06 from
+the verified turn peak, and continues to require three consecutive
+forward-facing frames with eyes open and mouth closed. Returning without
+a verified turn never earns credit. This is a usability adjustment
+that still needs multi-user calibration; it is not an empirically
+established PAD operating point.
+
+The frontend diagnostic shows a textual head-return hint and the
+stability counter (0/3–3/3), without publishing raw facial landmarks.
+Regression tests cover late turns, new bounded return windows, missing
+frames, wrong directions, partial gestures and expiry. Any retest
+should preserve both genuine failures and replay failures as distinct
+sample outcomes and explicitly record `phase`, `step` and
+`ACTIVE_CHALLENGE_FAILED` diagnostic reason. Do not infer actual
+presentation-attack rejection from face-detection failure.
