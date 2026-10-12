@@ -2129,10 +2129,16 @@ def sequential_liveness_detect_optimized():
             
             logger.info(f"[COUNTS] Raw: B{raw_blinks}/M{raw_mouth}/H{raw_head} → Capped: B{capped_blinks}/M{capped_mouth}/H{capped_head}")
             
+            # Use per-session requirements, not the UI's 2/1/1 display caps.
+            detector_state = result.get('sequential_state') or {}
+            requirements = detector_state.get('requirements') or {}
+            req_blinks = requirements.get('blinks', session.required_blinks)
+            req_mouth = requirements.get('mouth', session.required_mouth)
+            req_head = requirements.get('head', session.required_head)
             step_requirements = {
-                'blinks_met': capped_blinks >= 2,
-                'mouth_met': capped_mouth >= 1,
-                'head_met': capped_head >= 1,
+                'blinks_met': raw_blinks >= req_blinks,
+                'mouth_met': raw_mouth >= req_mouth,
+                'head_met': raw_head >= req_head,
                 'score_met': session.last_enhanced_score > 0.2
             }
             
@@ -2149,21 +2155,19 @@ def sequential_liveness_detect_optimized():
 
             if all_met:
                 current_phase = "complete"
-            elif capped_blinks < 2:
-                current_phase = "blinking"
-            elif capped_mouth < 1:
-                current_phase = "mouth"
-            elif capped_head < 1:
-                current_phase = "head"
             else:
-                current_phase = "head" 
+                current_phase = detector_state.get('current_phase') or 'blinking'
 
             sequential_state = {
                 'current_phase': current_phase,
-                'blinks_completed': capped_blinks >= 2,
-                'mouth_completed': capped_mouth >= 1,
-                'head_completed': capped_head >= 1,
-                'all_phases_complete': all_met
+                'blinks_completed': raw_blinks >= req_blinks,
+                'mouth_completed': raw_mouth >= req_mouth,
+                'head_completed': raw_head >= req_head,
+                'all_phases_complete': all_met,
+                'challenge_order': detector_state.get('challenge_order', ['blinking', 'mouth', 'head']),
+                'requirements': {
+                    'blinks': req_blinks, 'mouth': req_mouth, 'head': req_head
+                }
             }
 
             response_data = {
@@ -2185,7 +2189,7 @@ def sequential_liveness_detect_optimized():
                 'debug_info': {
                     'raw_counts': f"B{raw_blinks}/M{raw_mouth}/H{raw_head}",
                     'capped_counts': f"B{capped_blinks}/M{capped_mouth}/H{capped_head}",
-                    'requirements': "B2/M1/H1 (FIXED)"
+                    'requirements': sequential_state['requirements']
                 }
             }
 
@@ -2198,9 +2202,11 @@ def sequential_liveness_detect_optimized():
                 'face_detected': result.get('face_detected', False),
                 'blink_count': 0,
                 'mouth_open_count': 0,
-                'head_movement_count': 0,
+                'head_movement_count': result.get('head_movement_count', 0),
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': 0,
+                'alert_type': result.get('alert_type'),
+                'sequential_state': result.get('sequential_state', {}),
                 'liveness_validation': {
                     'overall_liveness_passed': False,
                     'step_requirements': {
