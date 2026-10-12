@@ -13,12 +13,17 @@ from statistics import median
 
 class ScreenReplayChallenge:
     ACTION_DEADLINE_S = 10.0
+    # A genuine user needs a fresh bounded window AFTER the turn is verified.
+    HEAD_RETURN_DEADLINE_S = 8.0
     NEUTRAL_DEADLINE_S = 8.0
     MAX_SESSION_S = 110.0
     NEUTRAL_FRAMES = 3
     GESTURE_FRAMES = 2
     YAW_DELTA = 0.11
-    YAW_RETURN = 0.055
+    # Guarded hysteresis; this remains below YAW_DELTA=0.11.
+    # Independently calibrate these thresholds on diverse genuine users.
+    YAW_RETURN = 0.075
+    RETURN_MIN_REVERSAL = 0.06
 
     def __init__(self, blinks=2, mouth=1, head=2, *, rng=None):
         if not (1 <= blinks <= 6 and 1 <= mouth <= 4 and 2 <= head <= 4):
@@ -36,6 +41,7 @@ class ScreenReplayChallenge:
         self.neutral_yaws = []
         self.action_streak = 0
         self.return_streak = 0
+        self.turn_peak = 0.0
         self.mouth_open_seen = False
         self.eye_closed_seen = False
         self.blink_open_streak = 0
@@ -79,6 +85,7 @@ class ScreenReplayChallenge:
         self.neutral_yaws = []
         self.action_streak = 0
         self.return_streak = 0
+        self.turn_peak = 0.0
         self.mouth_open_seen = False
         self.eye_closed_seen = False
         self.blink_open_streak = 0
@@ -143,6 +150,7 @@ class ScreenReplayChallenge:
                 self.deadline = now + self.ACTION_DEADLINE_S
                 self.action_streak = 0
                 self.return_streak = 0
+                self.turn_peak = 0.0
                 self.mouth_open_seen = False
                 self.eye_closed_seen = False
                 self.blink_open_streak = 0
@@ -184,19 +192,34 @@ class ScreenReplayChallenge:
             # LEFT/RIGHT sign is defined in landmark-image coordinates;
             # frontend must describe this direction consistently with video.
             diff = yaw - self.baseline_yaw
-            target = (diff <= -self.YAW_DELTA if self.action == "turn_left"
-                      else diff >= self.YAW_DELTA)
+            directed_offset = -diff if self.action == "turn_left" else diff
+            target = directed_offset >= self.YAW_DELTA
             if target:
                 self.action_streak += 1
+                self.turn_peak = max(self.turn_peak, directed_offset)
                 self.return_streak = 0
                 if self.action_streak >= self.GESTURE_FRAMES:
                     self.phase = "return"
+                    # Do not start the return countdown until the actual
+                    # requested turn has been confirmed. Never extend it
+                    # every frame, so a stalled return still fails closed.
+                    self.deadline = now + self.HEAD_RETURN_DEADLINE_S
             else:
                 self.action_streak = 0
             return False
 
         if self.phase == "return":
-            if neutral:
+            # Tolerance for natural re-centering stays smaller than the
+            # required initial turn. Also demand actual counter-movement
+            # back from the measured peak turn, plus stable open eyes and
+            # closed mouth for three consecutive processed frames.
+            directed_offset = (self.baseline_yaw - yaw if self.action == "turn_left"
+                               else yaw - self.baseline_yaw)
+            sufficient_reversal = (
+                self.turn_peak >= self.YAW_DELTA
+                and self.turn_peak - directed_offset >= self.RETURN_MIN_REVERSAL
+            )
+            if neutral and sufficient_reversal:
                 self.return_streak += 1
                 if self.return_streak >= self.NEUTRAL_FRAMES:
                     self._set_next(now)
@@ -219,7 +242,7 @@ class ScreenReplayChallenge:
         elif self.phase == "neutral":
             prompt = "Look straight at the camera, close your mouth and keep eyes open"
         elif self.phase == "return":
-            prompt = "Return your head to center and hold still"
+            prompt = "Head turn detected. Face the camera again and hold steady"
         else:
             prompt = {"blink": "Blink once naturally",
                       "mouth": "Open and close your mouth",
@@ -233,5 +256,8 @@ class ScreenReplayChallenge:
             "total_steps": len(self.actions),
             "prompt": prompt,
             "seconds_remaining": remaining,
+            # Non-sensitive progress for feedback; never expose landmarks.
+            "return_hold_frames": self.return_streak if self.phase == "return" else None,
+            "return_required_frames": self.NEUTRAL_FRAMES if self.phase == "return" else None,
             "completed": self.complete,
         }
