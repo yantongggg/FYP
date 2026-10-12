@@ -42,6 +42,7 @@ class ScreenReplayChallenge:
         self.action_streak = 0
         self.return_streak = 0
         self.turn_peak = 0.0
+        self.return_hint = None
         self.mouth_open_seen = False
         self.eye_closed_seen = False
         self.blink_open_streak = 0
@@ -86,6 +87,7 @@ class ScreenReplayChallenge:
         self.action_streak = 0
         self.return_streak = 0
         self.turn_peak = 0.0
+        self.return_hint = None
         self.mouth_open_seen = False
         self.eye_closed_seen = False
         self.blink_open_streak = 0
@@ -97,6 +99,8 @@ class ScreenReplayChallenge:
         self.action_streak = 0
         self.return_streak = 0
         self.blink_open_streak = 0
+        if self.phase == "return":
+            self.return_hint = "Face not tracked; hold your face in frame"
 
     def observe(self, left_ear, right_ear, mar, yaw, now):
         """Update on server-side measurements and server monotonic time.
@@ -151,6 +155,7 @@ class ScreenReplayChallenge:
                 self.action_streak = 0
                 self.return_streak = 0
                 self.turn_peak = 0.0
+                self.return_hint = None
                 self.mouth_open_seen = False
                 self.eye_closed_seen = False
                 self.blink_open_streak = 0
@@ -204,6 +209,7 @@ class ScreenReplayChallenge:
                     # requested turn has been confirmed. Never extend it
                     # every frame, so a stalled return still fails closed.
                     self.deadline = now + self.HEAD_RETURN_DEADLINE_S
+                    self.return_hint = "Turn verified; face the camera again"
             else:
                 self.action_streak = 0
             return False
@@ -221,11 +227,22 @@ class ScreenReplayChallenge:
             )
             if neutral and sufficient_reversal:
                 self.return_streak += 1
+                self.return_hint = (
+                    f"Centered: hold steady {self.return_streak}/{self.NEUTRAL_FRAMES}"
+                )
                 if self.return_streak >= self.NEUTRAL_FRAMES:
                     self._set_next(now)
                     return True
             else:
                 self.return_streak = 0
+                if left_ear < 0.27 or right_ear < 0.27:
+                    self.return_hint = "Keep both eyes open while facing forward"
+                elif mar > 0.5:
+                    self.return_hint = "Close your mouth while facing forward"
+                elif abs(yaw - self.baseline_yaw) > self.YAW_RETURN:
+                    self.return_hint = "Move a little closer toward the center"
+                else:
+                    self.return_hint = "Move back from the turned position"
         return False
 
     def metadata(self, now=None):
@@ -259,5 +276,6 @@ class ScreenReplayChallenge:
             # Non-sensitive progress for feedback; never expose landmarks.
             "return_hold_frames": self.return_streak if self.phase == "return" else None,
             "return_required_frames": self.NEUTRAL_FRAMES if self.phase == "return" else None,
+            "return_hint": self.return_hint if self.phase == "return" else None,
             "completed": self.complete,
         }
