@@ -2164,7 +2164,8 @@ def sequential_liveness_detect_optimized():
                 'mouth_completed': raw_mouth >= req_mouth,
                 'head_completed': raw_head >= req_head,
                 'all_phases_complete': all_met,
-                'challenge_order': detector_state.get('challenge_order', ['blinking', 'mouth', 'head']),
+                'challenge_order': [],  # Do not leak or misstate future active steps.
+                'screen_replay_challenge': detector_state.get('screen_replay_challenge'),
                 'requirements': {
                     'blinks': req_blinks, 'mouth': req_mouth, 'head': req_head
                 }
