@@ -15,7 +15,7 @@ from ml_models.liveness_gate_policy import may_evaluate_static_image
 
 supabase_manager = SupabaseManager()
 
-ENABLE_STATIC_IMAGE_DETECTION = False 
+ENABLE_STATIC_IMAGE_DETECTION = True  # Explicitly enable deferred passive checks.
 # Logger setup
 logging.basicConfig(
     level=logging.INFO,
@@ -525,7 +525,7 @@ class LivenessDetector:
         # static presentation. Do not short-circuit during initial prompts.
         is_static_image = (
             self._detect_static_image_comprehensive(user_state)
-            if may_evaluate_static_image(user_state) else False
+            if ENABLE_STATIC_IMAGE_DETECTION and may_evaluate_static_image(user_state) else False
         )
         
         # Early exit if static image detected after sufficient frames
