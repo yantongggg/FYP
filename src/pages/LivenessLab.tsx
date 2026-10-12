@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CircleCheck, CircleAlert, RefreshCw, StopCircle } from 'lucide-react';
+import { Camera, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 type Phase = 'blinking' | 'mouth' | 'head' | 'complete';
 type Requirements = { blinks: number; mouth: number; head: number };
@@ -217,7 +217,7 @@ export default function LivenessLab() {
             </button>
             <button type="button" onClick={stop} disabled={!running}
               className="inline-flex items-center gap-2 rounded-md border border-red-400 px-4 py-2 text-red-300 disabled:opacity-40">
-              <StopCircle size={17} /> Stop
+              Stop
             </button>
           </div>
           <p className="mt-3 text-xs text-slate-400">
@@ -226,7 +226,7 @@ export default function LivenessLab() {
         </div>
         <div className="rounded-xl border border-cyan-800 bg-slate-950/80 p-5">
           <div className="flex items-center gap-2 text-lg font-semibold text-cyan-300">
-            {completed ? <CircleCheck size={20} className="text-green-400" /> : <RefreshCw size={20} className={running ? 'animate-spin' : ''} />}
+            {completed ? <CheckCircle size={20} className="text-green-400" /> : <RefreshCw size={20} className={running ? 'animate-spin' : ''} />}
             {completed ? 'Server challenge completed' : running ? 'Challenge running' : 'Ready to begin'}
           </div>
           <div className="mt-5 rounded-lg border border-cyan-700 bg-cyan-900/20 p-4">
@@ -253,7 +253,7 @@ export default function LivenessLab() {
           </div>
           {error && (
             <p className="mt-5 flex items-start gap-2 text-sm text-red-300">
-              <CircleAlert size={18} className="shrink-0" />{error}
+              <AlertCircle size={18} className="shrink-0" />{error}
             </p>
           )}
           <p className="mt-5 text-xs text-amber-300">
