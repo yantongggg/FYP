@@ -109,6 +109,15 @@ class ChallengeTests(unittest.TestCase):
         c.observe(*self.OPEN, 1.0)
         self.assertEqual(c.status, "invalid_timing")
 
+    def test_failure_status_reasons_are_distinct(self):
+        c = self.make()
+        c.status = "expired"
+        self.assertIn("timed out", c.metadata()["prompt"])
+        c.status = "invalid_timing"
+        self.assertIn("timing", c.metadata()["prompt"])
+        c.status = "rejected_multiple_faces"
+        self.assertIn("Multiple faces", c.metadata()["prompt"])
+
     def test_command_metadata_does_not_expose_future_order(self):
         c = self.make()
         meta = c.metadata()
