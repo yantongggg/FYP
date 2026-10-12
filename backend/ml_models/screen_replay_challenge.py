@@ -210,8 +210,12 @@ class ScreenReplayChallenge:
         if now is not None and self.deadline is not None and self.status == "active":
             remaining = round(max(0., self.deadline - now), 1)
         if self.status != "active":
-            prompt = ("Challenge completed" if self.status == "passed"
-                      else "Challenge expired. Start a new session.")
+            prompt = {
+                "passed": "Challenge completed",
+                "expired": "Challenge timed out. Start a new session.",
+                "invalid_timing": "Frame timing validation failed. Start a new session.",
+                "rejected_multiple_faces": "Multiple faces detected. Start a new session.",
+            }.get(self.status, "Challenge rejected. Start a new session.")
         elif self.phase == "neutral":
             prompt = "Look straight at the camera, close your mouth and keep eyes open"
         elif self.phase == "return":
