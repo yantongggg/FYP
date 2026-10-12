@@ -11,6 +11,7 @@ from collections import defaultdict, deque
 from facenet_pytorch import MTCNN
 import torch
 from utils.supabase_manager import SupabaseManager
+from ml_models.liveness_gate_policy import may_evaluate_static_image
 
 supabase_manager = SupabaseManager()
 
@@ -228,6 +229,8 @@ class UserState:
             opening_phases = self.challenge_order[:2]
             random.shuffle(opening_phases)
             self.challenge_order = opening_phases + ["head"]
+        # The active phase must agree with the session's assigned challenge order.
+        self.current_detection_phase = self.challenge_order[0]
 
     def reset(self):
         self.__init__()
@@ -518,7 +521,12 @@ class LivenessDetector:
                     logger.info(f"Head movement #{user_state.total_head_movements}/{user_state.required_head_movements} detected")
         
         # ============= STATIC IMAGE DETECTION =============
-        is_static_image = self._detect_static_image_comprehensive(user_state)
+        # Missing an action is an incomplete challenge, NOT evidence of a
+        # static presentation. Do not short-circuit during initial prompts.
+        is_static_image = (
+            self._detect_static_image_comprehensive(user_state)
+            if may_evaluate_static_image(user_state) else False
+        )
         
         # Early exit if static image detected after sufficient frames
         if user_state.frames_processed > 20 and is_static_image:
@@ -543,6 +551,18 @@ class LivenessDetector:
                 }
             }
         
+        # Log internal landmark state for reproducible local diagnosis without
+        # storing frames or altering detection thresholds.
+        if user_state.frames_processed % 15 == 0:
+            logger.info(
+                'LIVENESS_DIAG frame=%d phase=%s EAR=%.4f MAR=%.4f eye_seen=%s mouth_seen=%s B=%d M=%d H=%d',
+                user_state.frames_processed, user_state.get_current_phase(),
+                user_state.current_ear, user_state.current_mar,
+                user_state.eyes_ever_opened, user_state.mouth_ever_opened,
+                user_state.total_blinks, user_state.total_mouth_open,
+                user_state.total_head_movements,
+            )
+
         # ============= PHASE PROGRESSION =============
         # Update detection phase based on completed actions
         self._update_detection_phase(user_state)
