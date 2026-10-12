@@ -19,6 +19,7 @@ import MyAnomalies from './pages/MyAnomalies';
 import Architecture from './pages/Architecture';
 import DatabaseSchema from './pages/DatabaseSchema';
 import Documentation from './pages/Documentation';
+import LivenessLab from './pages/LivenessLab';
 
 // Enhanced Dashboard redirect component
 const Dashboard = () => {
@@ -74,6 +75,8 @@ function AppContent() {
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
             <Route path="/register" element={<Register />} />
+            {/* Only bundled as an accessible route in Vite dev mode. Never a login path. */}
+            {import.meta.env.DEV && <Route path="/liveness-lab" element={<LivenessLab />} />}
             <Route path="/login" element={<Login />} />
             <Route path="/architecture" element={<Architecture />} />
             <Route path="/database" element={<DatabaseSchema />} />
