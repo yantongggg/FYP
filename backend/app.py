@@ -2173,9 +2173,9 @@ def sequential_liveness_detect_optimized():
             response_data = {
                 'success': True,
                 'face_detected': result.get('face_detected', True),
-                'blink_count': capped_blinks,        
-                'mouth_open_count': capped_mouth,  
-                'head_movement_count': capped_head, 
+                'blink_count': raw_blinks,        
+                'mouth_open_count': raw_mouth,  
+                'head_movement_count': raw_head, 
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': session.last_enhanced_score,
                 'sequential_state': sequential_state,
