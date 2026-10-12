@@ -7,6 +7,9 @@ on:
       - 'backend/tests/test_liveness_challenge.py'
       - 'backend/tests/test_liveness_gate_policy.py'
       - 'backend/ml_models/liveness_gate_policy.py'
+      - 'backend/ml_models/blink_pulse.py'
+      - 'backend/tests/test_blink_pulse.py'
+      - 'src/components/BiometricCapture.tsx'
       - 'backend/ml_models/liveness_detector.py'
       - 'backend/app.py'
       - '.github/workflows/liveness-challenge-tests.yml'
@@ -22,8 +25,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile affected Python sources
-        run: python -m py_compile backend/app.py backend/ml_models/liveness_detector.py backend/ml_models/liveness_gate_policy.py backend/utils/liveness_challenge.py
+        run: python -m py_compile backend/app.py backend/ml_models/liveness_detector.py backend/ml_models/liveness_gate_policy.py backend/ml_models/blink_pulse.py backend/utils/liveness_challenge.py
       - name: Challenge lifecycle unit tests
         run: python -m unittest discover -s backend/tests -p 'test_liveness_challenge.py' -v
+      - name: Bilateral blink pulse state-machine tests
+        run: python -m unittest discover -s backend/tests -p 'test_blink_pulse.py' -v
       - name: Static photo premature rejection policy tests
         run: python -m unittest discover -s backend/tests -p 'test_liveness_gate_policy.py' -v
