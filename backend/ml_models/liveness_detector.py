@@ -428,6 +428,10 @@ class LivenessDetector:
             user_state.blink_tracker.invalidate()
             if user_state.screen_challenge:
                 user_state.screen_challenge.status = "rejected_multiple_faces"
+                logger.warning(
+                    "ACTIVE_CHALLENGE_FAILED reason=rejected_multiple_faces frames=%d faces=%d",
+                    user_state.frames_processed, len(boxes)
+                )
             logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
             
             # Reset all progress when multiple faces detected
@@ -567,10 +571,15 @@ class LivenessDetector:
         user_state.current_detection_phase = gate.public_phase
 
         if gate.status not in ('active', 'passed'):
+            logger.warning(
+                "ACTIVE_CHALLENGE_FAILED reason=%s step=%d/%d frames=%d phase=%s",
+                gate.status, gate.index + 1, len(gate.actions),
+                user_state.frames_processed, gate.phase
+            )
             return {
                 'success': False,
                 'face_detected': True,
-                'error': 'Active challenge expired or invalid. Start a new session.',
+                'error': gate.metadata(time.monotonic())['prompt'],
                 'alert_type': 'active_challenge_failed',
                 'blink_count': user_state.total_blinks,
                 'mouth_open_count': user_state.total_mouth_open,
