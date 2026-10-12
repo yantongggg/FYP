@@ -17,6 +17,16 @@ type ServerResult = {
     challenge_order?: Phase[];
     requirements?: Requirements;
     all_phases_complete?: boolean;
+    screen_replay_challenge?: {
+      status: string;
+      stage: string;
+      current_action: string;
+      step: number;
+      total_steps: number;
+      prompt: string;
+      seconds_remaining?: number | null;
+      completed: boolean;
+    } | null;
   };
 };
 
@@ -55,6 +65,11 @@ export default function LivenessLab() {
   const [frames, setFrames] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [facePresent, setFacePresent] = useState(false);
+  const [serverPrompt, setServerPrompt] = useState<string | null>(null);
+  const [serverStep, setServerStep] = useState<number>(0);
+  const [serverStepTotal, setServerStepTotal] = useState<number>(0);
+  const [serverDeadline, setServerDeadline] = useState<number | null>(null);
+  const [serverAction, setServerAction] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +128,11 @@ export default function LivenessLab() {
     setFrames(0);
     setElapsed(0);
     setFacePresent(false);
+    setServerPrompt(null);
+    setServerStep(0);
+    setServerStepTotal(0);
+    setServerDeadline(null);
+    setServerAction(null);
     const started = performance.now();
     let frameIndex = 0;
     try {
@@ -156,8 +176,18 @@ export default function LivenessLab() {
           if (result.sequential_state.requirements) {
             setRequirements(result.sequential_state.requirements);
           }
-          if (result.sequential_state.challenge_order) {
-            setOrder(result.sequential_state.challenge_order);
+          // Do not expose future action order to pre-recorded replay tools.
+          const active = result.sequential_state.screen_replay_challenge;
+          if (active) {
+            setServerPrompt(active.prompt);
+            setServerStep(active.step);
+            setServerStepTotal(active.total_steps);
+            setServerDeadline(active.seconds_remaining ?? null);
+            setServerAction(active.current_action);
+            if (active.status !== 'active' && active.status !== 'passed') {
+              setError('Active challenge failed or expired. Start a new session.');
+              break;
+            }
           }
         }
         setCounts({
@@ -208,7 +238,7 @@ export default function LivenessLab() {
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <div className="rounded-xl border border-cyan-800 bg-black p-3">
-          <video ref={videoRef} muted autoPlay playsInline className="aspect-[4/3] w-full rounded-lg object-cover -scale-x-100" />
+          <video ref={videoRef} muted autoPlay playsInline className="aspect-[4/3] w-full rounded-lg object-cover" />
           <canvas ref={canvasRef} className="hidden" />
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button type="button" onClick={start} disabled={!cameraReady || running}
@@ -231,14 +261,18 @@ export default function LivenessLab() {
           </div>
           <div className="mt-5 rounded-lg border border-cyan-700 bg-cyan-900/20 p-4">
             <p className="text-xs uppercase tracking-widest text-slate-400">Current action</p>
-            <p className="mt-2 text-xl font-bold text-white">{phaseLabel(phase, requirements, activeCount)}</p>
+            <p className="mt-2 text-xl font-bold text-white">{serverPrompt ?? phaseLabel(phase, requirements, activeCount)}</p>
+            {serverAction === 'turn_left' && <p className="mt-3 text-5xl text-cyan-400" aria-label="Turn left">←</p>}
+            {serverAction === 'turn_right' && <p className="mt-3 text-5xl text-cyan-400" aria-label="Turn right">→</p>}
+            {serverDeadline !== null && running && <p className="mt-2 text-sm text-amber-300">Time remaining for this step: {serverDeadline.toFixed(1)}s</p>}
           </div>
-          <p className="mt-5 text-xs uppercase tracking-wider text-slate-400">Server-assigned action order</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {order.length
-              ? order.map((p, i) => <span key={i} className={`rounded-md px-3 py-2 text-sm ${p === phase ? 'bg-green-700 text-white' : 'bg-slate-800 text-slate-300'}`}>{i + 1}. {labels[p]}</span>)
-              : <span className="text-sm text-slate-500">Shown after the first processed frame</span>}
-          </div>
+          <p className="mt-5 text-xs uppercase tracking-wider text-slate-400">Fresh server-issued action</p>
+          <p className="mt-2 text-sm text-slate-300">
+            {serverStepTotal ? `Step ${serverStep} / ${serverStepTotal}` : 'Waiting for neutral face calibration'}
+          </p>
+          <p className="mt-1 text-xs text-amber-300">
+            The next action remains hidden until the current instruction is verified.
+          </p>
           <div className="mt-6 grid grid-cols-3 gap-2 text-center">
             {([
               ['Blinks', counts.blinks, requirements.blinks],
@@ -257,7 +291,7 @@ export default function LivenessLab() {
             </p>
           )}
           <p className="mt-5 text-xs text-amber-300">
-            Action detection only; passing this test is not evidence of presentation-attack resistance.
+            Prompted motion is only one replay-mitigation layer. A completed challenge does not establish camera provenance or independently verified presentation-attack detection.
           </p>
         </div>
       </div>
