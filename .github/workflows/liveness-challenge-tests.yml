@@ -8,6 +8,9 @@ on:
       - 'backend/tests/test_liveness_gate_policy.py'
       - 'backend/ml_models/liveness_gate_policy.py'
       - 'backend/ml_models/blink_pulse.py'
+      - 'backend/ml_models/screen_replay_challenge.py'
+      - 'backend/tests/test_screen_replay_challenge.py'
+      - 'src/pages/LivenessLab.tsx'
       - 'backend/tests/test_blink_pulse.py'
       - 'src/components/BiometricCapture.tsx'
       - 'backend/ml_models/liveness_detector.py'
@@ -25,11 +28,13 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile affected Python sources
-        run: python -m py_compile backend/app.py backend/ml_models/liveness_detector.py backend/ml_models/liveness_gate_policy.py backend/ml_models/blink_pulse.py backend/utils/liveness_challenge.py
+        run: python -m py_compile backend/app.py backend/ml_models/liveness_detector.py backend/ml_models/liveness_gate_policy.py backend/ml_models/blink_pulse.py backend/ml_models/screen_replay_challenge.py backend/utils/liveness_challenge.py
       - name: Challenge lifecycle unit tests
         run: python -m unittest discover -s backend/tests -p 'test_liveness_challenge.py' -v
       - name: Bilateral blink pulse state-machine tests
         run: python -m unittest discover -s backend/tests -p 'test_blink_pulse.py' -v
+      - name: Timed randomized replay challenge tests
+        run: python -m unittest discover -s backend/tests -p 'test_screen_replay_challenge.py' -v
       - name: Static photo premature rejection policy tests
         run: python -m unittest discover -s backend/tests -p 'test_liveness_gate_policy.py' -v
 
