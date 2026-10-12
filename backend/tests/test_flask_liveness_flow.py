@@ -220,5 +220,46 @@ class FlaskLivenessFlowTests(unittest.TestCase):
 
 
 
+    def test_registration_exposes_random_challenge_counts_without_capping(self):
+        with patch.object(backend_app, "process_frame_api", return_value={
+            "success": True,
+            "face_detected": True,
+            "blink_count": 4,
+            "mouth_open_count": 3,
+            "head_movement_count": 2,
+            "liveness_score": 0.8,
+            "liveness_passed": False,
+            "sequential_state": {
+                "current_phase": "head",
+                "challenge_order": ["mouth", "blinking", "head"],
+                "requirements": {"blinks": 4, "mouth": 3, "head": 2},
+            },
+        }):
+            response = self.client.post("/api/sequential-liveness-detect", json={
+                "user_id": "registration_test",
+                "mode": "registration",
+                "face_image": "dGVzdC1pbWFnZQ==",
+            })
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["blink_count"], 4)
+        self.assertEqual(data["mouth_open_count"], 3)
+        self.assertEqual(data["head_movement_count"], 2)
+        self.assertEqual(data["sequential_state"]["requirements"]["mouth"], 3)
+        self.assertFalse(data["all_completed"])
+
+    def test_mouth_cycles_use_session_requirement_not_global_default(self):
+        from ml_models.liveness_detector import UserState
+        state = UserState()
+        state.required_mouth_opens = 3
+        state.mouth_completed = False
+        for count in range(1, 5):
+            backend_app.DETECTOR._process_mouth_detection(state, True)
+            backend_app.DETECTOR._process_mouth_detection(state, False)
+            self.assertEqual(state.total_mouth_open, min(count, 3))
+        self.assertTrue(state.mouth_completed)
+
+
+
 if __name__ == "__main__":
     unittest.main()
