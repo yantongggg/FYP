@@ -14,6 +14,7 @@ from utils.supabase_manager import SupabaseManager
 from ml_models.liveness_gate_policy import may_evaluate_static_image
 from ml_models.blink_pulse import BlinkPulseTracker
 from ml_models.screen_replay_challenge import ScreenReplayChallenge
+from ml_models.face_count_guard import FaceCountGuard
 
 supabase_manager = SupabaseManager()
 
@@ -198,6 +199,7 @@ class UserState:
         self.required_head_movements = THRESHOLDS['MIN_HEAD_MOVEMENTS']
         self.challenge_order = ["blinking", "mouth", "head"]  # Default order
         self.multiple_faces_detected = False
+        self.face_count_guard = FaceCountGuard(confirmation_frames=3)
         self.no_face_frames = 0
 
     def set_mode(self, mode):
@@ -411,6 +413,7 @@ class LivenessDetector:
 
         # No face detected
         if boxes is None or len(boxes) == 0:
+            user_state.face_count_guard.observe(0)
             user_state.blink_tracker.invalidate()
             if user_state.screen_challenge:
                 user_state.screen_challenge.observe_missing()
@@ -423,24 +426,57 @@ class LivenessDetector:
                 
             return self._create_no_face_response(user_state)
 
-        # Multiple faces detected - security risk
+        # MTCNN may transiently return duplicate/spurious face boxes on
+        # a single-person camera feed. Never credit multi-face frames, but
+        # avoid irrevocably rejecting from one uncertain detection.
         if len(boxes) > 1:
             user_state.blink_tracker.invalidate()
             if user_state.screen_challenge:
-                user_state.screen_challenge.status = "rejected_multiple_faces"
-                logger.warning(
-                    "ACTIVE_CHALLENGE_FAILED reason=rejected_multiple_faces frames=%d faces=%d",
-                    user_state.frames_processed, len(boxes)
-                )
-            logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
-            
-            # Reset all progress when multiple faces detected
-            self._reset_user_state_counters(user_state)
-            user_state.multiple_faces_detected = True
-            
-            return self._create_multiple_faces_response(user_state, len(boxes))
+                user_state.screen_challenge.observe_missing()
 
-        # ============= SINGLE FACE PROCESSING =============
+            confirmed = user_state.face_count_guard.observe(len(boxes))
+            # Bounding boxes and confidences only, no images or landmarks.
+            # Coordinates allow diagnosing background-photo false positives.
+            sizes = []
+            for box, prob in zip(boxes, probs if probs is not None else [None] * len(boxes)):
+                x1, y1, x2, y2 = [round(float(v), 1) for v in box]
+                confidence = None if prob is None or not np.isfinite(prob) else round(float(prob), 4)
+                sizes.append({"box": [x1, y1, x2, y2], "confidence": confidence})
+            logger.warning(
+                "MULTI_FACE_DIAG frames=%d streak=%d/%d image=%dx%d candidates=%s",
+                user_state.frames_processed, user_state.face_count_guard.streak,
+                user_state.face_count_guard.confirmation_frames,
+                rgb_frame.shape[1], rgb_frame.shape[0], sizes
+            )
+
+            if confirmed:
+                if user_state.screen_challenge:
+                    user_state.screen_challenge.status = "rejected_multiple_faces"
+                    logger.warning(
+                        "ACTIVE_CHALLENGE_FAILED reason=rejected_multiple_faces frames=%d faces=%d",
+                        user_state.frames_processed, len(boxes)
+                    )
+                self._reset_user_state_counters(user_state)
+                user_state.multiple_faces_detected = True
+                return self._create_multiple_faces_response(user_state, len(boxes))
+
+            # Recoverable ambiguous frame: cannot earn ANY gesture credit.
+            # Keep the existing server deadline running (no timer extension).
+            return {
+                "success": True,
+                "face_detected": False,
+                "alert_type": "ambiguous_multiple_faces",
+                "warning": "Uncertain additional face detection; keep one person in view.",
+                "blink_count": int(user_state.screen_challenge.counts["blinks"]),
+                "mouth_open_count": int(user_state.screen_challenge.counts["mouth"]),
+                "head_movement_count": int(user_state.screen_challenge.counts["head"]),
+                "liveness_passed": False,
+                "liveness_score": 0.0,
+                "sequential_state": self._get_sequential_state(user_state, False),
+            }
+
+        user_state.face_count_guard.observe(1)
+        # ============= SINGLE FACE PROCESSING =
         # Reset error counters on successful single face detection
         user_state.no_face_frames = 0
         user_state.multiple_faces_detected = False
