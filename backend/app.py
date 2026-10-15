@@ -28,10 +28,11 @@ from supabase import create_client, Client
 from utils.ocr_utils import MyKadOCR
 from utils.image_utils import decode_base64_image
 from io import BytesIO
-from ml_models.liveness_detector import LivenessDetector, initialize_models
+from ml_models.liveness_detector import DETECTOR, initialize_models
 from utils.supabase_manager import SupabaseManager
 from ml_models.face_verification import FaceVerificationModel
 from flask_cors import CORS, cross_origin
+from utils.liveness_challenge import LoginChallengeStore
 import scipy.stats  
 import math  
 from ml_models.face_verification import FaceVerificationModel
@@ -145,6 +146,7 @@ class EnhancedLivenessSession:
     last_face_score: float = 0.0
     last_enhanced_score: float = 0.0
     registration_data: dict = field(default_factory=dict)
+    login_challenge_id: str = ''
     
     def __post_init__(self):
         """Ensure all attributes are properly initialized"""
@@ -161,6 +163,7 @@ class EnhancedLivenessSession:
 
 USER_SESSIONS = {}
 session_lock = threading.Lock()
+LOGIN_LIVENESS_CHALLENGES = LoginChallengeStore(ttl_seconds=300)
 
 # ============= CORS HEADERS =============
 @app.after_request
@@ -561,7 +564,9 @@ def login_user():
                 email, 'password', True, 'requires_biometric_verification', ip_address
             ))
             
+            challenge_id = LOGIN_LIVENESS_CHALLENGES.issue(user['id'])
             return jsonify({
+                'login_challenge_id': challenge_id,
                 'success': False,
                 'error': 'BIOMETRIC_REQUIRED',
                 'user_id': user['id'],
@@ -2018,6 +2023,10 @@ def sequential_liveness_detect_optimized():
         reset_counters = data.get("reset_counters", False)
         current_step = data.get("current_step", "ready")
         face_image_b64 = data.get("face_image")
+        challenge_id = data.get("login_challenge_id")
+
+        if mode == 'login' and not LOGIN_LIVENESS_CHALLENGES.is_pending(challenge_id, user_id):
+            return jsonify({'success': False, 'error': 'Valid login challenge required'}), 403
 
         logger.info(f"[API] Request: user={user_id}, mode={mode}, step={current_step}, reset={reset_counters}")
 
@@ -2044,7 +2053,8 @@ def sequential_liveness_detect_optimized():
                     completion_time=0.0,
                     last_face_score=0.0,
                     last_enhanced_score=0.0,
-                    registration_data={}
+                    registration_data={},
+                    login_challenge_id=challenge_id if mode == 'login' else ''
                 )
                 
                 USER_SESSIONS[user_id] = session
@@ -2052,9 +2062,14 @@ def sequential_liveness_detect_optimized():
                 if 'DETECTOR' in globals():
                     DETECTOR.reset_user_counters(user_id)
                     
-                logger.info(f"[SESSION] Created: {session}")
+                logger.info("[SESSION] Created for user=%s mode=%s (challenge ID redacted)", user_id, mode)
             else:
                 session = USER_SESSIONS[user_id]
+                if mode == 'login' and session.login_challenge_id != challenge_id:
+                    # Never carry completed state across independently issued challenges.
+                    session.all_requirements_met = False
+                    session.login_challenge_id = challenge_id
+                    DETECTOR.reset_user_counters(user_id)
                 session.current_step = current_step
                 
                 if not hasattr(session, 'all_requirements_met'):
@@ -2098,7 +2113,7 @@ def sequential_liveness_detect_optimized():
             })
 
         logger.info(f"  [PROCESSING] Processing frame for user {user_id}")
-        result = process_frame_api(face_image_b64, user_id, reset_counters)
+        result = process_frame_api(face_image_b64, user_id, reset_counters, mode=mode)
 
         if result['success']:
             session.last_face_score = result.get('liveness_score', 0.0)
@@ -2114,15 +2129,25 @@ def sequential_liveness_detect_optimized():
             
             logger.info(f"[COUNTS] Raw: B{raw_blinks}/M{raw_mouth}/H{raw_head} → Capped: B{capped_blinks}/M{capped_mouth}/H{capped_head}")
             
+            # Use per-session requirements, not the UI's 2/1/1 display caps.
+            detector_state = result.get('sequential_state') or {}
+            requirements = detector_state.get('requirements') or {}
+            req_blinks = requirements.get('blinks', session.required_blinks)
+            req_mouth = requirements.get('mouth', session.required_mouth)
+            req_head = requirements.get('head', session.required_head)
             step_requirements = {
-                'blinks_met': capped_blinks >= 2,
-                'mouth_met': capped_mouth >= 1,
-                'head_met': capped_head >= 1,
+                'blinks_met': raw_blinks >= req_blinks,
+                'mouth_met': raw_mouth >= req_mouth,
+                'head_met': raw_head >= req_head,
                 'score_met': session.last_enhanced_score > 0.2
             }
             
             all_met = all(step_requirements.values())
             
+            # The detector's own validation takes precedence over API counters.
+            all_met = bool(result.get('liveness_passed', False))
+            if all_met and mode == 'login':
+                all_met = LOGIN_LIVENESS_CHALLENGES.mark_liveness_completed(challenge_id, user_id)
             if all_met and not getattr(session, 'all_requirements_met', False):
                 session.all_requirements_met = True
                 session.completion_time = time.time() - session.start_time
@@ -2130,29 +2155,28 @@ def sequential_liveness_detect_optimized():
 
             if all_met:
                 current_phase = "complete"
-            elif capped_blinks < 2:
-                current_phase = "blinking"
-            elif capped_mouth < 1:
-                current_phase = "mouth"
-            elif capped_head < 1:
-                current_phase = "head"
             else:
-                current_phase = "head" 
+                current_phase = detector_state.get('current_phase') or 'blinking'
 
             sequential_state = {
                 'current_phase': current_phase,
-                'blinks_completed': capped_blinks >= 2,
-                'mouth_completed': capped_mouth >= 1,
-                'head_completed': capped_head >= 1,
-                'all_phases_complete': all_met
+                'blinks_completed': raw_blinks >= req_blinks,
+                'mouth_completed': raw_mouth >= req_mouth,
+                'head_completed': raw_head >= req_head,
+                'all_phases_complete': all_met,
+                'challenge_order': [],  # Do not leak or misstate future active steps.
+                'screen_replay_challenge': detector_state.get('screen_replay_challenge'),
+                'requirements': {
+                    'blinks': req_blinks, 'mouth': req_mouth, 'head': req_head
+                }
             }
 
             response_data = {
                 'success': True,
                 'face_detected': result.get('face_detected', True),
-                'blink_count': capped_blinks,        
-                'mouth_open_count': capped_mouth,  
-                'head_movement_count': capped_head, 
+                'blink_count': raw_blinks,        
+                'mouth_open_count': raw_mouth,  
+                'head_movement_count': raw_head, 
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': session.last_enhanced_score,
                 'sequential_state': sequential_state,
@@ -2166,7 +2190,7 @@ def sequential_liveness_detect_optimized():
                 'debug_info': {
                     'raw_counts': f"B{raw_blinks}/M{raw_mouth}/H{raw_head}",
                     'capped_counts': f"B{capped_blinks}/M{capped_mouth}/H{capped_head}",
-                    'requirements': "B2/M1/H1 (FIXED)"
+                    'requirements': sequential_state['requirements']
                 }
             }
 
@@ -2177,11 +2201,13 @@ def sequential_liveness_detect_optimized():
             return jsonify({
                 'success': False,
                 'face_detected': result.get('face_detected', False),
-                'blink_count': 0,
-                'mouth_open_count': 0,
-                'head_movement_count': 0,
+                'blink_count': result.get('blink_count', 0),
+                'mouth_open_count': result.get('mouth_open_count', 0),
+                'head_movement_count': result.get('head_movement_count', 0),
                 'face_real_score': result.get('liveness_score', 0),
                 'enhanced_face_score': 0,
+                'alert_type': result.get('alert_type'),
+                'sequential_state': result.get('sequential_state', {}),
                 'liveness_validation': {
                     'overall_liveness_passed': False,
                     'step_requirements': {
@@ -2464,7 +2490,7 @@ def process_base64_image(base64_str):
     nparr = np.frombuffer(img_data, np.uint8)
     return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False):
+def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: bool = False, mode: str = 'registration'):
     """Process frame for liveness detection with user-specific tracking"""
     try:
         if user_id is None:
@@ -2474,17 +2500,18 @@ def process_frame_api(face_image_b64: str, user_id: str = None, reset_counters: 
             DETECTOR.reset_user_counters(user_id)
 
         frame = process_base64_image(face_image_b64)
-        result = DETECTOR.process_frame_for_user(frame, user_id)
+        result = DETECTOR.process_frame_for_user(frame, user_id, mode)
 
         # Build liveness_validation field to match frontend expectations
+        # Report the detector's actual challenge counts, not unrelated API defaults.
+        state = DETECTOR.get_user_state(user_id, mode)
         step_requirements = {
-            'blinks_met': result['blink_count'] >= 3,
-            'mouth_met': result['mouth_open_count'] >= 2,
-            'head_met': result['head_movement_count'] >= 2,
+            'blinks_met': result['blink_count'] >= state.required_blinks,
+            'mouth_met': result['mouth_open_count'] >= state.required_mouth_opens,
+            'head_met': result['head_movement_count'] >= state.required_head_movements,
             'score_met': result['liveness_score'] >= 0.2
-            # 'score_met': result['face_real_score'] >= 0.2
         }
-        all_met = all(step_requirements.values())
+        all_met = bool(result.get('liveness_passed', False))
 
         result['liveness_validation'] = {
             'overall_liveness_passed': all_met,
@@ -2531,11 +2558,14 @@ def biometric_login_verify():
 
         user_id = data.get('user_id')
         face_image_b64 = data.get('face_image')
+        login_challenge_id = data.get('login_challenge_id')
         ip_address = request.remote_addr
         user_agent = request.headers.get('User-Agent', '')
 
         if not user_id or not face_image_b64:
             return jsonify({'success': False, 'error': 'User ID and face image are required'}), 400
+        if not LOGIN_LIVENESS_CHALLENGES.is_liveness_completed(login_challenge_id, user_id):
+            return jsonify({'success': False, 'error': 'Server-verified liveness challenge required'}), 403
 
         logger.info(f" Starting biometric login verification for user: {user_id}")
 
@@ -2625,6 +2655,8 @@ def biometric_login_verify():
         )
         
         if is_match:
+            if not LOGIN_LIVENESS_CHALLENGES.consume(login_challenge_id, user_id):
+                return jsonify({'success': False, 'error': 'Liveness challenge expired or already used'}), 403
             logger.info(f"Biometric login successful for user {user_id}")
             return jsonify({
                 'success': True,
@@ -4742,7 +4774,6 @@ if __name__ == '__main__':
     print("Initializing liveness detector...")
     try:
         initialize_detector()
-        DETECTOR = LivenessDetector(supabase_manager)
         logger.info("  Liveness detector initialized")
     except Exception as e:
         logger.error(f"  Could not initialize liveness detector: {e}")

@@ -11,10 +11,14 @@ from collections import defaultdict, deque
 from facenet_pytorch import MTCNN
 import torch
 from utils.supabase_manager import SupabaseManager
+from ml_models.liveness_gate_policy import may_evaluate_static_image
+from ml_models.blink_pulse import BlinkPulseTracker
+from ml_models.screen_replay_challenge import ScreenReplayChallenge
+from ml_models.face_count_guard import FaceCountGuard, weak_lower_face_candidate
 
 supabase_manager = SupabaseManager()
 
-ENABLE_STATIC_IMAGE_DETECTION = False 
+ENABLE_STATIC_IMAGE_DETECTION = True  # Explicitly enable deferred passive checks.
 # Logger setup
 logging.basicConfig(
     level=logging.INFO,
@@ -142,6 +146,7 @@ class UserState:
         self.last_mouth_state = False
         self.previous_head_pose = None
         self.eye_close_start_time = None  
+        self.blink_tracker = BlinkPulseTracker()
         self.last_blink_time = None      
         self.blink_phase = 'open'
 
@@ -188,15 +193,18 @@ class UserState:
 
 
         # Add after existing fields in __init__
-        self.mode = 'registration'  # default mode
+        self.mode = None  # initialized once per session by set_mode
         self.required_blinks = THRESHOLDS['MIN_BLINKS']
         self.required_mouth_opens = THRESHOLDS['MIN_MOUTH_OPENS']
         self.required_head_movements = THRESHOLDS['MIN_HEAD_MOVEMENTS']
         self.challenge_order = ["blinking", "mouth", "head"]  # Default order
         self.multiple_faces_detected = False
+        self.face_count_guard = FaceCountGuard(confirmation_frames=3)
         self.no_face_frames = 0
 
     def set_mode(self, mode):
+        if self.mode == mode:
+            return  # Preserve per-session challenge counts and order across frames.
         self.mode = mode
         if mode == 'login':
             # Login requirements (less strict)
@@ -223,7 +231,17 @@ class UserState:
         if THRESHOLDS['ENABLE_RANDOM_ORDER']:
             import random
             self.challenge_order = ["blinking", "mouth", "head"]
-            random.shuffle(self.challenge_order[:2])  # Only shuffle first two, keep head last
+            opening_phases = self.challenge_order[:2]
+            random.shuffle(opening_phases)
+            self.challenge_order = opening_phases + ["head"]
+        # Authentication evidence must follow instructions issued incrementally
+        # by the server, not a fixed list of historical movement counters.
+        self.screen_challenge = ScreenReplayChallenge(
+            blinks=self.required_blinks,
+            mouth=self.required_mouth_opens,
+            head=self.required_head_movements,
+        )
+        self.current_detection_phase = self.screen_challenge.public_phase
 
     def reset(self):
         self.__init__()
@@ -395,6 +413,10 @@ class LivenessDetector:
 
         # No face detected
         if boxes is None or len(boxes) == 0:
+            user_state.face_count_guard.observe(0)
+            user_state.blink_tracker.invalidate()
+            if user_state.screen_challenge:
+                user_state.screen_challenge.observe_missing()
             user_state.no_face_frames += 1
             logger.warning(f"No face detected - consecutive frames: {user_state.no_face_frames}")
             
@@ -404,17 +426,61 @@ class LivenessDetector:
                 
             return self._create_no_face_response(user_state)
 
-        # Multiple faces detected - security risk
+        # MTCNN may transiently return duplicate/spurious face boxes on
+        # a single-person camera feed. Never credit multi-face frames, but
+        # avoid irrevocably rejecting from one uncertain detection.
         if len(boxes) > 1:
-            logger.warning(f"Multiple faces detected: {len(boxes)} - resetting all counters")
-            
-            # Reset all progress when multiple faces detected
-            self._reset_user_state_counters(user_state)
-            user_state.multiple_faces_detected = True
-            
-            return self._create_multiple_faces_response(user_state, len(boxes))
+            user_state.blink_tracker.invalidate()
+            if user_state.screen_challenge:
+                user_state.screen_challenge.observe_missing()
 
-        # ============= SINGLE FACE PROCESSING =============
+            weak_extra = weak_lower_face_candidate(boxes, probs)
+            confirmed = user_state.face_count_guard.observe(len(boxes), weak_extra=weak_extra)
+            # Bounding boxes and confidences only, no images or landmarks.
+            # Coordinates allow diagnosing background-photo false positives.
+            sizes = []
+            for box, prob in zip(boxes, probs if probs is not None else [None] * len(boxes)):
+                x1, y1, x2, y2 = [round(float(v), 1) for v in box]
+                confidence = None if prob is None or not np.isfinite(prob) else round(float(prob), 4)
+                sizes.append({"box": [x1, y1, x2, y2], "confidence": confidence})
+            logger.warning(
+                "MULTI_FACE_DIAG frames=%d streak=%d/%d strong_streak=%d/%d "
+                "weak_lower_candidate=%s image=%dx%d candidates=%s",
+                user_state.frames_processed, user_state.face_count_guard.streak,
+                user_state.face_count_guard.weak_confirmation_frames,
+                user_state.face_count_guard.strong_streak,
+                user_state.face_count_guard.confirmation_frames,
+                weak_extra, rgb_frame.shape[1], rgb_frame.shape[0], sizes
+            )
+
+            if confirmed:
+                if user_state.screen_challenge:
+                    user_state.screen_challenge.status = "rejected_multiple_faces"
+                    logger.warning(
+                        "ACTIVE_CHALLENGE_FAILED reason=rejected_multiple_faces frames=%d faces=%d",
+                        user_state.frames_processed, len(boxes)
+                    )
+                self._reset_user_state_counters(user_state)
+                user_state.multiple_faces_detected = True
+                return self._create_multiple_faces_response(user_state, len(boxes))
+
+            # Recoverable ambiguous frame: cannot earn ANY gesture credit.
+            # Keep the existing server deadline running (no timer extension).
+            return {
+                "success": True,
+                "face_detected": False,
+                "alert_type": "ambiguous_multiple_faces",
+                "warning": "Uncertain additional face detection; keep one person in view.",
+                "blink_count": int(user_state.screen_challenge.counts["blinks"]),
+                "mouth_open_count": int(user_state.screen_challenge.counts["mouth"]),
+                "head_movement_count": int(user_state.screen_challenge.counts["head"]),
+                "liveness_passed": False,
+                "liveness_score": 0.0,
+                "sequential_state": self._get_sequential_state(user_state, False),
+            }
+
+        user_state.face_count_guard.observe(1)
+        # ============= SINGLE FACE PROCESSING =
         # Reset error counters on successful single face detection
         user_state.no_face_frames = 0
         user_state.multiple_faces_detected = False
@@ -466,12 +532,8 @@ class LivenessDetector:
                 EAR_CLOSED_THRESHOLD = 0.25
                 current_eye_closed = ear <= EAR_CLOSED_THRESHOLD
                 
-                # Process blinks only if in blinking phase AND eyes have opened before
-                phase = user_state.get_current_phase()
-                if phase == "blinking" and user_state.eyes_ever_opened:
-                    self._process_blink_detection(user_state, ear)
-                elif phase == "blinking" and not user_state.eyes_ever_opened:
-                    logger.warning("Cannot process blinks - eyes never opened")
+                # Counters are now credited ONLY by the server-timed active
+                # challenge below, not by an unprompted raw eye blink.
             
             # ============= MOUTH ASPECT RATIO PROCESSING =============
             mar = get_mouth_aspect_ratio(lmarks)
@@ -492,12 +554,7 @@ class LivenessDetector:
                     user_state.mouth_ever_opened = True
                     logger.debug(f"Mouth confirmed open (MAR: {mar:.3f})")
                 
-                # Process mouth opening only if in mouth phase AND mouth has moved before
-                phase = user_state.get_current_phase()
-                if phase == "mouth" and user_state.mouth_ever_opened:
-                    self._process_mouth_detection(user_state, current_mouth_open)
-                elif phase == "mouth" and not user_state.mouth_ever_opened:
-                    logger.warning("Cannot process mouth - mouth never opened")
+                # Do not count mouth openings until prompted by the server.
             
             # ============= HEAD MOVEMENT PROCESSING =============
             phase = user_state.get_current_phase()
@@ -509,12 +566,76 @@ class LivenessDetector:
                 
                 # Process head movement with noise filtering
                 head_moved, head_score = self._detect_head_movement(lmarks, user_state)
-                if head_moved and user_state.total_head_movements < user_state.required_head_movements:
-                    user_state.total_head_movements += 1
-                    logger.info(f"Head movement #{user_state.total_head_movements}/{user_state.required_head_movements} detected")
+                # Pixel displacement is an unreliable spoof signal; only the
+                # direction-calibrated nose-vs-eye pose challenge may earn credit.
         
+        # Feed the original measured landmarks into the fresh per-session
+        # challenge. The source image never supplies server time or progress.
+        if landmarks and len(landmarks) > 0:
+            marks = landmarks[0]
+            l_eye = marks.get('left_eye')
+            r_eye = marks.get('right_eye')
+            nose = marks.get('nose_tip')
+            if l_eye and r_eye and nose and len(nose) > 2:
+                left_ear = get_ear(l_eye)
+                right_ear = get_ear(r_eye)
+                l_x = float(np.mean([point[0] for point in l_eye]))
+                r_x = float(np.mean([point[0] for point in r_eye]))
+                eye_span = abs(r_x - l_x)
+                if eye_span > 1:
+                    nose_x = float(nose[2][0])
+                    yaw = (nose_x - (l_x + r_x) / 2.0) / eye_span
+                    step_finished = user_state.screen_challenge.observe(
+                        left_ear, right_ear, mar_value, yaw, time.monotonic()
+                    )
+                    if step_finished:
+                        active = user_state.screen_challenge
+                        logger.info(
+                            'ACTIVE_CHALLENGE_STEP step=%d/%d action=%s next=%s status=%s',
+                            len(active.completed_events), len(active.actions),
+                            active.completed_events[-1], active.action, active.status
+                        )
+                else:
+                    user_state.screen_challenge.observe_missing()
+            else:
+                user_state.screen_challenge.observe_missing()
+        else:
+            user_state.blink_tracker.invalidate()
+            user_state.screen_challenge.observe_missing()
+
+        # Only this server-owned sequence can update credited movements.
+        gate = user_state.screen_challenge
+        user_state.total_blinks = gate.counts['blinks']
+        user_state.total_mouth_open = gate.counts['mouth']
+        user_state.total_head_movements = gate.counts['head']
+        user_state.current_detection_phase = gate.public_phase
+
+        if gate.status not in ('active', 'passed'):
+            logger.warning(
+                "ACTIVE_CHALLENGE_FAILED reason=%s step=%d/%d frames=%d phase=%s",
+                gate.status, gate.index + 1, len(gate.actions),
+                user_state.frames_processed, gate.phase
+            )
+            return {
+                'success': False,
+                'face_detected': True,
+                'error': gate.metadata(time.monotonic())['prompt'],
+                'alert_type': 'active_challenge_failed',
+                'blink_count': user_state.total_blinks,
+                'mouth_open_count': user_state.total_mouth_open,
+                'head_movement_count': user_state.total_head_movements,
+                'liveness_passed': False,
+                'liveness_score': 0.0,
+                'sequential_state': self._get_sequential_state(user_state, False),
+            }
+
         # ============= STATIC IMAGE DETECTION =============
-        is_static_image = self._detect_static_image_comprehensive(user_state)
+        # Missing an action is an incomplete challenge, NOT evidence of a
+        # static presentation. Do not short-circuit during initial prompts.
+        is_static_image = (
+            self._detect_static_image_comprehensive(user_state)
+            if ENABLE_STATIC_IMAGE_DETECTION and may_evaluate_static_image(user_state) else False
+        )
         
         # Early exit if static image detected after sufficient frames
         if user_state.frames_processed > 20 and is_static_image:
@@ -539,10 +660,24 @@ class LivenessDetector:
                 }
             }
         
+        # Log internal landmark state for reproducible local diagnosis without
+        # storing frames or altering detection thresholds.
+        if user_state.frames_processed % 15 == 0:
+            logger.info(
+                'LIVENESS_DIAG frame=%d phase=%s EAR=%.4f MAR=%.4f eye_seen=%s mouth_seen=%s B=%d M=%d H=%d',
+                user_state.frames_processed, user_state.get_current_phase(),
+                user_state.current_ear, user_state.current_mar,
+                user_state.eyes_ever_opened, user_state.mouth_ever_opened,
+                user_state.total_blinks, user_state.total_mouth_open,
+                user_state.total_head_movements,
+            )
+
         # ============= PHASE PROGRESSION =============
         # Update detection phase based on completed actions
-        self._update_detection_phase(user_state)
-        
+        # Do not overwrite the timed randomized action sequence with the
+        # legacy fixed three-phase order.
+        user_state.current_detection_phase = gate.public_phase
+
         # ============= FINAL VALIDATION =============
         # Comprehensive requirements check
         all_requirements_met = (
@@ -552,7 +687,8 @@ class LivenessDetector:
             not is_static_image and
             user_state.eyes_ever_opened and  # Must have opened eyes at least once
             user_state.mouth_ever_opened and  # Must have opened mouth at least once
-            user_state.frames_processed >= 30  # Minimum frames for validation
+            user_state.frames_processed >= 30 and  # Minimum frames for validation
+            gate.complete  # Required for all registration/login approvals.
         )
         
         # Update completion status
@@ -730,7 +866,8 @@ class LivenessDetector:
                 "blinks": user_state.required_blinks,
                 "mouth": user_state.required_mouth_opens,
                 "head": user_state.required_head_movements
-            }
+            },
+            "screen_replay_challenge": user_state.screen_challenge.metadata(time.monotonic())
         }
 
     def _create_no_face_response(self, user_state):
@@ -856,56 +993,33 @@ class LivenessDetector:
                 logger.error(f" MTCNN detection error on attempt {attempt + 1}: {e}")
         return None, None
 
-    def _process_blink_detection(self, user_state, ear):
-        if ear is None:
+    def _process_blink_detection(self, user_state, landmarks):
+        """Track a bilateral eye closure followed by stable reopening.
+
+        Action evidence only: a prerecorded video may contain the same event.
+        The single-sample 15-FPS case is permitted after independent
+        pre/post open frames, not described as a verified 100ms closure.
+        """
+        left_eye = landmarks.get('left_eye')
+        right_eye = landmarks.get('right_eye')
+        if not left_eye or not right_eye:
+            user_state.blink_tracker.invalidate()
             return
-        current_time = time.time()
-        ear_thresh = THRESHOLDS['EAR_THRESHOLD']
-        is_eye_closed = ear < ear_thresh
-        print(f"    EAR: {ear:.4f}, Threshold: {ear_thresh}, Eyes Closed: {is_eye_closed}")
-        # Eyes just closed
-        if is_eye_closed and not user_state.last_eye_state:
-            user_state.eye_close_start_time = current_time
-            user_state.eye_closed_frames = 1
-            print(f"    Eyes CLOSED (EAR: {ear:.3f})")
-        # Eyes still closed
-        elif is_eye_closed and user_state.last_eye_state:
-            user_state.eye_closed_frames += 1
-        # Eyes just opened
-        elif not is_eye_closed and user_state.last_eye_state:
-            # Validate only if the start time was set
-            if user_state.eye_close_start_time is not None:
-                close_duration = current_time - user_state.eye_close_start_time
-
-                min_dur = THRESHOLDS['BLINK_MIN_DURATION']
-                max_dur = THRESHOLDS['BLINK_MAX_DURATION']
-                min_frames = THRESHOLDS['BLINK_MIN_FRAMES']
-                cooldown = THRESHOLDS['BLINK_COOLDOWN']
-
-                if (min_dur <= close_duration <= max_dur and
-                    user_state.eye_closed_frames >= min_frames):
-
-                    if (user_state.last_blink_time is None or
-                        current_time - user_state.last_blink_time > cooldown):
-
-                        user_state.total_blinks += 1
-                        user_state.last_blink_time = current_time
-                        print(f"    VALID BLINK #{user_state.total_blinks} - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
-                    else:
-                        print("    REJECTED: Blink too soon after previous")
-                else:
-                    print(f"    REJECTED: Invalid blink - Duration: {close_duration:.2f}s, Frames: {user_state.eye_closed_frames}")
-
-            else:
-                print(" Skipped blink validation - start time was not set")
-
-            # Always reset after eyes open
-            user_state.eye_closed_frames = 0
-            user_state.eye_close_start_time = None
-
-        user_state.last_eye_state = is_eye_closed
-        user_state.current_ear = float(ear)
-
+        left_ear = get_ear(left_eye)
+        right_ear = get_ear(right_eye)
+        accepted = user_state.blink_tracker.update(
+            left_ear, right_ear, time.monotonic()
+        )
+        user_state.last_eye_state = (
+            user_state.blink_tracker.phase in ('closed', 'reopening')
+        )
+        if accepted:
+            user_state.total_blinks += 1
+            user_state.last_blink_time = time.monotonic()
+            logger.info(
+                'VALID BLINK PULSE %d/%d, bilateral open/close/reopen',
+                user_state.total_blinks, user_state.required_blinks
+            )
 
     def _process_mouth_detection(self, user_state, current_mouth_open):
         """Process mouth detection with state transitions"""
@@ -914,10 +1028,11 @@ class LivenessDetector:
         elif current_mouth_open:
             user_state.mouth_open_frames += 1
         elif not current_mouth_open and user_state.last_mouth_state:
-            if not user_state.mouth_completed:
+            if user_state.total_mouth_open < user_state.required_mouth_opens:
                 user_state.total_mouth_open += 1
-                logger.info(f" Mouth open detected! Total: {user_state.total_mouth_open}/{THRESHOLDS['MIN_MOUTH_OPENS']}")
-                if user_state.total_mouth_open >= THRESHOLDS['MIN_MOUTH_OPENS']:
+                logger.info("Mouth opening %d/%d recorded",
+                            user_state.total_mouth_open, user_state.required_mouth_opens)
+                if user_state.total_mouth_open >= user_state.required_mouth_opens:
                     user_state.mouth_completed = True
             user_state.mouth_open_frames = 0
         user_state.last_mouth_state = current_mouth_open

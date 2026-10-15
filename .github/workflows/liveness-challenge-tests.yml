@@ -1,0 +1,56 @@
+name: Liveness challenge unit tests
+
+on:
+  pull_request:
+    paths:
+      - 'backend/utils/liveness_challenge.py'
+      - 'backend/tests/test_liveness_challenge.py'
+      - 'backend/tests/test_liveness_gate_policy.py'
+      - 'backend/ml_models/liveness_gate_policy.py'
+      - 'backend/ml_models/blink_pulse.py'
+      - 'backend/ml_models/screen_replay_challenge.py'
+      - 'backend/tests/test_screen_replay_challenge.py'
+      - 'src/pages/LivenessLab.tsx'
+      - 'backend/tests/test_blink_pulse.py'
+      - 'src/components/BiometricCapture.tsx'
+      - 'backend/ml_models/liveness_detector.py'
+      - 'backend/ml_models/face_count_guard.py'
+      - 'backend/tests/test_face_count_guard.py'
+      - 'backend/app.py'
+      - '.github/workflows/liveness-challenge-tests.yml'
+  push:
+    branches: [fix/liveness-evaluation]
+
+jobs:
+  challenge-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile affected Python sources
+        run: python -m py_compile backend/app.py backend/ml_models/liveness_detector.py backend/ml_models/face_count_guard.py backend/ml_models/liveness_gate_policy.py backend/ml_models/blink_pulse.py backend/ml_models/screen_replay_challenge.py backend/utils/liveness_challenge.py
+      - name: Challenge lifecycle unit tests
+        run: python -m unittest discover -s backend/tests -p 'test_liveness_challenge.py' -v
+      - name: Bilateral blink pulse state-machine tests
+        run: python -m unittest discover -s backend/tests -p 'test_blink_pulse.py' -v
+      - name: Timed randomized replay challenge tests
+        run: python -m unittest discover -s backend/tests -p 'test_screen_replay_challenge.py' -v
+      - name: Multi-face rejection debounce tests
+        run: python -m unittest discover -s backend/tests -p 'test_face_count_guard.py' -v
+      - name: Static photo premature rejection policy tests
+        run: python -m unittest discover -s backend/tests -p 'test_liveness_gate_policy.py' -v
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Compile Vite application
+        run: npm run build
