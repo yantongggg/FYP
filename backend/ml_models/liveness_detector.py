@@ -14,7 +14,7 @@ from utils.supabase_manager import SupabaseManager
 from ml_models.liveness_gate_policy import may_evaluate_static_image
 from ml_models.blink_pulse import BlinkPulseTracker
 from ml_models.screen_replay_challenge import ScreenReplayChallenge
-from ml_models.face_count_guard import FaceCountGuard
+from ml_models.face_count_guard import FaceCountGuard, weak_lower_face_candidate
 
 supabase_manager = SupabaseManager()
 
@@ -434,7 +434,8 @@ class LivenessDetector:
             if user_state.screen_challenge:
                 user_state.screen_challenge.observe_missing()
 
-            confirmed = user_state.face_count_guard.observe(len(boxes))
+            weak_extra = weak_lower_face_candidate(boxes, probs)
+            confirmed = user_state.face_count_guard.observe(len(boxes), weak_extra=weak_extra)
             # Bounding boxes and confidences only, no images or landmarks.
             # Coordinates allow diagnosing background-photo false positives.
             sizes = []
@@ -443,10 +444,13 @@ class LivenessDetector:
                 confidence = None if prob is None or not np.isfinite(prob) else round(float(prob), 4)
                 sizes.append({"box": [x1, y1, x2, y2], "confidence": confidence})
             logger.warning(
-                "MULTI_FACE_DIAG frames=%d streak=%d/%d image=%dx%d candidates=%s",
+                "MULTI_FACE_DIAG frames=%d streak=%d/%d strong_streak=%d/%d "
+                "weak_lower_candidate=%s image=%dx%d candidates=%s",
                 user_state.frames_processed, user_state.face_count_guard.streak,
+                user_state.face_count_guard.weak_confirmation_frames,
+                user_state.face_count_guard.strong_streak,
                 user_state.face_count_guard.confirmation_frames,
-                rgb_frame.shape[1], rgb_frame.shape[0], sizes
+                weak_extra, rgb_frame.shape[1], rgb_frame.shape[0], sizes
             )
 
             if confirmed:
